@@ -10,15 +10,21 @@ from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, PositiveFloat, mo
 
 
 class ContractModel(BaseModel):
+    """Immutable, extra-forbid base for executable bridge plans."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 class EndpointMode(StrEnum):
+    """Select transparent single-upstream or namespaced aggregate routing."""
+
     PASSTHROUGH = "passthrough"
     AGGREGATE = "aggregate"
 
 
 class StdioUpstreamConfig(ContractModel):
+    """Resolved subprocess launch settings for one stdio MCP connection."""
+
     transport: Literal["stdio"] = "stdio"
     command: str = Field(min_length=1)
     args: tuple[str, ...] = ()
@@ -27,6 +33,8 @@ class StdioUpstreamConfig(ContractModel):
 
 
 class SseUpstreamConfig(ContractModel):
+    """Resolved legacy SSE endpoint, credentials, and timeout for an MCP connection."""
+
     transport: Literal["sse"] = "sse"
     url: AnyHttpUrl
     headers: dict[str, str] = Field(default_factory=dict)
@@ -34,6 +42,8 @@ class SseUpstreamConfig(ContractModel):
 
 
 class StreamableHttpUpstreamConfig(ContractModel):
+    """Resolved streamable HTTP endpoint, credentials, and timeout for an MCP connection."""
+
     transport: Literal["streamable-http"] = "streamable-http"
     url: AnyHttpUrl
     headers: dict[str, str] = Field(default_factory=dict)
@@ -47,11 +57,15 @@ UpstreamConfig = Annotated[
 
 
 class BridgeCapabilities(ContractModel):
+    """Declare which MCP method families the downstream endpoint publishes."""
+
     tools: bool = False
     resources: bool = False
 
 
 class BindingPlan(ContractModel):
+    """Bind one upstream connection to an endpoint with routing order and namespace."""
+
     binding_key: str = Field(min_length=1)
     upstream_key: str = Field(min_length=1)
     upstream_name: str = Field(min_length=1)
@@ -61,6 +75,8 @@ class BindingPlan(ContractModel):
 
 
 class EndpointPlan(ContractModel):
+    """Validated executable topology for one endpoint, independent of persistence models."""
+
     endpoint_key: str = Field(min_length=1)
     display_name: str = Field(min_length=1)
     mode: EndpointMode

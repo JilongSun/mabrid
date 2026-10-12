@@ -25,7 +25,12 @@ from .sdk_v1 import (
 
 
 class ProxyHandlers:
-    """Implements downstream MCP methods for one bridge session."""
+    """Adapt [McpMethodRouter](../contracts/methods.py) methods to MCP SDK handlers.
+
+    Consume the router structurally; `register` installs official SDK handlers,
+    while tool dispatch emits paired operation observations and then requests
+    fresh UI-resource loading. This is not an upstream-client implementation.
+    """
 
     def __init__(
         self,

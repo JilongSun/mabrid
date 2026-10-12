@@ -10,6 +10,11 @@ from .base import BaseSessionUpstreamClient
 
 
 class StdioUpstreamClient(BaseSessionUpstreamClient):
+    """Add subprocess stdio `connect` to [BaseSessionUpstreamClient](base.py)'s operations.
+
+    The combined inherited surface structurally satisfies [UpstreamClient](runtime.py).
+    """
+
     async def connect(self, config: UpstreamConfig) -> UpstreamIdentity:
         if not isinstance(config, StdioUpstreamConfig):
             raise ValueError("stdio upstream client requires stdio configuration")

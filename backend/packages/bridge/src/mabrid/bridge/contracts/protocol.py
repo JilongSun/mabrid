@@ -8,10 +8,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ProtocolModel(BaseModel):
+    """Immutable project-owned MCP value base, independent of SDK wire classes."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 class UpstreamIdentity(ProtocolModel):
+    """Initialization identity and supported method families reported by an upstream."""
+
     server_name: str
     server_version: str | None = None
     protocol_version: str | None = None
@@ -22,6 +26,8 @@ class UpstreamIdentity(ProtocolModel):
 
 
 class ToolDescriptor(ProtocolModel):
+    """Preserve MCP tool schemas, annotations, metadata, and any MCP Apps resource URI."""
+
     name: str
     title: str | None = None
     description: str | None = None
@@ -33,6 +39,8 @@ class ToolDescriptor(ProtocolModel):
 
 
 class ToolCallResult(ProtocolModel):
+    """Preserve content blocks, structured output, error state, and MCP result metadata."""
+
     content: tuple[dict[str, Any], ...] = ()
     structured_content: dict[str, Any] | None = None
     is_error: bool = False
@@ -40,6 +48,8 @@ class ToolCallResult(ProtocolModel):
 
 
 class ResourceDescriptor(ProtocolModel):
+    """Describe a listed MCP resource without dropping its optional protocol fields."""
+
     name: str
     uri: str
     title: str | None = None
@@ -51,6 +61,8 @@ class ResourceDescriptor(ProtocolModel):
 
 
 class ResourceContent(ProtocolModel):
+    """One resource content item containing exactly one of text or encoded binary data."""
+
     uri: str
     mime_type: str | None = None
     text: str | None = None
@@ -65,5 +77,7 @@ class ResourceContent(ProtocolModel):
 
 
 class ReadResourceResult(ProtocolModel):
+    """Complete non-empty resource-read contents and result-level metadata."""
+
     contents: tuple[ResourceContent, ...] = Field(min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)

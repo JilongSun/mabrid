@@ -10,6 +10,11 @@ from .base import BaseSessionUpstreamClient
 
 
 class SseUpstreamClient(BaseSessionUpstreamClient):
+    """Add legacy SSE `connect` to [BaseSessionUpstreamClient](base.py)'s MCP operations.
+
+    The combined inherited surface structurally satisfies [UpstreamClient](runtime.py).
+    """
+
     async def connect(self, config: UpstreamConfig) -> UpstreamIdentity:
         if not isinstance(config, SseUpstreamConfig):
             raise ValueError("SSE upstream client requires SSE configuration")

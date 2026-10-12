@@ -28,7 +28,12 @@ from ..upstream import DefaultUpstreamClientFactory, UpstreamClientFactory, Upst
 
 
 class BridgeSession:
-    """Owns one immutable endpoint plan and its session-scoped protocol runtime."""
+    """Own one immutable endpoint plan and its Session-scoped protocol runtime.
+
+    Consume [McpSessionRouter](../routing/ports.py) structurally and expose the
+    downstream server as [McpTransportSession](../downstream/asgi.py). The
+    `on_closed` callback updates engine ownership; it is not a persistence hook.
+    """
 
     def __init__(
         self,
@@ -86,7 +91,12 @@ class BridgeSession:
 
 
 class BridgeEngine:
-    """Owns worker tasks and opens isolated bridge sessions from immutable plans."""
+    """Own worker tasks and assemble isolated protocol Sessions from immutable plans.
+
+    Consume [UpstreamClientFactory](../upstream/factory.py) structurally; router
+    selection joins upstream runtimes, [ProxyHandlers](../downstream/handlers.py),
+    and downstream transport. Application topology and persistence stay outside core.
+    """
 
     def __init__(
         self,

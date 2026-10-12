@@ -18,6 +18,12 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
 class McpTransportSession(Protocol):
+    """Transport behavior required by [create_mcp_asgi_app](asgi.py).
+
+    The three `handle_*` ASGI methods are supplied structurally by
+    [BridgeDownstreamServer](server.py); this port owns no application Session data.
+    """
+
     async def handle_streamable_http(
         self,
         scope: Scope,
@@ -44,6 +50,14 @@ SessionT = TypeVar("SessionT")
 
 
 class McpSessionBroker(Protocol[SessionT]):
+    """Supply opaque Sessions and transports to [create_mcp_asgi_app](asgi.py).
+
+    `open_session`/`resolve_session` select ownership; `bind_transport_session`
+    records correlation; `close_session` releases it; `transport` returns the
+    ASGI-method view. The application supplies its broker structurally, so core
+    does not import Gateway topology, lifecycle, or persistence.
+    """
+
     async def open_session(self, endpoint_key: str) -> SessionT | None: ...
 
     async def resolve_session(

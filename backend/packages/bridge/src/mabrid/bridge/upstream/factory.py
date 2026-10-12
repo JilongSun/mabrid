@@ -15,10 +15,18 @@ from .streamable_http import StreamableHttpUpstreamClient
 
 
 class UpstreamClientFactory(Protocol):
+    """Construct a fresh [UpstreamClient](runtime.py) from a resolved transport config.
+
+    `create` is provided structurally by [DefaultUpstreamClientFactory](factory.py)
+    and injected into the bridge engine; the factory does not own connection life.
+    """
+
     def create(self, config: UpstreamConfig) -> UpstreamClient: ...
 
 
 class DefaultUpstreamClientFactory:
+    """Structurally implement [UpstreamClientFactory](factory.py) via transport selection."""
+
     def create(self, config: UpstreamConfig) -> UpstreamClient:
         return build_upstream_client(config)
 

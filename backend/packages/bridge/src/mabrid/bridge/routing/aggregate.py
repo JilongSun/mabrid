@@ -35,6 +35,8 @@ from .resource_uris import canonical_uri, public_resource_uri, rewrite_ui_metada
 
 @dataclass
 class BindingAvailability:
+    """Mutable per-binding discovery evidence retained by an aggregate Session router."""
+
     binding_key: str
     status: BindingAvailabilityStatus = BindingAvailabilityStatus.UNKNOWN
     identity: UpstreamIdentity | None = None
@@ -45,6 +47,8 @@ class BindingAvailability:
 
 @dataclass
 class BoundUpstreamRuntime:
+    """Pair an immutable binding plan with its live runtime and availability state."""
+
     binding: BindingPlan
     runtime: UpstreamRuntime
     availability: BindingAvailability
@@ -57,6 +61,14 @@ class BoundUpstreamRuntime:
 
 
 class AggregateRouter:
+    """Route namespaced MCP tools and resources across independently available bindings.
+
+    Structurally implement [McpSessionRouter](ports.py): `identity`/`start`/`close`
+    own lifecycle, and the inherited method contract routes MCP operations and
+    fresh UI resources. The bridge engine supplies worker ownership; observer
+    calls expose binding evidence without depending on application persistence.
+    """
+
     def __init__(
         self,
         plan: EndpointPlan,

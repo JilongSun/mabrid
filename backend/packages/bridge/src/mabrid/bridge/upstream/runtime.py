@@ -25,6 +25,13 @@ CommandResult = TypeVar("CommandResult")
 
 
 class UpstreamClient(Protocol):
+    """SDK-independent connection and MCP operation port consumed by [UpstreamRuntime](runtime.py).
+
+    `connect`/`close` own the connection; tool/resource methods return core values.
+    Transport subclasses of [BaseSessionUpstreamClient](base.py) supply this shape
+    structurally, and the runtime executes it on a persistent owner task.
+    """
+
     async def connect(self, config: UpstreamConfig) -> UpstreamIdentity: ...
 
     async def list_tools(self) -> list[ToolDescriptor]: ...
@@ -40,12 +47,16 @@ class UpstreamClient(Protocol):
 
 @dataclass
 class _CommandOutcome(Generic[CommandResult]):
+    """Return one owner-task operation's value or ordinary exception to its caller."""
+
     value: CommandResult | None = None
     error: Exception | None = None
 
 
 @dataclass
 class _RuntimeCommand(Generic[CommandResult]):
+    """Queue an upstream operation and its one-shot result channel to the owner task."""
+
     operation: str
     execute: Callable[[], Awaitable[CommandResult]]
     response: MemoryObjectSendStream[_CommandOutcome[CommandResult]]
@@ -53,6 +64,8 @@ class _RuntimeCommand(Generic[CommandResult]):
 
 @dataclass
 class _ShutdownCommand:
+    """Ask the owner task to close its connection before acknowledging worker exit."""
+
     response: MemoryObjectSendStream[_CommandOutcome[None]]
 
 
@@ -60,7 +73,12 @@ RuntimeMessage = _RuntimeCommand[Any] | _ShutdownCommand
 
 
 class UpstreamRuntime:
-    """Owns upstream lifecycle, state synchronization, and bridge-side routing state."""
+    """Serialize upstream operations and exit-stack cleanup in a persistent owner task.
+
+    Consume [UpstreamClient](runtime.py) structurally; transport adapters satisfy
+    it with `connect`, tool/resource methods, and `close`. Routers use this runtime
+    for discovery and operations, not as an implementation of the router port.
+    """
 
     def __init__(
         self,

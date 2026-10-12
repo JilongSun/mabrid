@@ -6,6 +6,13 @@ from ..contracts import McpMethodRouter, UpstreamIdentity
 
 
 class McpSessionRouter(McpMethodRouter, Protocol):
+    """Extend [McpMethodRouter](../contracts/methods.py) with Session lifecycle.
+
+    `identity`, `start`, and `close` complete the router contract used by the
+    bridge engine. [PassthroughRouter](passthrough.py) and
+    [AggregateRouter](aggregate.py) provide it structurally without inheritance.
+    """
+
     @property
     def identity(self) -> UpstreamIdentity: ...
 

@@ -23,6 +23,13 @@ from ..contracts import (
 
 
 class BaseSessionUpstreamClient:
+    """Share initialized MCP SDK operations and lossless wire-to-core mapping.
+
+    Transport subclasses add `connect`; together their inherited methods satisfy
+    [UpstreamClient](runtime.py) structurally. This base alone does not implement
+    connection setup, and its exit stack must close in the runtime's owner task.
+    """
+
     def __init__(self) -> None:
         self._stack: AsyncExitStack | None = None
         self._session: ClientSession | None = None
