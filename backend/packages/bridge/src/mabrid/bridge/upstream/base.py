@@ -26,7 +26,7 @@ class BaseSessionUpstreamClient:
     """Share initialized MCP SDK operations and lossless wire-to-core mapping.
 
     Transport subclasses add `connect`; together their inherited methods satisfy
-    [UpstreamClient](runtime.py) structurally. This base alone does not implement
+    [UpstreamClient](runtime.py:27) structurally. This base alone does not implement
     connection setup, and its exit stack must close in the runtime's owner task.
     """
 

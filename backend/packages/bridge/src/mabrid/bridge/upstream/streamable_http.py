@@ -16,9 +16,9 @@ from .base import BaseSessionUpstreamClient
 
 
 class StreamableHttpUpstreamClient(BaseSessionUpstreamClient):
-    """Add streamable HTTP `connect` to [BaseSessionUpstreamClient](base.py)'s operations.
+    """Add streamable HTTP `connect` to [BaseSessionUpstreamClient](base.py:25)'s operations.
 
-    The combined inherited surface structurally satisfies [UpstreamClient](runtime.py).
+    The combined inherited surface structurally satisfies [UpstreamClient](runtime.py:27).
     """
 
     async def connect(self, config: UpstreamConfig) -> UpstreamIdentity:

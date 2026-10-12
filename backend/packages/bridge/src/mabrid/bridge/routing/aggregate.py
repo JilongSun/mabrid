@@ -63,7 +63,7 @@ class BoundUpstreamRuntime:
 class AggregateRouter:
     """Route namespaced MCP tools and resources across independently available bindings.
 
-    Structurally implement [McpSessionRouter](ports.py): `identity`/`start`/`close`
+    Structurally implement [McpSessionRouter](ports.py:8): `identity`/`start`/`close`
     own lifecycle, and the inherited method contract routes MCP operations and
     fresh UI resources. The bridge engine supplies worker ownership; observer
     calls expose binding evidence without depending on application persistence.

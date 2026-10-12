@@ -13,11 +13,11 @@ from .protocol import ReadResourceResult, ResourceDescriptor, ToolCallResult, To
 
 
 class McpMethodRouter(Protocol):
-    """Core-valued MCP methods consumed by [ProxyHandlers](../downstream/handlers.py).
+    """Core-valued MCP methods consumed by [ProxyHandlers](../downstream/handlers.py:27).
 
     `list_tools`, `call_tool`, `list_resources`, and `read_resource` forward MCP
     behavior; `load_tool_resource` publishes fresh UI-resource observations.
-    [McpSessionRouter](../routing/ports.py) adds lifecycle. Its concrete routers
+    [McpSessionRouter](../routing/ports.py:8) adds lifecycle. Its concrete routers
     satisfy this contract structurally, not through nominal inheritance.
     """
 

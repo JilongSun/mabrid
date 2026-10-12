@@ -15,9 +15,9 @@ from .streamable_http import StreamableHttpUpstreamClient
 
 
 class UpstreamClientFactory(Protocol):
-    """Construct a fresh [UpstreamClient](runtime.py) from a resolved transport config.
+    """Construct a fresh [UpstreamClient](runtime.py:27) from a resolved transport config.
 
-    `create` is provided structurally by [DefaultUpstreamClientFactory](factory.py)
+    `create` is provided structurally by [DefaultUpstreamClientFactory](factory.py:27)
     and injected into the bridge engine; the factory does not own connection life.
     """
 
@@ -25,7 +25,7 @@ class UpstreamClientFactory(Protocol):
 
 
 class DefaultUpstreamClientFactory:
-    """Structurally implement [UpstreamClientFactory](factory.py) via transport selection."""
+    """Structurally implement [UpstreamClientFactory](factory.py:17) via transport selection."""
 
     def create(self, config: UpstreamConfig) -> UpstreamClient:
         return build_upstream_client(config)

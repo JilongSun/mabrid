@@ -20,8 +20,8 @@ from .handlers import ProxyHandlers
 class BridgeDownstreamServer:
     """Own SDK serving and transport lifetime for one bridge Session.
 
-    Structurally implement [McpTransportSession](asgi.py) through the three
-    `handle_*` methods. Consume [ProxyHandlers](handlers.py) for method behavior;
+    Structurally implement [McpTransportSession](asgi.py:20) through the three
+    `handle_*` methods. Consume [ProxyHandlers](handlers.py:27) for method behavior;
     the application broker exposes this object to the raw MCP ASGI dispatcher.
     """
 

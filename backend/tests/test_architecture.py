@@ -107,8 +107,9 @@ def test_docstring_source_links_resolve_to_named_symbols() -> None:
                     node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
                 ):
                     continue
-                for symbol, target in re.findall(
-                    r"\[([A-Za-z_]\w*)\]\(([^)]+\.py)\)", ast.get_docstring(node) or ""
+                for symbol, target, line in re.findall(
+                    r"\[([A-Za-z_]\w*)\]\(([^)]+\.py)(?::([^)]*))?\)",
+                    ast.get_docstring(node) or "",
                 ):
                     destination = (path.parent / target).resolve()
                     if Path(target).is_absolute() or not destination.is_file():
@@ -116,13 +117,21 @@ def test_docstring_source_links_resolve_to_named_symbols() -> None:
                         continue
                     target_module = ast.parse(destination.read_text(encoding="utf-8"))
                     declarations = {
-                        item.name
+                        (item.name, item.lineno)
                         for item in ast.walk(target_module)
                         if isinstance(item, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
                     }
-                    if symbol not in declarations:
+                    if not any(name == symbol for name, declaration_line in declarations):
                         failures.append(
                             f"{path.relative_to(BACKEND_ROOT)}: missing {symbol} in {target}"
+                        )
+                    elif not line.isdecimal():
+                        failures.append(
+                            f"{path.relative_to(BACKEND_ROOT)}: missing or invalid declaration line for {symbol} in {target}"
+                        )
+                    elif (symbol, int(line)) not in declarations:
+                        failures.append(
+                            f"{path.relative_to(BACKEND_ROOT)}: {symbol} is not declared at {target}:{line}"
                         )
     assert failures == []
 

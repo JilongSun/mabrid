@@ -26,9 +26,9 @@ from ..upstream.runtime import UpstreamRuntime
 class PassthroughRouter:
     """Preserve one upstream's MCP names, identity, results, and resource contents.
 
-    Structurally implement [McpSessionRouter](ports.py) using `identity`, lifecycle
+    Structurally implement [McpSessionRouter](ports.py:8) using `identity`, lifecycle
     methods, MCP method forwarding, and `load_tool_resource`. Consume
-    [UpstreamRuntime](../upstream/runtime.py), rather than an SDK client directly.
+    [UpstreamRuntime](../upstream/runtime.py:75), rather than an SDK client directly.
     """
 
     def __init__(

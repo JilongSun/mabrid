@@ -25,7 +25,7 @@ from .sdk_v1 import (
 
 
 class ProxyHandlers:
-    """Adapt [McpMethodRouter](../contracts/methods.py) methods to MCP SDK handlers.
+    """Adapt [McpMethodRouter](../contracts/methods.py:15) methods to MCP SDK handlers.
 
     Consume the router structurally; `register` installs official SDK handlers,
     while tool dispatch emits paired operation observations and then requests

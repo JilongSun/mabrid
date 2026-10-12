@@ -25,10 +25,10 @@ CommandResult = TypeVar("CommandResult")
 
 
 class UpstreamClient(Protocol):
-    """SDK-independent connection and MCP operation port consumed by [UpstreamRuntime](runtime.py).
+    """SDK-independent connection and MCP operation port consumed by [UpstreamRuntime](runtime.py:75).
 
     `connect`/`close` own the connection; tool/resource methods return core values.
-    Transport subclasses of [BaseSessionUpstreamClient](base.py) supply this shape
+    Transport subclasses of [BaseSessionUpstreamClient](base.py:25) supply this shape
     structurally, and the runtime executes it on a persistent owner task.
     """
 
@@ -75,7 +75,7 @@ RuntimeMessage = _RuntimeCommand[Any] | _ShutdownCommand
 class UpstreamRuntime:
     """Serialize upstream operations and exit-stack cleanup in a persistent owner task.
 
-    Consume [UpstreamClient](runtime.py) structurally; transport adapters satisfy
+    Consume [UpstreamClient](runtime.py:27) structurally; transport adapters satisfy
     it with `connect`, tool/resource methods, and `close`. Routers use this runtime
     for discovery and operations, not as an implementation of the router port.
     """
