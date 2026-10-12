@@ -28,6 +28,8 @@ from .settlement import HostRunSettlement, HostObservationFactory
 
 @dataclass(frozen=True)
 class NativeSessionPorts:
+    """Bundle one deployment binding and separately typed native Session behaviors."""
+
     binding_id: str
     catalog: RuntimeSessionCatalog
     history: RuntimeSessionHistory
@@ -37,6 +39,8 @@ class NativeSessionPorts:
 
 @dataclass(frozen=True)
 class McpAppsComposition:
+    """Pair process-local widget events with the factory that projects Gateway observations."""
+
     events: InMemoryWidgetEventStore
     bridge_observer_factory: McpAppsLifecycleObserverFactory
 
@@ -44,6 +48,8 @@ class McpAppsComposition:
 def compose_mcp_apps(
     endpoint_slug: str, operation_attributions: OperationRunAttributionRegistry
 ) -> McpAppsComposition:
+    """Wire the attribution registry's read view to a widget writer and observer factory."""
+
     events = InMemoryWidgetEventStore()
     return McpAppsComposition(
         events=events,
@@ -55,6 +61,12 @@ def compose_mcp_apps(
 
 @dataclass(frozen=True)
 class HostCapabilityComposition:
+    """Expose typed, shared Host capabilities without owning server deployment resources.
+
+    [compose_host_capabilities](composition.py) shares one coordinator across
+    native/compatibility ingress and connects structurally typed stores/factories.
+    """
+
     agent_host: AgentHostService
     sessions: AgentSessionService | None
     attributions: InMemoryOperationRunAttributionRegistry
@@ -76,6 +88,14 @@ async def compose_host_capabilities(
     observer_timeout_seconds: float = 5.0,
     settlement_timeout_seconds: float = 5.0,
 ) -> HostCapabilityComposition:
+    """Assemble structural ports and shared ownership, not deployment clients or secrets.
+
+    Restore durable ownership first, then order attribution/activity/widget
+    projection and expose reader views to [HostEventStream](service.py) and its
+    native counterpart. [NativeSessionPorts](composition.py) may share one
+    adapter object while retaining distinct behavior-oriented type boundaries.
+    """
+
     coordinator = AgentRunCoordinator((target,))
     await restore_target_run_ownership(repository, coordinator, target.target_id)
     attributions = InMemoryOperationRunAttributionRegistry()

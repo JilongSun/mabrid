@@ -9,10 +9,23 @@ from mabrid.bridge import BridgeObservation, BridgeObserver
 
 
 class BridgeSessionObserverFactory(Protocol):
+    """Supply an optional core observer when a Gateway Session is created.
+
+    `create(session_key, endpoint_slug)` is the structural factory shape consumed
+    by the coordinator. [CompositeBridgeSessionObserverFactory](observers.py)
+    and Host/MCP Apps factories fulfill it without inheriting this Protocol.
+    """
+
     def create(self, session_key: str, endpoint_slug: str) -> BridgeObserver | None: ...
 
 
 class CompositeBridgeSessionObserverFactory:
+    """Structurally implement [BridgeSessionObserverFactory](observers.py) by ordered fan-out.
+
+    `create` skips absent observers and returns a composite only when at least one
+    factory applies. Construction requires at least one configured factory.
+    """
+
     def __init__(self, factories: Iterable[BridgeSessionObserverFactory]) -> None:
         self._factories = tuple(factories)
         if not self._factories:
@@ -32,6 +45,12 @@ class CompositeBridgeSessionObserverFactory:
 
 
 class CompositeBridgeObserver:
+    """Supply async `observe` structurally by invoking observers in configured order.
+
+    This simple composition propagates failures; Host's bounded observer wrapper
+    applies its own isolation policy rather than changing this core sink shape.
+    """
+
     def __init__(self, observers: Iterable[BridgeObserver]) -> None:
         self._observers = tuple(observers)
         if not self._observers:

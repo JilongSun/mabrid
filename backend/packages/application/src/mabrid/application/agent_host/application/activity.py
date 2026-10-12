@@ -17,6 +17,13 @@ from .attribution import OperationRunAttributionRegistry
 
 
 class InMemoryToolActivityStore:
+    """Project attributed tool starts/results into ordered process-local Run events.
+
+    Writes belong to the activity observer; `list_for_run`, `wait_for_events`,
+    and `invocation_id` structurally expose [ToolActivityReader](../../host/ports.py).
+    Duplicate starts/completions are rejected; invocation IDs survive projection.
+    """
+
     def __init__(self) -> None:
         self._condition = Condition()
         self._events: dict[UUID, list[ToolActivityEvent]] = {}
@@ -107,6 +114,12 @@ class InMemoryToolActivityStore:
 
 
 class AgentToolActivityObserverFactory:
+    """Supply the activity projection stage after operation attribution.
+
+    `create` structurally implements [BridgeSessionObserverFactory](../../gateway/sessions/observers.py);
+    [compose_host_capabilities](../../host/composition.py) owns observer ordering.
+    """
+
     def __init__(
         self, attributions: OperationRunAttributionRegistry, events: InMemoryToolActivityStore
     ) -> None:
@@ -118,6 +131,12 @@ class AgentToolActivityObserverFactory:
 
 
 class _ToolActivityObserver:
+    """Structurally consume `observe` calls for one Session's attributed tool activity.
+
+    Read attribution on start, then pair completion with the store's invocation;
+    this observer does not infer Run ownership from a provider's tool metadata.
+    """
+
     def __init__(
         self,
         session_key: str,

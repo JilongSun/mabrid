@@ -10,6 +10,13 @@ from .contracts import WidgetCreated, WidgetEvent
 
 
 class InMemoryWidgetEventStore:
+    """Retain one widget outcome per attributed operation and pending Run settlement.
+
+    Structurally supply [WidgetEventStore](ports.py) to the projector and
+    [WidgetEventReader](../host/ports.py) to presentation. The writer tracks/aborts
+    operations; the reader only lists/waits outcomes. Events are process-local.
+    """
+
     def __init__(self) -> None:
         self._events: list[WidgetEvent] = []
         self._operation_keys: set[tuple[str, str]] = set()

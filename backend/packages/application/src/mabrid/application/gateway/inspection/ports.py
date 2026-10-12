@@ -27,6 +27,13 @@ from .queries import SessionEventPage, SessionEventPageRequest
 
 
 class BridgeSessionStore(Protocol):
+    """Event/snapshot write and read surface for one bridge Session.
+
+    [SessionInspectionProjector](projector.py) writes observation projections;
+    server persistence supplies event appends, snapshots, and waiting structurally.
+    HTTP inspection uses the narrower [SessionInspectionReader](ports.py).
+    """
+
     async def start(
         self,
         upstream: UpstreamInitialization | None = None,
@@ -71,6 +78,12 @@ class BridgeSessionStore(Protocol):
 
 
 class BridgeSessionStoreFactory(Protocol):
+    """Create, resolve, and remove Session-scoped [BridgeSessionStore](ports.py) views.
+
+    The coordinator consumes `create`/`get`/`remove` structurally; the server SQL
+    factory owns persistence and process-local notification resources.
+    """
+
     async def create(self, session_id: UUID) -> BridgeSessionStore: ...
 
     async def get(self, session_id: UUID) -> BridgeSessionStore | None: ...
@@ -79,6 +92,12 @@ class BridgeSessionStoreFactory(Protocol):
 
 
 class SessionInspectionReader(Protocol):
+    """Paginated management reads through `get_snapshot` and `list_events`.
+
+    The server SQL reader supplies this shape structurally, without widening the
+    runtime store or its lifecycle factory with HTTP query responsibilities.
+    """
+
     async def get_snapshot(self, session_id: UUID) -> BridgeSessionSnapshot | None: ...
 
     async def list_events(self, request: SessionEventPageRequest) -> SessionEventPage | None: ...

@@ -11,10 +11,14 @@ from .models import BridgeSessionRecord, BridgeSessionStatus
 
 
 class SessionQueryModel(BaseModel):
+    """Immutable base for typed Session-history query boundaries."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 class SessionKeyset(SessionQueryModel):
+    """Represent a deterministic descending creation-time/UUID pagination boundary."""
+
     created_at: datetime
     session_id: UUID
 
@@ -27,6 +31,8 @@ class SessionKeyset(SessionQueryModel):
 
 
 class SessionPageRequest(SessionQueryModel):
+    """Filter lifecycle history with a bounded limit and optional keyset boundary."""
+
     endpoint_id: UUID | None = None
     status: BridgeSessionStatus | None = None
     before: SessionKeyset | None = None
@@ -34,5 +40,7 @@ class SessionPageRequest(SessionQueryModel):
 
 
 class SessionPage(SessionQueryModel):
+    """Return lifecycle records and the typed boundary for another management page."""
+
     items: tuple[BridgeSessionRecord, ...]
     next_keyset: SessionKeyset | None = None

@@ -37,7 +37,13 @@ from ..topology.revisions import EndpointTopologyRevision
 
 
 class SessionInspectionProjector(BridgeObserver):
-    """Apply observations for one bridge session to its inspection store."""
+    """Project core observations into one Session's durable inspection state.
+
+    This class explicitly inherits the core observer Protocol, unlike the Host
+    observers' structural conformance. `observe` maps protocol facts onto
+    [BridgeSessionStore](ports.py); [GatewaySessionCoordinator](../sessions/service.py)
+    injects the store and the captured endpoint revision before core execution.
+    """
 
     def __init__(
         self,

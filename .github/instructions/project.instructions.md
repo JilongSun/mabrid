@@ -29,6 +29,10 @@ belong to the product.
 
 - Use precise MCP terminology such as `bridge`, `host`, `adapter`, `session`, and `resource`.
 - Prefer typed, contract-first boundaries and small explicit implementations.
+- Document production classes as well as modules: explain responsibility, ownership, and important
+	invariants so reviewers can follow the architecture without reconstructing every call site.
+- Make structural Protocol and callable relationships explicit in class documentation, with
+	verified source navigation links. Do not change inheritance merely to visualize these relationships.
 - Preserve cross-platform behavior and avoid OS-specific path or shell assumptions.
 - Do not expose management, persistence, routing, or debugging concepts in model-visible MCP
 	descriptions unless the protocol contract requires them.

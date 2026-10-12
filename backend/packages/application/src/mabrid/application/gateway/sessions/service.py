@@ -39,6 +39,8 @@ def utc_now() -> datetime:
 
 @dataclass(frozen=True)
 class BridgeSessionRuntime:
+    """Hold a live core Session and its process-local shutdown/closure synchronization."""
+
     session_id: UUID
     endpoint_id: UUID
     bridge_session: BridgeSession
@@ -47,7 +49,14 @@ class BridgeSessionRuntime:
 
 
 class GatewaySessionCoordinator:
-    """Coordinates managed topology, persisted sessions, and core bridge lifecycles."""
+    """Coordinate published topology, durable lifecycle records, and live core Sessions.
+
+    Consume [TopologyReader](../topology/ports.py), [BridgeSessionRepository](ports.py),
+    [BridgeSessionStoreFactory](../inspection/ports.py), and optional observer
+    factories structurally. [GatewayMcpSessionBroker](transport.py) adapts this
+    use-case owner to core ASGI; the coordinator itself is not that broker port.
+    Live transport correlations are process-local, never reconstructed from SQLite.
+    """
 
     def __init__(
         self,

@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class PublishedEndpoint:
+    """Pair a captured endpoint revision with its executable core plan and stable path."""
+
     revision: EndpointTopologyRevision
     plan: EndpointPlan
 
@@ -29,6 +31,13 @@ class PublishedEndpoint:
 
 
 class PublishedTopology:
+    """Materialize enabled endpoint revisions into a process-lifetime publication index.
+
+    Consume [TopologyReader](../topology/ports.py) structurally through
+    `list_current_revisions`; the coordinator owns startup loading. This is not a
+    live database view or the all-heads management topology snapshot.
+    """
+
     def __init__(self, reader: TopologyReader) -> None:
         self._reader = reader
         self._endpoints: dict[UUID, PublishedEndpoint] = {}

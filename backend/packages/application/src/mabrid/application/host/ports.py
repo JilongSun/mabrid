@@ -17,10 +17,22 @@ from ..mcp_apps import WidgetEvent
 
 
 class AgentRunEventSource(Protocol):
+    """Compatibility Run source consumed by [HostEventStream](service.py).
+
+    [AgentHostService](../agent_host/application/service.py) structurally supplies
+    `run_events`; the presentation merger does not depend on its runtime adapter.
+    """
+
     def run_events(self, command: StartRunCommand) -> AsyncGenerator[AgentRunEvent, None]: ...
 
 
 class SessionRunEventSource(Protocol):
+    """Native Session source consumed by [HostSessionEventStream](service.py).
+
+    [AgentSessionService](../agent_host/application/sessions.py) structurally
+    supplies `target_id` and `run_session`; Session admission remains application-owned.
+    """
+
     target_id: str
 
     def run_session(
@@ -29,6 +41,12 @@ class SessionRunEventSource(Protocol):
 
 
 class WidgetEventReader(Protocol):
+    """Read/wait widget outcomes for Host presentation without lifecycle writes.
+
+    [InMemoryWidgetEventStore](../mcp_apps/store.py) supplies `list_for_run`,
+    `wait_for_events`, and `wait_until_settled` structurally.
+    """
+
     async def list_for_run(self, run_id: UUID) -> tuple[WidgetEvent, ...]: ...
 
     async def wait_for_events(self, run_id: UUID, after: int) -> tuple[WidgetEvent, ...]: ...
@@ -37,6 +55,12 @@ class WidgetEventReader(Protocol):
 
 
 class ToolActivityReader(Protocol):
+    """Read/wait attributed tool events and resolve their public invocation IDs.
+
+    [InMemoryToolActivityStore](../agent_host/application/activity.py) supplies
+    `list_for_run`, `wait_for_events`, and `invocation_id` structurally to the merger.
+    """
+
     async def list_for_run(self, run_id: UUID) -> tuple[ToolActivityEvent, ...]: ...
 
     async def wait_for_events(self, run_id: UUID, after: int) -> tuple[ToolActivityEvent, ...]: ...

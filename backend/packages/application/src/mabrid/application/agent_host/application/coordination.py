@@ -18,6 +18,13 @@ class AgentRunConflictError(RuntimeError):
 
 
 class AgentRunCoordinator:
+    """Enforce endpoint ownership and one active/settling Run per configured Target.
+
+    Shared by [AgentHostService](service.py), [AgentSessionService](sessions.py),
+    and attribution observers. This process-local lock supplements, not replaces,
+    the native service's durable unresolved-Run claim and restart restoration.
+    """
+
     def __init__(self, targets: Iterable[AgentTarget]) -> None:
         self._targets_by_id: dict[str, AgentTarget] = {}
         self._targets_by_endpoint: dict[str, AgentTarget] = {}

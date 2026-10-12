@@ -11,10 +11,14 @@ from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, PositiveFloat, mo
 
 
 class ServiceModel(BaseModel):
+    """Immutable, extra-forbid base for application-owned Gateway values."""
+
     model_config = ConfigDict(extra="forbid")
 
 
 class StreamableHttpConnection(ServiceModel):
+    """Resolved streamable HTTP settings used for execution, including credential values."""
+
     transport: Literal["streamable-http"] = "streamable-http"
     url: AnyHttpUrl
     headers: dict[str, str] = Field(default_factory=dict)
@@ -22,12 +26,16 @@ class StreamableHttpConnection(ServiceModel):
 
 
 class SseConnection(ServiceModel):
+    """Resolved legacy SSE settings used for execution, not secret-safe management reads."""
+
     transport: Literal["sse"] = "sse"
     url: AnyHttpUrl
     headers: dict[str, str] = Field(default_factory=dict)
 
 
 class StdioConnection(ServiceModel):
+    """Resolved subprocess launch settings used for execution, including environment values."""
+
     transport: Literal["stdio"] = "stdio"
     command: str = Field(min_length=1)
     args: list[str] = Field(default_factory=list)
@@ -42,6 +50,8 @@ UpstreamConnection = Annotated[
 
 
 class UpstreamServerDefinition(ServiceModel):
+    """Stable managed upstream identity and initial connection definition."""
+
     server_id: UUID = Field(default_factory=uuid4)
     slug: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     display_name: str = Field(min_length=1)
@@ -51,6 +61,8 @@ class UpstreamServerDefinition(ServiceModel):
 
 
 class EndpointBinding(ServiceModel):
+    """Define one endpoint-owned upstream association with namespace and routing order."""
+
     binding_id: UUID = Field(default_factory=uuid4)
     upstream_server_id: UUID
     namespace: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
@@ -59,6 +71,8 @@ class EndpointBinding(ServiceModel):
 
 
 class EndpointDefinition(ServiceModel):
+    """Stable managed endpoint identity and validated initial routing definition."""
+
     endpoint_id: UUID = Field(default_factory=uuid4)
     slug: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     display_name: str = Field(min_length=1)

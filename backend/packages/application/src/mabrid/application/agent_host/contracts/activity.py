@@ -10,6 +10,8 @@ from .base import AgentHostModel
 
 
 class ToolInvocationResult(AgentHostModel):
+    """Preserve the complete MCP tool result in attributed Agent Run activity."""
+
     content: tuple[dict[str, Any], ...] = ()
     structured_content: dict[str, Any] | None = None
     is_error: bool = False
@@ -17,6 +19,8 @@ class ToolInvocationResult(AgentHostModel):
 
 
 class ToolInvocationEventBase(AgentHostModel):
+    """Identify one tool invocation within a Target Run, independent of transport keys."""
+
     event_id: UUID = Field(default_factory=uuid4)
     occurred_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     run_id: UUID
@@ -26,16 +30,22 @@ class ToolInvocationEventBase(AgentHostModel):
 
 
 class ToolInvocationStarted(ToolInvocationEventBase):
+    """Report attributed tool input before execution completes."""
+
     kind: Literal["tool.started"] = "tool.started"
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
 class ToolInvocationCompleted(ToolInvocationEventBase):
+    """Report a successful attributed tool result with its stable invocation ID."""
+
     kind: Literal["tool.completed"] = "tool.completed"
     result: ToolInvocationResult
 
 
 class ToolInvocationFailed(ToolInvocationEventBase):
+    """Report attributed tool failure, retaining an error result when available."""
+
     kind: Literal["tool.failed"] = "tool.failed"
     error_code: str = Field(min_length=1)
     error_message: str = Field(min_length=1)

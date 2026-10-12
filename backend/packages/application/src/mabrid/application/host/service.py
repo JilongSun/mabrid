@@ -38,6 +38,13 @@ from .ports import AgentRunEventSource, WidgetEventReader, ToolActivityReader, S
 
 
 class _HostEventMerger:
+    """Merge narrow event-reader views into one ordered presentation stream.
+
+    Consume [WidgetEventReader](ports.py), [ToolActivityReader](ports.py), and
+    settlement; retain/cancel/join all reader tasks and close the owned source.
+    This presentation utility does not implement runtime execution or persistence.
+    """
+
     def __init__(
         self,
         widget_events: WidgetEventReader | None = None,
@@ -161,6 +168,13 @@ class _HostEventMerger:
 
 
 class HostEventStream(_HostEventMerger):
+    """Present compatibility agent, tool, and widget events using shared merge semantics.
+
+    Consume [AgentRunEventSource](ports.py), supplied by the Agent Host service.
+    Although its method is also named `run_events`, it yields Host envelopes and
+    is not an implementation of the agent-domain source Protocol.
+    """
+
     def __init__(
         self,
         agent_runs: AgentRunEventSource,
@@ -180,6 +194,13 @@ class HostEventStream(_HostEventMerger):
 
 
 class HostSessionEventStream(_HostEventMerger):
+    """Translate native Session events and merge live tool/widget presentation.
+
+    Consume [SessionRunEventSource](ports.py), supplied by the native Session
+    service; its own `run_session` yields Host envelopes, not adapter events.
+    Explicit source closure preserves settlement and cancellation ownership.
+    """
+
     def __init__(
         self,
         session_runs: SessionRunEventSource,

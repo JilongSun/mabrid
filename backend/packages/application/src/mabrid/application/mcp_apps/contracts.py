@@ -14,10 +14,14 @@ def utc_now() -> datetime:
 
 
 class McpAppsModel(BaseModel):
+    """Immutable, extra-forbid base for composed MCP Apps lifecycle values."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 class WidgetToolResult(McpAppsModel):
+    """Preserve the tool output used to initialize an interactive MCP App."""
+
     content: tuple[dict[str, Any], ...] = ()
     structured_content: dict[str, Any] | None = None
     is_error: bool = False
@@ -25,6 +29,8 @@ class WidgetToolResult(McpAppsModel):
 
 
 class ApplicationResourceContent(McpAppsModel):
+    """Preserve one fresh MCP Apps resource content item and its metadata."""
+
     uri: str
     mime_type: str | None = None
     text: str | None = None
@@ -33,6 +39,8 @@ class ApplicationResourceContent(McpAppsModel):
 
 
 class WidgetInstance(McpAppsModel):
+    """Combine attributed tool output and complete fresh resource payloads for one widget."""
+
     widget_id: UUID = Field(default_factory=uuid4)
     run_id: UUID
     target_id: str = Field(min_length=1)
@@ -46,6 +54,8 @@ class WidgetInstance(McpAppsModel):
 
 
 class WidgetCreated(McpAppsModel):
+    """Report a composed widget ready for first-party presentation."""
+
     kind: Literal["widget.created"] = "widget.created"
     event_id: UUID = Field(default_factory=uuid4)
     occurred_at: datetime = Field(default_factory=utc_now)
@@ -53,6 +63,8 @@ class WidgetCreated(McpAppsModel):
 
 
 class WidgetFailed(McpAppsModel):
+    """Report an attributed UI-resource failure while preserving the tool result."""
+
     kind: Literal["widget.failed"] = "widget.failed"
     event_id: UUID = Field(default_factory=uuid4)
     occurred_at: datetime = Field(default_factory=utc_now)

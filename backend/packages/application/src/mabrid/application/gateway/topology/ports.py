@@ -10,6 +10,13 @@ from .revisions import EndpointTopologyRevision
 
 
 class TopologyReader(Protocol):
+    """Load executable endpoint revisions for [GatewaySessionCoordinator](../sessions/service.py).
+
+    `list_current_revisions` selects enabled publication; slug and revision lookups
+    support Session creation. Server persistence supplies this port structurally,
+    not the all-heads management view of [TopologySnapshotReader](ports.py).
+    """
+
     async def list_current_revisions(self) -> list[EndpointTopologyRevision]: ...
 
     async def resolve_current_revision(
@@ -21,4 +28,10 @@ class TopologyReader(Protocol):
 
 
 class TopologySnapshotReader(Protocol):
+    """Read all current managed heads consistently through `read_snapshot`.
+
+    The server SQL adapter supplies this shape in one read transaction, including
+    disabled definitions; it is distinct from runtime [TopologyReader](ports.py).
+    """
+
     async def read_snapshot(self) -> TopologySnapshot: ...

@@ -11,15 +11,21 @@ from ...contracts.capabilities import RuntimeCapabilityObservation, RuntimeSuppo
 
 
 class HermesCapabilityDocumentModel(BaseModel):
+    """Base for Hermes-owned discovery documents, not provider-neutral capability contracts."""
+
     model_config = ConfigDict(extra="allow", frozen=True)
 
 
 class HermesAuthDescriptor(HermesCapabilityDocumentModel):
+    """Describe the authentication mechanism advertised by Hermes discovery."""
+
     type: str
     required: bool
 
 
 class HermesRuntimeDescriptor(HermesCapabilityDocumentModel):
+    """Preserve Hermes's runtime mode and tool-execution architecture evidence."""
+
     mode: str
     tool_execution: str
     split_runtime: bool
@@ -27,6 +33,8 @@ class HermesRuntimeDescriptor(HermesCapabilityDocumentModel):
 
 
 class HermesFeatureSet(HermesCapabilityDocumentModel):
+    """Parse vendor-advertised feature flags without treating them as local implementation."""
+
     chat_completions: bool = False
     chat_completions_streaming: bool = False
     responses_api: bool = False
@@ -47,11 +55,15 @@ class HermesFeatureSet(HermesCapabilityDocumentModel):
 
 
 class HermesEndpointDescriptor(HermesCapabilityDocumentModel):
+    """Pair an advertised HTTP method and path for explicit discovery verification."""
+
     method: str
     path: str
 
 
 class HermesCapabilityDocument(HermesCapabilityDocumentModel):
+    """Validate Hermes discovery before deriving conservative runtime support evidence."""
+
     object: Literal["hermes.api_server.capabilities"]
     platform: str
     model: str

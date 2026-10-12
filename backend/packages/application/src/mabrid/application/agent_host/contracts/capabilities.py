@@ -9,6 +9,8 @@ from .base import AgentHostModel
 
 
 class RuntimeSupport(AgentHostModel):
+    """Tri-state remote support evidence; absent proof remains unknown, not false."""
+
     session_create: bool | None = None
     session_reopen: bool | None = None
     session_history: bool | None = None
@@ -19,6 +21,8 @@ class RuntimeSupport(AgentHostModel):
 
 
 class RuntimeCapabilityObservation(AgentHostModel):
+    """Timestamped discovery availability and support evidence for one runtime interface."""
+
     availability: Literal["available", "unavailable", "unknown"]
     reason: Literal[
         "discovery_verified",
@@ -34,6 +38,8 @@ class RuntimeCapabilityObservation(AgentHostModel):
 
 
 class EffectiveCapability(AgentHostModel):
+    """Separate implementation, deployment selection, remote support, and availability."""
+
     implemented: bool
     enabled: bool
     remote_support: bool | None = None
@@ -50,6 +56,8 @@ class EffectiveCapability(AgentHostModel):
 
 
 class AgentHostFeatures(AgentHostModel):
+    """Effective feature states, including explicitly unimplemented Host behaviors."""
+
     session_list: EffectiveCapability
     session_create: EffectiveCapability
     session_reopen: EffectiveCapability
@@ -66,6 +74,8 @@ class AgentHostFeatures(AgentHostModel):
 
 
 class AgentHostCapabilitySnapshot(AgentHostModel):
+    """Report Target selection, independent runtime evidence, and single-Run product features."""
+
     enabled: bool
     target_id: str | None = None
     native_runtime: RuntimeCapabilityObservation | None = None

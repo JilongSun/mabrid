@@ -13,6 +13,15 @@ from .service import BridgeSessionRuntime, GatewaySessionCoordinator
 
 
 class GatewayMcpSessionBroker:
+    """Adapt Gateway lifecycle use cases to core's opaque ASGI broker shape.
+
+    `open_session`, `resolve_session`, `bind_transport_session`, `close_session`,
+    and `transport` structurally implement the generic MCP Session broker.
+    [GatewaySessionCoordinator](service.py) owns the Session; the returned transport
+    is its downstream server, not an application-owned HTTP implementation.
+    Contract: [McpSessionBroker](../../../../../../bridge/src/mabrid/bridge/downstream/asgi.py).
+    """
+
     def __init__(self, coordinator: GatewaySessionCoordinator) -> None:
         self._coordinator = coordinator
 

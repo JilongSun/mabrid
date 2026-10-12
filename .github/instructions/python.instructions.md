@@ -22,6 +22,21 @@ applyTo: ["**/*.py"]
 - Use `typing.Protocol` or ABCs for adapter interfaces, not concrete implementations.
 - Use `pathlib.Path` and portable path operations rather than OS-specific string concatenation or hardcoded filesystem separators.
 
+## Architecture Documentation
+
+- Give every production class a concise English docstring. Keep simple data contracts brief;
+	explain lifecycle, ownership, and non-obvious invariants for services and adapters.
+- For Protocols and structural implementations, name the contract, matching methods/properties,
+	and the actual consumer or composition site. Distinguish structural conformance from inheritance;
+	document callable factories and reader views when they fulfill a port without a base class.
+- Use Markdown links such as `[PortName](../ports.py)` to the symbol's actual Python source file,
+	relative to the documenting file, so Pylance hover can preserve navigable links. Verify the file
+	and named symbol exist; do not invent editor inheritance support or use machine-specific paths.
+- Do not add imports, base classes, wrappers, or runtime behavior solely for documentation. Follow
+	the existing Protocol pattern and public facade boundaries.
+- Class docstrings can change Pydantic schema descriptions. Check that fields and validation stay
+	unchanged and refresh an affected frozen contract snapshot as documentation metadata only.
+
 ## Async Model
 
 - Use `anyio` or `asyncio` explicitly; do not mix threading primitives without deliberate isolation.

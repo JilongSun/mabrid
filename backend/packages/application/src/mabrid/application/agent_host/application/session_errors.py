@@ -15,6 +15,8 @@ SessionErrorCode = Literal[
 
 
 class AgentSessionError(RuntimeError):
+    """Carry a provider-neutral failure code across native Session use-case boundaries."""
+
     def __init__(self, code: SessionErrorCode, message: str) -> None:
         super().__init__(message)
         self.code = code

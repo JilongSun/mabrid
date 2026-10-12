@@ -16,6 +16,8 @@ def utc_now() -> datetime:
 
 
 class BridgeSessionStatus(StrEnum):
+    """Durable lifecycle states maintained by the Gateway Session coordinator."""
+
     STARTING = "starting"
     ACTIVE = "active"
     CLOSING = "closing"
@@ -24,6 +26,8 @@ class BridgeSessionStatus(StrEnum):
 
 
 class BridgeSessionRecord(ServiceModel):
+    """Persist lifecycle and captured endpoint revision, never live MCP transport state."""
+
     session_id: UUID = Field(default_factory=uuid4)
     endpoint_id: UUID
     endpoint_revision_id: UUID

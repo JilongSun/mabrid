@@ -27,6 +27,8 @@ from .ports import OperationAttributionReader, WidgetEventStore
 
 @dataclass(frozen=True)
 class _PendingToolOperation:
+    """Capture attribution, UI-resource URI, and eventual result for one pending tool."""
+
     tool_name: str
     application_resource_uri: str | None
     attribution: OperationRunAttribution
@@ -34,6 +36,14 @@ class _PendingToolOperation:
 
 
 class McpAppsLifecycleProjector:
+    """Compose a widget only from attributed tool completion and fresh resource evidence.
+
+    Async `observe` structurally supplies the bridge observation sink. Consume
+    [OperationAttributionReader](ports.py) and [WidgetEventStore](ports.py);
+    [McpAppsLifecycleObserverFactory](observers.py) binds this instance to a Session.
+    No provider metadata is trusted to infer a missing Run attribution.
+    """
+
     def __init__(
         self,
         session_key: str,

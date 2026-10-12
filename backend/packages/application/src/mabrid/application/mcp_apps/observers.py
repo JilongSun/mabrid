@@ -9,6 +9,12 @@ from .projector import McpAppsLifecycleProjector
 
 
 class McpAppsLifecycleObserverFactory:
+    """Create widget projectors only for the configured Agent Host endpoint.
+
+    `create` structurally supplies [BridgeSessionObserverFactory](../gateway/sessions/observers.py);
+    its returned [McpAppsLifecycleProjector](projector.py) supplies async `observe`.
+    """
+
     def __init__(
         self,
         endpoint_slug: str,

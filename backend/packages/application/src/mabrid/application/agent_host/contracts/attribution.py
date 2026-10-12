@@ -8,6 +8,8 @@ from .base import AgentHostModel
 
 
 class OperationRunAttribution(AgentHostModel):
+    """Capture the Target Run owning a Gateway tool operation when that operation starts."""
+
     run_id: UUID
     target_id: str = Field(min_length=1)
     session_key: str = Field(min_length=1)

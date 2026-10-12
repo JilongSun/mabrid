@@ -14,6 +14,8 @@ def utc_now() -> datetime:
 
 
 class SessionStatus(StrEnum):
+    """Lifecycle vocabulary for an inspection snapshot, not the runtime Session owner."""
+
     STARTING = "starting"
     READY = "ready"
     DEGRADED = "degraded"
@@ -22,18 +24,24 @@ class SessionStatus(StrEnum):
 
 
 class UpstreamAvailabilityStatus(StrEnum):
+    """Diagnostic availability evidence for one captured upstream binding."""
+
     UNKNOWN = "unknown"
     AVAILABLE = "available"
     FAILED = "failed"
 
 
 class ToolCallStatus(StrEnum):
+    """Diagnostic state of an observed tool invocation."""
+
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
 
 
 class UpstreamInitialization(BaseModel):
+    """Persist initialization identity and raw capability evidence for inspection."""
+
     server_name: str
     server_version: str | None = None
     protocol_version: str | None = None
@@ -44,6 +52,8 @@ class UpstreamInitialization(BaseModel):
 
 
 class ToolDescriptor(BaseModel):
+    """Inspection projection of a published MCP tool, including schemas and metadata."""
+
     name: str
     title: str | None = None
     description: str | None = None
@@ -55,6 +65,8 @@ class ToolDescriptor(BaseModel):
 
 
 class ToolCallResult(BaseModel):
+    """Persist a complete MCP tool output for diagnostic reads."""
+
     content: list[dict[str, Any]] = Field(default_factory=list)
     structured_content: dict[str, Any] | None = None
     is_error: bool = False
@@ -62,6 +74,8 @@ class ToolCallResult(BaseModel):
 
 
 class ToolCallRecord(BaseModel):
+    """Pair one observed invocation's input, timing, diagnostic state, and result."""
+
     call_id: str
     tool_name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
@@ -72,6 +86,8 @@ class ToolCallRecord(BaseModel):
 
 
 class ResourceContent(BaseModel):
+    """Persist an individual resource content item without truncating text or binary data."""
+
     uri: str
     mime_type: str | None = None
     text: str | None = None
@@ -80,6 +96,8 @@ class ResourceContent(BaseModel):
 
 
 class ResourceReadRecord(BaseModel):
+    """Retain complete resource-read contents and optional operation attribution."""
+
     operation_key: str | None = None
     requested_uri: str
     contents: list[ResourceContent]
@@ -88,6 +106,8 @@ class ResourceReadRecord(BaseModel):
 
 
 class ResourceDescriptor(BaseModel):
+    """Represent MCP resource discovery fields in the inspection vocabulary."""
+
     name: str
     uri: str
     title: str | None = None
@@ -99,6 +119,8 @@ class ResourceDescriptor(BaseModel):
 
 
 class UpstreamAvailability(BaseModel):
+    """Attach availability and failure evidence to exact endpoint/upstream revisions."""
+
     binding_revision_id: str
     namespace: str | None = None
     upstream_revision_id: str
@@ -111,6 +133,8 @@ class UpstreamAvailability(BaseModel):
 
 
 class BridgeSessionSnapshot(BaseModel):
+    """Current diagnostic projection of discovery, tool calls, resources, and errors."""
+
     session_id: str
     status: SessionStatus = SessionStatus.STARTING
     upstream: UpstreamInitialization | None = None

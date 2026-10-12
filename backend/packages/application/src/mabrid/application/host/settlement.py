@@ -14,6 +14,13 @@ from ..gateway.sessions import BridgeSessionObserverFactory
 
 
 class HostRunSettlement:
+    """Await bounded local tool/widget completion before terminal presentation.
+
+    `wait_until_settled` structurally supplies [AgentRunSettlement](../agent_host/application/ports.py).
+    Unknown or failed local workflow state prevents false completion; remote exit
+    verification remains the native Session service's separate responsibility.
+    """
+
     def __init__(
         self, widgets: WidgetEventStore | None = None, *, timeout_seconds: float = 5.0
     ) -> None:
@@ -74,6 +81,13 @@ class HostRunSettlement:
 
 
 class HostObservationFactory:
+    """Create bounded, ordered Host observers for an assigned Gateway endpoint.
+
+    `create` structurally supplies [BridgeSessionObserverFactory](../gateway/sessions/observers.py).
+    [compose_host_capabilities](composition.py) injects attribution, activity, and
+    optional widget factories without changing core MCP method results.
+    """
+
     def __init__(
         self,
         coordinator: AgentRunCoordinator,
@@ -109,6 +123,12 @@ class HostObservationFactory:
 
 
 class _HostObserver:
+    """Supply the core async observation shape with Host failure/timeout isolation.
+
+    Track pending tool operations around ordered downstream projections; ordinary
+    observer failures mark Host settlement failed, while cancellation propagates.
+    """
+
     def __init__(
         self,
         target_id: str,

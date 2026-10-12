@@ -25,6 +25,8 @@ def utc_now() -> datetime:
 
 
 class UpstreamRevision(ServiceModel):
+    """Immutable upstream settings captured independently of its mutable managed head."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     revision_id: UUID = Field(default_factory=uuid4)
@@ -39,6 +41,8 @@ class UpstreamRevision(ServiceModel):
 
 
 class EndpointBindingRevision(ServiceModel):
+    """Capture one binding and its exact immutable upstream revision."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     binding_revision_id: UUID = Field(default_factory=uuid4)
@@ -50,6 +54,8 @@ class EndpointBindingRevision(ServiceModel):
 
 
 class EndpointTopologyRevision(ServiceModel):
+    """Immutable endpoint topology selected for publication and pinned by Session history."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     revision_id: UUID = Field(default_factory=uuid4)

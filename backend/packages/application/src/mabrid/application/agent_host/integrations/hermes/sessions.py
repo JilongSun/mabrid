@@ -55,6 +55,16 @@ JSON_ARGUMENTS = TypeAdapter(dict[str, JsonValue])
 
 
 class HermesSessionAdapter:
+    """Translate selected native Hermes Session and Run HTTP/SSE contracts.
+
+    Structurally supply [RuntimeSessionCatalog](../../application/ports.py) via
+    `create_session`/`get_session`, [RuntimeSessionHistory](../../application/ports.py)
+    via `read_history`, [RuntimeSessionExecution](../../application/ports.py) via
+    `run_session`, and [RuntimeSessionRunControl](../../application/ports.py) via
+    `request_stop`/`get_run_state`. `inspect_capabilities` is a separate probe view.
+    Server composition owns `close`; SSE done and stop acceptance do not prove exit.
+    """
+
     def __init__(
         self,
         *,

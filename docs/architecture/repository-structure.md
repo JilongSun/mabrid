@@ -59,6 +59,32 @@ mabrid.server ----------------> mabrid.bridge
 - Detailed contracts are imported from their owning context facade. Distribution roots expose
   only high-level entry points.
 
+## Reviewing Structural Contracts
+
+Production modules document their package boundary; classes document their responsibility and
+important ownership/lifecycle invariants. Protocols and concrete adapters additionally name their
+structural relationship, matching methods or properties, and the actual consumer or composition
+site. A matching method name alone does not prove conformance: parameter and return types matter.
+
+Class docstrings use Markdown source links that Pylance preserves in hover documentation. Link
+labels name the class or function; targets are portable paths relative to the documenting source
+file. Follow a link to the owning file and select the named symbol in the editor outline. These
+links do not change inheritance, create a nominal type hierarchy, or guarantee a language server's
+automatic Go to Implementation results for structural typing.
+
+For a concrete example, start at
+[SqliteAgentSessionRepository](../../backend/apps/server/src/mabrid/server/persistence/agent_host.py),
+follow its
+[AgentSessionRepository](../../backend/packages/application/src/mabrid/application/agent_host/application/ports.py)
+contract and consumer, then inspect
+[compose_agent_host](../../backend/apps/server/src/mabrid/server/composition/agent_host.py)
+for actual injection. Observer factories, store reader views, and async bound-method callbacks use
+the same documented approach without adding base classes or documentation-only imports.
+
+[Architecture tests](../../backend/tests/test_architecture.py) require class docstrings and verify
+that source links resolve to files containing the named symbols. Descriptive Pydantic schema
+changes are reflected in the frozen frontend contract without altering its fields or validation.
+
 ## Ownership
 
 | Owner | Responsibility |
@@ -79,8 +105,8 @@ mabrid.server ----------------> mabrid.bridge
 ## Key Invariants
 
 - Core owns all MCP path, method, header, SSE query, and SDK transport mechanics.
-- The core ASGI adapter depends on the application `McpSessionBroker` contract; it never accesses
-  topology repositories or persistence.
+- The core ASGI adapter consumes the core-defined `McpSessionBroker` contract, implemented by the
+  application broker; it never accesses topology repositories or persistence.
 - `mcp-session-id` correlation is process-local because the corresponding SDK transport state
   cannot survive restart. SQLite stores application session history, not live transport state.
 - Each bridge session captures one immutable endpoint revision and corresponding core plan.
