@@ -26,6 +26,7 @@ class McpAppsLifecycleObserverFactory:
         self._events = events
 
     def create(self, session_key: str, endpoint_slug: str) -> BridgeObserver | None:
+        """Implement [BridgeSessionObserverFactory.create](../gateway/sessions/observers.py:19)."""
         if endpoint_slug != self._endpoint_slug:
             return None
         return McpAppsLifecycleProjector(session_key, self._attributions, self._events)

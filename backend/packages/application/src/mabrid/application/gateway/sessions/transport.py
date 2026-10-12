@@ -26,6 +26,7 @@ class GatewayMcpSessionBroker:
         self._coordinator = coordinator
 
     async def open_session(self, endpoint_key: str) -> BridgeSessionRuntime | None:
+        """Implement [McpSessionBroker.open_session](../../../../../../bridge/src/mabrid/bridge/downstream/asgi.py:61)."""
         if self._coordinator.resolve_published_endpoint(endpoint_key) is None:
             return None
         return await self._coordinator.open_session(endpoint_key)
@@ -35,6 +36,7 @@ class GatewayMcpSessionBroker:
         endpoint_key: str,
         transport_session_id: str,
     ) -> BridgeSessionRuntime | None:
+        """Implement [McpSessionBroker.resolve_session](../../../../../../bridge/src/mabrid/bridge/downstream/asgi.py:63)."""
         return await self._coordinator.resolve_session(endpoint_key, transport_session_id)
 
     async def bind_transport_session(
@@ -42,10 +44,13 @@ class GatewayMcpSessionBroker:
         session: BridgeSessionRuntime,
         transport_session_id: str,
     ) -> None:
+        """Implement [McpSessionBroker.bind_transport_session](../../../../../../bridge/src/mabrid/bridge/downstream/asgi.py:69)."""
         await self._coordinator.bind_transport_session(session, transport_session_id)
 
     async def close_session(self, session: BridgeSessionRuntime) -> None:
+        """Implement [McpSessionBroker.close_session](../../../../../../bridge/src/mabrid/bridge/downstream/asgi.py:75)."""
         await self._coordinator.close_session(session)
 
     def transport(self, session: BridgeSessionRuntime) -> McpTransportSession:
+        """Implement [McpSessionBroker.transport](../../../../../../bridge/src/mabrid/bridge/downstream/asgi.py:77)."""
         return session.bridge_session.transport

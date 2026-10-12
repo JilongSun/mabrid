@@ -62,6 +62,7 @@ class HostRunSettlement:
             )
 
     async def wait_until_settled(self, run_id: UUID) -> None:
+        """Implement [AgentRunSettlement.wait_until_settled](../agent_host/application/ports.py:68)."""
         try:
             with anyio.fail_after(self._timeout):
                 async with self._condition:
@@ -104,6 +105,7 @@ class HostObservationFactory:
         self._timeout = timeout_seconds
 
     def create(self, session_key: str, endpoint_slug: str) -> BridgeObserver | None:
+        """Implement [BridgeSessionObserverFactory.create](../gateway/sessions/observers.py:19)."""
         target = self._coordinator.target_for_endpoint(endpoint_slug)
         if target is None:
             return None
@@ -125,6 +127,8 @@ class HostObservationFactory:
 class _HostObserver:
     """Supply the core async observation shape with Host failure/timeout isolation.
 
+    Structurally implements [BridgeObserver](../../../../../bridge/src/mabrid/bridge/contracts/observer.py:10)
+    through `observe`; `HostObservationFactory.create` returns this composed sink.
     Track pending tool operations around ordered downstream projections; ordinary
     observer failures mark Host settlement failed, while cancellation propagates.
     """
@@ -146,6 +150,7 @@ class _HostObserver:
         self._timeout = timeout_seconds
 
     async def observe(self, event: BridgeObservation) -> None:
+        """Implement [BridgeObserver.observe](../../../../../bridge/src/mabrid/bridge/contracts/observer.py:18) with bounded Host projection."""
         run_id = await self._coordinator.active_run_id(self._target_id)
         try:
             with anyio.fail_after(self._timeout):

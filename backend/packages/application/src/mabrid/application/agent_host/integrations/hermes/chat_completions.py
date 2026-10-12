@@ -75,6 +75,7 @@ class HermesChatCompletionsAdapter:
 
     @property
     def profile(self) -> AgentRuntimeProfile:
+        """Implement [AgentRuntime.profile](../../application/ports.py:36)."""
         return HERMES_CHAT_COMPLETIONS_PROFILE
 
     async def fetch_capability_document(self) -> HermesCapabilityDocument:
@@ -84,6 +85,7 @@ class HermesChatCompletionsAdapter:
         )
 
     async def inspect_capabilities(self) -> RuntimeCapabilityObservation:
+        """Implement [RuntimeCapabilityProbe.inspect_capabilities](../../application/ports.py:48)."""
         try:
             response = await self._client.get("/capabilities", cast_to=httpx.Response)
             verified = HermesCapabilityDocument.model_validate_json(response.content, strict=True)
@@ -98,6 +100,7 @@ class HermesChatCompletionsAdapter:
         return capability_observation(verified)
 
     async def run(self, command: StartRunCommand) -> AsyncGenerator[AgentAdapterEvent, None]:
+        """Implement [AgentRuntime.run](../../application/ports.py:38)."""
         stream = await self._client.chat.completions.create(
             model=await self._resolve_remote_model_id(),
             messages=[_to_openai_message(message) for message in command.messages],
@@ -143,6 +146,7 @@ class HermesChatCompletionsAdapter:
         )
 
     async def close(self) -> None:
+        """Implement [ManagedAgentRuntime.close](../../application/ports.py:58)."""
         await self._client.close()
 
     async def _resolve_remote_model_id(self) -> str:

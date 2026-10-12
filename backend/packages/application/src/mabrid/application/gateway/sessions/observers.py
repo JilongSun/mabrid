@@ -34,6 +34,7 @@ class CompositeBridgeSessionObserverFactory:
             )
 
     def create(self, session_key: str, endpoint_slug: str) -> BridgeObserver | None:
+        """Implement [BridgeSessionObserverFactory.create](observers.py:19)."""
         observers = tuple(
             observer
             for factory in self._factories
@@ -49,6 +50,8 @@ class CompositeBridgeObserver:
 
     This simple composition propagates failures; Host's bounded observer wrapper
     applies its own isolation policy rather than changing this core sink shape.
+
+    Contract: [BridgeObserver](../../../../../../bridge/src/mabrid/bridge/contracts/observer.py:10).
     """
 
     def __init__(self, observers: Iterable[BridgeObserver]) -> None:
@@ -57,5 +60,6 @@ class CompositeBridgeObserver:
             raise ValueError("Composite bridge observer requires at least one observer")
 
     async def observe(self, event: BridgeObservation) -> None:
+        """Implement [BridgeObserver.observe](../../../../../../bridge/src/mabrid/bridge/contracts/observer.py:18)."""
         for observer in self._observers:
             await observer.observe(event)

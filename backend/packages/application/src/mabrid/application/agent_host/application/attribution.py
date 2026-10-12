@@ -40,6 +40,7 @@ class InMemoryOperationRunAttributionRegistry:
         self._lock = Lock()
 
     async def record(self, attribution: OperationRunAttribution) -> None:
+        """Implement [OperationRunAttributionRegistry.record](attribution.py:21)."""
         key = (attribution.session_key, attribution.operation_key)
         async with self._lock:
             existing = self._attributions.get(key)
@@ -55,6 +56,7 @@ class InMemoryOperationRunAttributionRegistry:
         session_key: str,
         operation_key: str,
     ) -> OperationRunAttribution | None:
+        """Implement [OperationRunAttributionRegistry.get](attribution.py:23) and [OperationAttributionReader.get](../../mcp_apps/ports.py:19)."""
         async with self._lock:
             return self._attributions.get((session_key, operation_key))
 
@@ -64,6 +66,8 @@ class AgentOperationAttributionObserver:
 
     `observe` structurally supplies the core observation sink. Recording before
     tool/widget projection makes later events retain attribution after Run exit.
+
+    Contract: [BridgeObserver](../../../../../../bridge/src/mabrid/bridge/contracts/observer.py:10).
     """
 
     def __init__(
@@ -79,6 +83,7 @@ class AgentOperationAttributionObserver:
         self._registry = registry
 
     async def observe(self, event: BridgeObservation) -> None:
+        """Implement [BridgeObserver.observe](../../../../../../bridge/src/mabrid/bridge/contracts/observer.py:18)."""
         if event.session_key != self._session_key:
             raise ValueError(
                 f"observation session mismatch: {event.session_key} != {self._session_key}"
@@ -115,6 +120,7 @@ class AgentOperationAttributionObserverFactory:
         self._registry = registry
 
     def create(self, session_key: str, endpoint_slug: str) -> BridgeObserver | None:
+        """Implement [BridgeSessionObserverFactory.create](../../gateway/sessions/observers.py:19)."""
         target = self._coordinator.target_for_endpoint(endpoint_slug)
         if target is None:
             return None

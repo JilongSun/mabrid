@@ -84,6 +84,7 @@ class AgentHostService:
         ]
 
     async def run_events(self, command: StartRunCommand) -> AsyncGenerator[AgentRunEvent, None]:
+        """Implement [AgentRunEventSource.run_events](../../host/ports.py:26)."""
         command = command.model_copy(update={"model": self._target.target_id})
         await self._coordinator.start_run(self._target.target_id, command.run_id)
         run_active = True

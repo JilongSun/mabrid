@@ -197,7 +197,7 @@ class HostSessionEventStream(_HostEventMerger):
     """Translate native Session events and merge live tool/widget presentation.
 
     Consume [SessionRunEventSource](ports.py:29), supplied by the native Session
-    service; its own `run_session` yields Host envelopes, not adapter events.
+    service; its own `run_events` yields Host envelopes, not adapter events.
     Explicit source closure preserves settlement and cancellation ownership.
     """
 

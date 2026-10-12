@@ -43,6 +43,8 @@ class SessionInspectionProjector(BridgeObserver):
     observers' structural conformance. `observe` maps protocol facts onto
     [BridgeSessionStore](ports.py:29); [GatewaySessionCoordinator](../sessions/service.py:51)
     injects the store and the captured endpoint revision before core execution.
+
+    Contract: [BridgeObserver](../../../../../../bridge/src/mabrid/bridge/contracts/observer.py:10).
     """
 
     def __init__(
@@ -61,6 +63,7 @@ class SessionInspectionProjector(BridgeObserver):
         self._availability: dict[str, UpstreamAvailability] = {}
 
     async def observe(self, event: BridgeObservation) -> None:
+        """Implement [BridgeObserver.observe](../../../../../../bridge/src/mabrid/bridge/contracts/observer.py:18)."""
         if event.session_key != self._session_key:
             raise ValueError(
                 f"observation session mismatch: {event.session_key} != {self._session_key}"

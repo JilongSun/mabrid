@@ -25,6 +25,7 @@ class InMemoryWidgetEventStore:
         self._condition = Condition()
 
     async def start_operation(self, attribution: OperationRunAttribution) -> None:
+        """Implement [WidgetEventStore.start_operation](ports.py:34)."""
         key = (attribution.session_key, attribution.operation_key)
         async with self._condition:
             if attribution.run_id in self._aborted_runs:
@@ -35,10 +36,12 @@ class InMemoryWidgetEventStore:
             pending.add(key)
 
     async def settle_operation(self, attribution: OperationRunAttribution) -> None:
+        """Implement [WidgetEventStore.settle_operation](ports.py:36)."""
         async with self._condition:
             self._settle(attribution.run_id, (attribution.session_key, attribution.operation_key))
 
     async def append(self, event: WidgetEvent) -> None:
+        """Implement [WidgetEventStore.append](ports.py:38)."""
         key = _event_operation_key(event)
         run_id = _event_run_id(event)
         async with self._condition:
@@ -54,10 +57,12 @@ class InMemoryWidgetEventStore:
             self._condition.notify_all()
 
     async def list_for_run(self, run_id: UUID) -> tuple[WidgetEvent, ...]:
+        """Implement [WidgetEventStore.list_for_run](ports.py:40) and [WidgetEventReader.list_for_run](../host/ports.py:50)."""
         async with self._condition:
             return tuple(event for event in self._events if _event_run_id(event) == run_id)
 
     async def wait_for_events(self, run_id: UUID, after: int) -> tuple[WidgetEvent, ...]:
+        """Implement [WidgetEventReader.wait_for_events](../host/ports.py:52)."""
         if after < 0:
             raise ValueError("Event offset must not be negative")
         async with self._condition:
@@ -67,10 +72,12 @@ class InMemoryWidgetEventStore:
             return tuple(event for event in self._events if _event_run_id(event) == run_id)[after:]
 
     async def wait_until_settled(self, run_id: UUID) -> None:
+        """Implement [WidgetEventStore.wait_until_settled](ports.py:42) and [WidgetEventReader.wait_until_settled](../host/ports.py:54)."""
         async with self._condition:
             await self._condition.wait_for(lambda: not self._pending_by_run.get(run_id))
 
     async def abort_run(self, run_id: UUID) -> None:
+        """Implement [WidgetEventStore.abort_run](ports.py:44)."""
         async with self._condition:
             self._aborted_runs.add(run_id)
             self._pending_by_run.pop(run_id, None)

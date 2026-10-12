@@ -97,15 +97,18 @@ class InMemoryToolActivityStore:
             self._condition.notify_all()
 
     async def invocation_id(self, session_key: str, operation_key: str) -> UUID | None:
+        """Implement [ToolActivityReader.invocation_id](../../host/ports.py:68)."""
         async with self._condition:
             started = self._invocations.get((session_key, operation_key))
             return started.tool_invocation_id if started is not None else None
 
     async def list_for_run(self, run_id: UUID) -> tuple[ToolActivityEvent, ...]:
+        """Implement [ToolActivityReader.list_for_run](../../host/ports.py:64)."""
         async with self._condition:
             return tuple(self._events.get(run_id, ()))
 
     async def wait_for_events(self, run_id: UUID, after: int) -> tuple[ToolActivityEvent, ...]:
+        """Implement [ToolActivityReader.wait_for_events](../../host/ports.py:66)."""
         if after < 0:
             raise ValueError("Event offset must not be negative")
         async with self._condition:
@@ -127,14 +130,17 @@ class AgentToolActivityObserverFactory:
         self._events = events
 
     def create(self, session_key: str, endpoint_slug: str) -> BridgeObserver:
+        """Implement [BridgeSessionObserverFactory.create](../../gateway/sessions/observers.py:19)."""
         return _ToolActivityObserver(session_key, self._attributions, self._events)
 
 
 class _ToolActivityObserver:
-    """Structurally consume `observe` calls for one Session's attributed tool activity.
+    """Project one Session's attributed tool activity through the core observer port.
 
     Read attribution on start, then pair completion with the store's invocation;
     this observer does not infer Run ownership from a provider's tool metadata.
+
+    Contract: [BridgeObserver](../../../../../../bridge/src/mabrid/bridge/contracts/observer.py:10).
     """
 
     def __init__(
@@ -148,6 +154,7 @@ class _ToolActivityObserver:
         self._events = events
 
     async def observe(self, event: BridgeObservation) -> None:
+        """Implement [BridgeObserver.observe](../../../../../../bridge/src/mabrid/bridge/contracts/observer.py:18)."""
         if event.session_key != self._session_key:
             raise ValueError("Tool activity observation session mismatch")
         if isinstance(event, ToolCallStarted):

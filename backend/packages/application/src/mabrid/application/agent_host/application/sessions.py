@@ -168,6 +168,7 @@ class AgentSessionService:
     async def run_session(
         self, command: StartSessionRunCommand
     ) -> AsyncGenerator[RuntimeSessionRunEvent, None]:
+        """Implement [SessionRunEventSource.run_session](../../host/ports.py:38)."""
         session = await self._load(command.session_id)
         pending = await self._repository.get_unsettled_run(self.target_id)
         if pending is not None:

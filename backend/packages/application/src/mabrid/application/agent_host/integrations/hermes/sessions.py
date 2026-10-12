@@ -63,6 +63,8 @@ class HermesSessionAdapter:
     `run_session`, and [RuntimeSessionRunControl](../../application/ports.py:144) via
     `request_stop`/`get_run_state`. `inspect_capabilities` is a separate probe view.
     Server composition owns `close`; SSE done and stop acceptance do not prove exit.
+
+    Contract: [RuntimeCapabilityProbe](../../application/ports.py:41).
     """
 
     def __init__(
@@ -95,6 +97,7 @@ class HermesSessionAdapter:
         await self._client.aclose()
 
     async def inspect_capabilities(self) -> RuntimeCapabilityObservation:
+        """Implement [RuntimeCapabilityProbe.inspect_capabilities](../../application/ports.py:48)."""
         try:
             response = await self._client.get(
                 self._root.join("v1/capabilities"), headers=self._headers
@@ -112,6 +115,7 @@ class HermesSessionAdapter:
         return capability_observation(document)
 
     async def create_session(self, command: CreateAgentSessionCommand) -> RuntimeAgentSession:
+        """Implement [RuntimeSessionCatalog.create_session](../../application/ports.py:115)."""
         response = await self._request(
             "POST",
             "api/sessions",
@@ -126,6 +130,7 @@ class HermesSessionAdapter:
         )
 
     async def get_session(self, reference: RuntimeSessionReference) -> RuntimeAgentSession:
+        """Implement [RuntimeSessionCatalog.get_session](../../application/ports.py:117)."""
         self._require_binding(reference)
         response = await self._request("GET", _session_path(reference.remote_session_id))
         try:
@@ -141,6 +146,7 @@ class HermesSessionAdapter:
     async def read_history(
         self, reference: RuntimeSessionReference, query: HistoryPageQuery
     ) -> RuntimeHistoryPage:
+        """Implement [RuntimeSessionHistory.read_history](../../application/ports.py:127)."""
         self._require_binding(reference)
         response = await self._request(
             "GET",
@@ -173,6 +179,7 @@ class HermesSessionAdapter:
             )
 
     async def request_stop(self, handle: RuntimeRunHandle) -> RuntimeStopReceipt:
+        """Implement [RuntimeSessionRunControl.request_stop](../../application/ports.py:151)."""
         self._require_handle(handle)
         response = await self._request(
             "POST", "v1/runs/" + quote(handle.remote_run_id, safe="") + "/stop", allow_missing=True
@@ -188,6 +195,7 @@ class HermesSessionAdapter:
         return RuntimeStopReceipt(handle=handle, accepted=True)
 
     async def get_run_state(self, handle: RuntimeRunHandle) -> RuntimeRunState:
+        """Implement [RuntimeSessionRunControl.get_run_state](../../application/ports.py:153)."""
         self._require_handle(handle)
         response = await self._request(
             "GET", "v1/runs/" + quote(handle.remote_run_id, safe=""), allow_missing=True
@@ -211,6 +219,7 @@ class HermesSessionAdapter:
     async def run_session(
         self, reference: RuntimeSessionReference, command: StartSessionRunCommand
     ) -> AsyncGenerator[RuntimeSessionRunEvent, None]:
+        """Implement [RuntimeSessionExecution.run_session](../../application/ports.py:139)."""
         self._require_binding(reference)
         stream_url = str(
             self._root.join(_session_path(reference.remote_session_id) + "/chat/stream")

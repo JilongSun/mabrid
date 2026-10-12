@@ -42,6 +42,8 @@ class McpAppsLifecycleProjector:
     [OperationAttributionReader](ports.py:12) and [WidgetEventStore](ports.py:26);
     [McpAppsLifecycleObserverFactory](observers.py:11) binds this instance to a Session.
     No provider metadata is trusted to infer a missing Run attribution.
+
+    Contract: [BridgeObserver](../../../../../bridge/src/mabrid/bridge/contracts/observer.py:10).
     """
 
     def __init__(
@@ -57,6 +59,7 @@ class McpAppsLifecycleProjector:
         self._operations: dict[str, _PendingToolOperation] = {}
 
     async def observe(self, event: BridgeObservation) -> None:
+        """Implement [BridgeObserver.observe](../../../../../bridge/src/mabrid/bridge/contracts/observer.py:18)."""
         if event.session_key != self._session_key:
             raise ValueError(
                 f"observation session mismatch: {event.session_key} != {self._session_key}"
