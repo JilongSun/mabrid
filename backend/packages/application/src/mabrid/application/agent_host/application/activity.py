@@ -20,7 +20,7 @@ class InMemoryToolActivityStore:
     """Project attributed tool starts/results into ordered process-local Run events.
 
     Writes belong to the activity observer; `list_for_run`, `wait_for_events`,
-    and `invocation_id` structurally expose [ToolActivityReader](../../host/ports.py).
+    and `invocation_id` structurally expose [ToolActivityReader](../../host/ports.py:57).
     Duplicate starts/completions are rejected; invocation IDs survive projection.
     """
 
@@ -116,8 +116,8 @@ class InMemoryToolActivityStore:
 class AgentToolActivityObserverFactory:
     """Supply the activity projection stage after operation attribution.
 
-    `create` structurally implements [BridgeSessionObserverFactory](../../gateway/sessions/observers.py);
-    [compose_host_capabilities](../../host/composition.py) owns observer ordering.
+    `create` structurally implements [BridgeSessionObserverFactory](../../gateway/sessions/observers.py:11);
+    [compose_host_capabilities](../../host/composition.py:81) owns observer ordering.
     """
 
     def __init__(

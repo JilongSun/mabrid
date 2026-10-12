@@ -25,10 +25,10 @@ from ..contracts.session import (
 
 
 class AgentRuntime(Protocol):
-    """Provider-neutral execution consumed by [AgentHostService](service.py).
+    """Provider-neutral execution consumed by [AgentHostService](service.py:33).
 
     `profile` describes locally implemented behavior and `run` yields adapter
-    events. [HermesChatCompletionsAdapter](../integrations/hermes/chat_completions.py)
+    events. [HermesChatCompletionsAdapter](../integrations/hermes/chat_completions.py:51)
     provides both structurally; wire SDK types stay inside the integration.
     """
 
@@ -39,7 +39,7 @@ class AgentRuntime(Protocol):
 
 
 class RuntimeCapabilityProbe(Protocol):
-    """Read-only discovery consumed by [AgentHostCapabilityService](capabilities.py).
+    """Read-only discovery consumed by [AgentHostCapabilityService](capabilities.py:53).
 
     `inspect_capabilities` returns evidence, not effective product support. Both
     Hermes adapters satisfy this shape independently of their execution ports.
@@ -49,7 +49,7 @@ class RuntimeCapabilityProbe(Protocol):
 
 
 class ManagedAgentRuntime(AgentRuntime, Protocol):
-    """Extend [AgentRuntime](ports.py) with deployment-owned async `close`.
+    """Extend [AgentRuntime](ports.py:27) with deployment-owned async `close`.
 
     The concrete adapter supplies lifecycle cleanup structurally; server
     composition owns cleanup, while the application consumes the narrower port.
@@ -61,7 +61,7 @@ class ManagedAgentRuntime(AgentRuntime, Protocol):
 class AgentRunSettlement(Protocol):
     """Await local workflow completion before the application releases Run ownership.
 
-    [HostRunSettlement](../../host/settlement.py) structurally supplies
+    [HostRunSettlement](../../host/settlement.py:16) structurally supplies
     `wait_until_settled`; this does not itself verify remote runtime exit.
     """
 
@@ -69,13 +69,13 @@ class AgentRunSettlement(Protocol):
 
 
 class AgentSessionRepository(Protocol):
-    """Durable identity and unresolved-Run storage for [AgentSessionService](sessions.py).
+    """Durable identity and unresolved-Run storage for [AgentSessionService](sessions.py:59).
 
     `add`/`get`/`list_sessions`/`update_runtime_session` preserve Session bindings.
     `get_unsettled_run`/`claim_run`/`record_runtime_run`/`release_run` preserve
     single-Target ownership across restart.
     No transcript storage is required. The server's SQLite adapter supplies these
-    methods structurally and is injected by [compose_host_capabilities](../../host/composition.py).
+    methods structurally and is injected by [compose_host_capabilities](../../host/composition.py:81).
     """
 
     async def add(self, session: AgentSessionRecord) -> None: ...
@@ -106,9 +106,9 @@ class AgentSessionRepository(Protocol):
 
 
 class RuntimeSessionCatalog(Protocol):
-    """Create and reopen remote Sessions for [AgentSessionService](sessions.py).
+    """Create and reopen remote Sessions for [AgentSessionService](sessions.py:59).
 
-    [HermesSessionAdapter](../integrations/hermes/sessions.py) structurally
+    [HermesSessionAdapter](../integrations/hermes/sessions.py:57) structurally
     supplies `create_session` and `get_session`; the runtime owns conversation data.
     """
 
@@ -120,8 +120,8 @@ class RuntimeSessionCatalog(Protocol):
 class RuntimeSessionHistory(Protocol):
     """Load runtime-owned history through `read_history`, without transcript replay.
 
-    Supplied by [HermesSessionAdapter](../integrations/hermes/sessions.py) and
-    consumed by [AgentSessionService](sessions.py) independently of execution.
+    Supplied by [HermesSessionAdapter](../integrations/hermes/sessions.py:57) and
+    consumed by [AgentSessionService](sessions.py:59) independently of execution.
     """
 
     async def read_history(
@@ -132,8 +132,8 @@ class RuntimeSessionHistory(Protocol):
 class RuntimeSessionExecution(Protocol):
     """Continue a bound remote Session through an async `run_session` event source.
 
-    [HermesSessionAdapter](../integrations/hermes/sessions.py) supplies this
-    structural port; [AgentSessionService](sessions.py) owns local admission.
+    [HermesSessionAdapter](../integrations/hermes/sessions.py:57) supplies this
+    structural port; [AgentSessionService](sessions.py:59) owns local admission.
     """
 
     def run_session(
@@ -142,9 +142,9 @@ class RuntimeSessionExecution(Protocol):
 
 
 class RuntimeSessionRunControl(Protocol):
-    """Remote stop/status evidence consumed by [AgentSessionService](sessions.py).
+    """Remote stop/status evidence consumed by [AgentSessionService](sessions.py:59).
 
-    [HermesSessionAdapter](../integrations/hermes/sessions.py) supplies
+    [HermesSessionAdapter](../integrations/hermes/sessions.py:57) supplies
     `request_stop` and `get_run_state` structurally. Stop acceptance is not exit.
     """
 

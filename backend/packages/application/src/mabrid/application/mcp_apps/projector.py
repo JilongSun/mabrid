@@ -39,8 +39,8 @@ class McpAppsLifecycleProjector:
     """Compose a widget only from attributed tool completion and fresh resource evidence.
 
     Async `observe` structurally supplies the bridge observation sink. Consume
-    [OperationAttributionReader](ports.py) and [WidgetEventStore](ports.py);
-    [McpAppsLifecycleObserverFactory](observers.py) binds this instance to a Session.
+    [OperationAttributionReader](ports.py:12) and [WidgetEventStore](ports.py:26);
+    [McpAppsLifecycleObserverFactory](observers.py:11) binds this instance to a Session.
     No provider metadata is trusted to infer a missing Run attribution.
     """
 

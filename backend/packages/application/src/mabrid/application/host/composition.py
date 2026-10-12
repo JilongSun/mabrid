@@ -63,7 +63,7 @@ def compose_mcp_apps(
 class HostCapabilityComposition:
     """Expose typed, shared Host capabilities without owning server deployment resources.
 
-    [compose_host_capabilities](composition.py) shares one coordinator across
+    [compose_host_capabilities](composition.py:81) shares one coordinator across
     native/compatibility ingress and connects structurally typed stores/factories.
     """
 
@@ -91,8 +91,8 @@ async def compose_host_capabilities(
     """Assemble structural ports and shared ownership, not deployment clients or secrets.
 
     Restore durable ownership first, then order attribution/activity/widget
-    projection and expose reader views to [HostEventStream](service.py) and its
-    native counterpart. [NativeSessionPorts](composition.py) may share one
+    projection and expose reader views to [HostEventStream](service.py:170) and its
+    native counterpart. [NativeSessionPorts](composition.py:30) may share one
     adapter object while retaining distinct behavior-oriented type boundaries.
     """
 

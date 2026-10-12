@@ -29,9 +29,9 @@ from .queries import SessionEventPage, SessionEventPageRequest
 class BridgeSessionStore(Protocol):
     """Event/snapshot write and read surface for one bridge Session.
 
-    [SessionInspectionProjector](projector.py) writes observation projections;
+    [SessionInspectionProjector](projector.py:39) writes observation projections;
     server persistence supplies event appends, snapshots, and waiting structurally.
-    HTTP inspection uses the narrower [SessionInspectionReader](ports.py).
+    HTTP inspection uses the narrower [SessionInspectionReader](ports.py:94).
     """
 
     async def start(
@@ -78,7 +78,7 @@ class BridgeSessionStore(Protocol):
 
 
 class BridgeSessionStoreFactory(Protocol):
-    """Create, resolve, and remove Session-scoped [BridgeSessionStore](ports.py) views.
+    """Create, resolve, and remove Session-scoped [BridgeSessionStore](ports.py:29) views.
 
     The coordinator consumes `create`/`get`/`remove` structurally; the server SQL
     factory owns persistence and process-local notification resources.

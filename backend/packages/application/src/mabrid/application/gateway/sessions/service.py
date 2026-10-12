@@ -51,9 +51,9 @@ class BridgeSessionRuntime:
 class GatewaySessionCoordinator:
     """Coordinate published topology, durable lifecycle records, and live core Sessions.
 
-    Consume [TopologyReader](../topology/ports.py), [BridgeSessionRepository](ports.py),
-    [BridgeSessionStoreFactory](../inspection/ports.py), and optional observer
-    factories structurally. [GatewayMcpSessionBroker](transport.py) adapts this
+    Consume [TopologyReader](../topology/ports.py:12), [BridgeSessionRepository](ports.py:12),
+    [BridgeSessionStoreFactory](../inspection/ports.py:80), and optional observer
+    factories structurally. [GatewayMcpSessionBroker](transport.py:15) adapts this
     use-case owner to core ASGI; the coordinator itself is not that broker port.
     Live transport correlations are process-local, never reconstructed from SQLite.
     """

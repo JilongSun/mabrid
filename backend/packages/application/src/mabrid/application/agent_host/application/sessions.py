@@ -40,8 +40,8 @@ async def restore_target_run_ownership(
 ) -> None:
     """Restore a durable unresolved lease before admitting native or compatibility Runs.
 
-    [compose_host_capabilities](../../host/composition.py) passes a structural
-    [AgentSessionRepository](ports.py); persistence does not reconstruct execution.
+    [compose_host_capabilities](../../host/composition.py:81) passes a structural
+    [AgentSessionRepository](ports.py:71); persistence does not reconstruct execution.
     """
 
     pending = await repository.get_unsettled_run(target_id)
@@ -60,9 +60,9 @@ class AgentSessionService:
     """Own local Session identity, deployment checks, admission, and durable Run settlement.
 
     Consume the repository, catalog, history, execution, and control ports in
-    [AgentSessionRepository](ports.py)'s module; concrete adapters are injected by
-    [compose_host_capabilities](../../host/composition.py). `target_id` and
-    `run_session` structurally supply [SessionRunEventSource](../../host/ports.py).
+    [AgentSessionRepository](ports.py:71)'s module; concrete adapters are injected by
+    [compose_host_capabilities](../../host/composition.py:81). `target_id` and
+    `run_session` structurally supply [SessionRunEventSource](../../host/ports.py:29).
     Runtime history/context remain remote. Unknown execution retains its lease;
     reference adoption is verified within the same deployment before compare-and-swap.
     """

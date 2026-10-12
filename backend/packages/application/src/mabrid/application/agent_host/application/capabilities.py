@@ -53,7 +53,7 @@ def _effective(
 class AgentHostCapabilityService:
     """Intersect local implementation, deployment selection, and bounded discovery evidence.
 
-    Consume independent native/compatibility [RuntimeCapabilityProbe](ports.py)
+    Consume independent native/compatibility [RuntimeCapabilityProbe](ports.py:41)
     views through `inspect_capabilities`. Probes are request-scoped and joined;
     unknown support stays unknown, and reporting never bypasses Run admission or
     controls Gateway readiness.

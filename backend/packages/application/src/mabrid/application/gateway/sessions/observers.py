@@ -12,7 +12,7 @@ class BridgeSessionObserverFactory(Protocol):
     """Supply an optional core observer when a Gateway Session is created.
 
     `create(session_key, endpoint_slug)` is the structural factory shape consumed
-    by the coordinator. [CompositeBridgeSessionObserverFactory](observers.py)
+    by the coordinator. [CompositeBridgeSessionObserverFactory](observers.py:22)
     and Host/MCP Apps factories fulfill it without inheriting this Protocol.
     """
 
@@ -20,7 +20,7 @@ class BridgeSessionObserverFactory(Protocol):
 
 
 class CompositeBridgeSessionObserverFactory:
-    """Structurally implement [BridgeSessionObserverFactory](observers.py) by ordered fan-out.
+    """Structurally implement [BridgeSessionObserverFactory](observers.py:11) by ordered fan-out.
 
     `create` skips absent observers and returns a composite only when at least one
     factory applies. Construction requires at least one configured factory.

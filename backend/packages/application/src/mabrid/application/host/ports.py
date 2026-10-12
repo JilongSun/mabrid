@@ -17,9 +17,9 @@ from ..mcp_apps import WidgetEvent
 
 
 class AgentRunEventSource(Protocol):
-    """Compatibility Run source consumed by [HostEventStream](service.py).
+    """Compatibility Run source consumed by [HostEventStream](service.py:170).
 
-    [AgentHostService](../agent_host/application/service.py) structurally supplies
+    [AgentHostService](../agent_host/application/service.py:33) structurally supplies
     `run_events`; the presentation merger does not depend on its runtime adapter.
     """
 
@@ -27,9 +27,9 @@ class AgentRunEventSource(Protocol):
 
 
 class SessionRunEventSource(Protocol):
-    """Native Session source consumed by [HostSessionEventStream](service.py).
+    """Native Session source consumed by [HostSessionEventStream](service.py:196).
 
-    [AgentSessionService](../agent_host/application/sessions.py) structurally
+    [AgentSessionService](../agent_host/application/sessions.py:59) structurally
     supplies `target_id` and `run_session`; Session admission remains application-owned.
     """
 
@@ -43,7 +43,7 @@ class SessionRunEventSource(Protocol):
 class WidgetEventReader(Protocol):
     """Read/wait widget outcomes for Host presentation without lifecycle writes.
 
-    [InMemoryWidgetEventStore](../mcp_apps/store.py) supplies `list_for_run`,
+    [InMemoryWidgetEventStore](../mcp_apps/store.py:12) supplies `list_for_run`,
     `wait_for_events`, and `wait_until_settled` structurally.
     """
 
@@ -57,7 +57,7 @@ class WidgetEventReader(Protocol):
 class ToolActivityReader(Protocol):
     """Read/wait attributed tool events and resolve their public invocation IDs.
 
-    [InMemoryToolActivityStore](../agent_host/application/activity.py) supplies
+    [InMemoryToolActivityStore](../agent_host/application/activity.py:19) supplies
     `list_for_run`, `wait_for_events`, and `invocation_id` structurally to the merger.
     """
 

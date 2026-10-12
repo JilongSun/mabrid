@@ -33,7 +33,7 @@ class PublishedEndpoint:
 class PublishedTopology:
     """Materialize enabled endpoint revisions into a process-lifetime publication index.
 
-    Consume [TopologyReader](../topology/ports.py) structurally through
+    Consume [TopologyReader](../topology/ports.py:12) structurally through
     `list_current_revisions`; the coordinator owns startup loading. This is not a
     live database view or the all-heads management topology snapshot.
     """

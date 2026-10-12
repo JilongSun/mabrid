@@ -12,8 +12,8 @@ from .contracts import WidgetCreated, WidgetEvent
 class InMemoryWidgetEventStore:
     """Retain one widget outcome per attributed operation and pending Run settlement.
 
-    Structurally supply [WidgetEventStore](ports.py) to the projector and
-    [WidgetEventReader](../host/ports.py) to presentation. The writer tracks/aborts
+    Structurally supply [WidgetEventStore](ports.py:26) to the projector and
+    [WidgetEventReader](../host/ports.py:43) to presentation. The writer tracks/aborts
     operations; the reader only lists/waits outcomes. Events are process-local.
     """
 

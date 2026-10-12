@@ -51,9 +51,9 @@ HERMES_CHAT_COMPLETIONS_PROFILE = AgentRuntimeProfile(
 class HermesChatCompletionsAdapter:
     """Adapt independently deployed Hermes Chat Completions through the official SDK.
 
-    `profile`/`run` structurally supply [AgentRuntime](../../application/ports.py);
-    `close` completes [ManagedAgentRuntime](../../application/ports.py), while
-    `inspect_capabilities` independently supplies [RuntimeCapabilityProbe](../../application/ports.py).
+    `profile`/`run` structurally supply [AgentRuntime](../../application/ports.py:27);
+    `close` completes [ManagedAgentRuntime](../../application/ports.py:51), while
+    `inspect_capabilities` independently supplies [RuntimeCapabilityProbe](../../application/ports.py:41).
     The server owns cleanup. This compatibility adapter does not implement native
     Session/history/control ports or simulate continuity by transcript replay.
     """

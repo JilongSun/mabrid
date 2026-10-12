@@ -33,9 +33,9 @@ class AgentRunError(RuntimeError):
 class AgentHostService:
     """Coordinate compatibility Runs against one Target without owning its runtime loop.
 
-    Consume [AgentRuntime](ports.py) and optional [AgentRunSettlement](ports.py).
-    `run_events` structurally supplies [AgentRunEventSource](../../host/ports.py);
-    [compose_host_capabilities](../../host/composition.py) shares its coordinator
+    Consume [AgentRuntime](ports.py:27) and optional [AgentRunSettlement](ports.py:61).
+    `run_events` structurally supplies [AgentRunEventSource](../../host/ports.py:19);
+    [compose_host_capabilities](../../host/composition.py:81) shares its coordinator
     with native Session execution so the two ingress paths cannot run concurrently.
     """
 

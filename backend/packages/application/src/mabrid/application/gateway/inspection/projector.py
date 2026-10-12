@@ -41,7 +41,7 @@ class SessionInspectionProjector(BridgeObserver):
 
     This class explicitly inherits the core observer Protocol, unlike the Host
     observers' structural conformance. `observe` maps protocol facts onto
-    [BridgeSessionStore](ports.py); [GatewaySessionCoordinator](../sessions/service.py)
+    [BridgeSessionStore](ports.py:29); [GatewaySessionCoordinator](../sessions/service.py:51)
     injects the store and the captured endpoint revision before core execution.
     """
 

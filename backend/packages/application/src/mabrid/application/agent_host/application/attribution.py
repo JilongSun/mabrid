@@ -14,7 +14,7 @@ from .coordination import AgentRunCoordinator
 class OperationRunAttributionRegistry(Protocol):
     """Record and read stable Gateway-operation-to-Run attribution.
 
-    [InMemoryOperationRunAttributionRegistry](attribution.py) supplies `record`
+    [InMemoryOperationRunAttributionRegistry](attribution.py:30) supplies `record`
     and `get` structurally. MCP Apps consumes only the narrower read shape.
     """
 
@@ -30,8 +30,8 @@ class OperationRunAttributionRegistry(Protocol):
 class InMemoryOperationRunAttributionRegistry:
     """Retain immutable attribution per `(session_key, operation_key)` in this process.
 
-    Structurally implement [OperationRunAttributionRegistry](attribution.py) via
-    `record`/`get`, and [OperationAttributionReader](../../mcp_apps/ports.py) via
+    Structurally implement [OperationRunAttributionRegistry](attribution.py:14) via
+    `record`/`get`, and [OperationAttributionReader](../../mcp_apps/ports.py:12) via
     `get` alone. Conflicting reassignment is rejected rather than overwritten.
     """
 
@@ -102,8 +102,8 @@ class AgentOperationAttributionObserverFactory:
     """Create attribution observers only for endpoints assigned to a known Target.
 
     `create(session_key, endpoint_slug)` structurally implements
-    [BridgeSessionObserverFactory](../../gateway/sessions/observers.py) and is
-    wired before activity/widget observers in [compose_host_capabilities](../../host/composition.py).
+    [BridgeSessionObserverFactory](../../gateway/sessions/observers.py:11) and is
+    wired before activity/widget observers in [compose_host_capabilities](../../host/composition.py:81).
     """
 
     def __init__(
