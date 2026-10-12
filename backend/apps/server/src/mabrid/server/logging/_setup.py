@@ -13,6 +13,8 @@ _configured: bool = False
 
 
 class LogMode(str, Enum):
+    """Choose deployment logging behavior without coupling it to application use cases."""
+
     DEBUG = "debug"
     PRODUCTION = "production"
 

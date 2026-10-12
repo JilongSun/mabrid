@@ -10,6 +10,8 @@ from .base import Base
 
 
 class AgentSessionRow(Base):
+    """Persist local Agent Session identity and remote binding, never transcript content."""
+
     __tablename__ = "agent_sessions"
     __table_args__ = (
         UniqueConstraint(
@@ -27,6 +29,8 @@ class AgentSessionRow(Base):
 
 
 class UnsettledAgentRunRow(Base):
+    """Enforce one durable unresolved Run claim per Target, including unknown remote IDs."""
+
     __tablename__ = "unsettled_agent_runs"
 
     target_id: Mapped[str] = mapped_column(String(255), primary_key=True)

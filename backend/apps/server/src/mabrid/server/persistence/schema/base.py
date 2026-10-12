@@ -8,4 +8,6 @@ from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
+    """Own server ORM metadata and naming conventions, never domain contracts."""
+
     pass

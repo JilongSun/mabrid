@@ -10,6 +10,8 @@ from .host_contracts import HostHttpModel
 
 
 class GatewayCapabilities(HostHttpModel):
+    """Report implemented Gateway read/inspection features and explicit mutation absence."""
+
     enabled: Literal[True] = True
     topology_read: bool
     session_inspection: bool
@@ -18,6 +20,8 @@ class GatewayCapabilities(HostHttpModel):
 
 
 class ProductCapabilitiesResponse(HostHttpModel):
+    """Combine independent Gateway and Agent Host capability/availability views."""
+
     gateway: GatewayCapabilities
     agent_host: AgentHostCapabilitySnapshot
 

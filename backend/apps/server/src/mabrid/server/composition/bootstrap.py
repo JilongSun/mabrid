@@ -26,6 +26,8 @@ logger = get_logger(__name__)
 
 @dataclass(frozen=True)
 class BootstrapResult:
+    """Return composed process resources and typed surfaces for later runtime startup."""
+
     gateway: GatewaySessionCoordinator
     gateway_management: GatewayManagementComposition
     database: SqliteDatabase
@@ -35,6 +37,12 @@ class BootstrapResult:
 
 
 async def bootstrap_server(configuration: RuntimeConfiguration) -> BootstrapResult:
+    """Own migrations, resource construction, and failure cleanup before HTTP serving.
+
+    Gateway observers come from the Host factory's structural `create` contract;
+    later runtime startup owns live task groups. Failures close clients then DB.
+    """
+
     database = SqliteDatabase(configuration.storage.sqlite_path)
     logger.info("SQLite database opened: %s", configuration.storage.sqlite_path)
     agent_host: AgentHostComposition | None = None

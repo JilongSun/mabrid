@@ -13,6 +13,8 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 
 class CursorPayload(BaseModel):
+    """Validate the versioned keyset encoded inside an opaque Session-history cursor."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     v: Literal[1] = 1

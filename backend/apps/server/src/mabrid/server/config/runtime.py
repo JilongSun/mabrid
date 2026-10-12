@@ -16,11 +16,15 @@ from .file import BridgeRuntimeConfig, EndpointFileConfig, StorageConfig
 
 
 class RuntimeHermesSessionConfig(BaseModel):
+    """Resolved native API root and deployment identity passed to the Session adapter."""
+
     api_root: str = Field(min_length=1)
     binding_id: str = Field(min_length=1)
 
 
 class RuntimeHermesAgentConfig(BaseModel):
+    """Resolved Hermes connection settings with secret material protected by SecretStr."""
+
     integration: Literal["hermes"] = "hermes"
     interface: Literal["openai-chat-completions"] = "openai-chat-completions"
     base_url: str = "http://127.0.0.1:8642/v1"
@@ -30,6 +34,8 @@ class RuntimeHermesAgentConfig(BaseModel):
 
 
 class RuntimeAgentHostConfig(BaseModel):
+    """Resolved single-Target Host selection used by server composition."""
+
     enabled: bool = False
     mcp_apps_enabled: bool = False
     target_id: str | None = Field(default=None, min_length=1)
@@ -38,6 +44,8 @@ class RuntimeAgentHostConfig(BaseModel):
 
 
 class RuntimeUpstreamConfig(BaseModel):
+    """Resolved transport settings after file paths, environment values, and overrides."""
+
     transport: Literal["stdio", "sse", "streamable-http"] = "stdio"
     command: str | None = None
     args: list[str] = Field(default_factory=list)
@@ -50,6 +58,8 @@ class RuntimeUpstreamConfig(BaseModel):
 
 @dataclass(frozen=True)
 class RuntimeConfiguration:
+    """Typed deployment assembly input, not authoritative product topology storage."""
+
     config_path: Path
     bridge: BridgeRuntimeConfig
     storage: StorageConfig

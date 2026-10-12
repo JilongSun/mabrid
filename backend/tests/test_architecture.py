@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import tomllib
 from pathlib import Path
 
@@ -83,6 +84,47 @@ def test_every_production_module_records_its_boundary() -> None:
                 missing.append(str(path.relative_to(BACKEND_ROOT)))
 
     assert missing == []
+
+
+def test_every_production_class_records_its_responsibility() -> None:
+    missing: list[str] = []
+    for source_root in SOURCE_ROOTS.values():
+        for path in source_root.rglob("*.py"):
+            module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(module):
+                if isinstance(node, ast.ClassDef) and not ast.get_docstring(node):
+                    missing.append(f"{path.relative_to(BACKEND_ROOT)}: {node.name}")
+    assert missing == []
+
+
+def test_docstring_source_links_resolve_to_named_symbols() -> None:
+    failures: list[str] = []
+    for source_root in SOURCE_ROOTS.values():
+        for path in source_root.rglob("*.py"):
+            module = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(module):
+                if not isinstance(
+                    node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+                ):
+                    continue
+                for symbol, target in re.findall(
+                    r"\[([A-Za-z_]\w*)\]\(([^)]+\.py)\)", ast.get_docstring(node) or ""
+                ):
+                    destination = (path.parent / target).resolve()
+                    if Path(target).is_absolute() or not destination.is_file():
+                        failures.append(f"{path.relative_to(BACKEND_ROOT)}: {symbol} -> {target}")
+                        continue
+                    target_module = ast.parse(destination.read_text(encoding="utf-8"))
+                    declarations = {
+                        item.name
+                        for item in ast.walk(target_module)
+                        if isinstance(item, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+                    }
+                    if symbol not in declarations:
+                        failures.append(
+                            f"{path.relative_to(BACKEND_ROOT)}: missing {symbol} in {target}"
+                        )
+    assert failures == []
 
 
 def _absolute_imports(path: Path) -> list[str]:

@@ -19,6 +19,8 @@ from .base import Base
 
 
 class UpstreamServerRow(Base):
+    """Store the managed upstream head and pointer to its current immutable revision."""
+
     __tablename__ = "upstream_servers"
 
     server_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
@@ -41,6 +43,8 @@ class UpstreamServerRow(Base):
 
 
 class UpstreamRevisionRow(Base):
+    """Capture immutable upstream connection settings for historical endpoint references."""
+
     __tablename__ = "upstream_revisions"
     __table_args__ = (
         UniqueConstraint("server_id", "revision_number", name="uq_upstream_revision_number"),
@@ -69,6 +73,8 @@ class UpstreamRevisionRow(Base):
 
 
 class EndpointRow(Base):
+    """Store stable endpoint identity and the current topology revision pointer."""
+
     __tablename__ = "endpoints"
 
     endpoint_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
@@ -84,6 +90,8 @@ class EndpointRow(Base):
 
 
 class EndpointRevisionRow(Base):
+    """Capture immutable endpoint publication settings referenced by Session history."""
+
     __tablename__ = "endpoint_revisions"
     __table_args__ = (
         UniqueConstraint("endpoint_id", "revision_number", name="uq_endpoint_revision_number"),
@@ -105,6 +113,8 @@ class EndpointRevisionRow(Base):
 
 
 class EndpointBindingRevisionRow(Base):
+    """Pin a historical endpoint binding to exact endpoint and upstream revisions."""
+
     __tablename__ = "endpoint_binding_revisions"
     __table_args__ = (
         Index(
@@ -133,6 +143,8 @@ class EndpointBindingRevisionRow(Base):
 
 
 class EndpointBindingRow(Base):
+    """Store the current endpoint-owned upstream association and routing attributes."""
+
     __tablename__ = "endpoint_bindings"
     __table_args__ = (
         Index(

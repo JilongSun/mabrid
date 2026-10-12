@@ -131,6 +131,13 @@ async def close_presentation(source: AsyncGenerator[HostEvent, None]) -> AgentSe
 
 
 class HostEventSourceResponse(EventSourceResponse):
+    """Own an admitted Host source across SSE sending, disconnect, and header failures.
+
+    Explicitly extend the mature SSE response, not an application Protocol.
+    `__call__` closes the owned source even before body iteration; terminal events
+    follow cleanup/settlement and failures are projected to safe public payloads.
+    """
+
     media_type = "text/event-stream"
 
     def __init__(

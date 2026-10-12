@@ -46,6 +46,8 @@ logger = get_logger(__name__)
 
 @dataclass(frozen=True)
 class AgentHostManagementView:
+    """Expose the configured Target and resolved declared endpoint URL without client state."""
+
     target: AgentTarget
     endpoint_id: UUID
     endpoint_slug: str
@@ -56,6 +58,13 @@ class AgentHostManagementView:
 
 @dataclass(frozen=True)
 class AgentHostComposition:
+    """Own configured runtime clients and expose typed application/presentation capabilities.
+
+    [compose_agent_host](agent_host.py) injects structurally compatible adapters;
+    `close` releases native then compatibility clients under cancellation shielding.
+    This deployment container does not own the remote runtime's conversation loop.
+    """
+
     service: AgentHostService
     runtime: ManagedAgentRuntime
     management: AgentHostManagementView
@@ -80,6 +89,14 @@ async def compose_agent_host(
     gateway: GatewaySessionCoordinator,
     database: SqliteDatabase,
 ) -> AgentHostComposition | None:
+    """Construct one Target's concrete adapters and pass their narrow behavior views.
+
+    [HermesChatCompletionsAdapter](../../../../../../packages/application/src/mabrid/application/agent_host/integrations/hermes/chat_completions.py)
+    supplies compatibility/lifecycle/probe views; the optional native adapter
+    supplies catalog/history/execution/control/probe views without Protocol bases.
+    SQLite persists local identity and unresolved ownership, never transcripts.
+    """
+
     config = configuration.agent_host
     if not config.enabled:
         return None

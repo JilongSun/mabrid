@@ -18,6 +18,18 @@ from .schema import AgentSessionRow, UnsettledAgentRunRow
 
 
 class SqliteAgentSessionRepository:
+    """Persist Session bindings and unresolved Target ownership, never transcripts.
+
+    Structurally implements `AgentSessionRepository` without inheriting it: `add`,
+    `get`, `list_sessions`, and `update_runtime_session` manage Session identity;
+    `get_unsettled_run`, `claim_run`, `record_runtime_run`, and `release_run`
+    manage durable ownership for one Target.
+    Remote-reference updates use compare-and-swap within the same deployment.
+
+    Contract: [AgentSessionRepository](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py).
+    Consumer: [AgentSessionService](../../../../../../packages/application/src/mabrid/application/agent_host/application/sessions.py).
+    """
+
     def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
         self._sessions = sessions
 

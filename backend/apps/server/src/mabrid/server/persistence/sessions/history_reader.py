@@ -19,6 +19,14 @@ from ..schema import BridgeSessionRow
 
 
 class SqlAlchemySessionHistoryReader:
+    """Read durable lifecycle history with stable descending keyset pagination.
+
+    `list_sessions`/`get_session` structurally implement the management read port,
+    separate from lifecycle writes; [compose_gateway](../../composition/gateway.py)
+    injects it into the management view.
+    Contract: [SessionHistoryReader](../../../../../../../packages/application/src/mabrid/application/gateway/sessions/ports.py).
+    """
+
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 

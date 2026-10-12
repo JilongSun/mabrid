@@ -50,6 +50,7 @@
     "$defs": {
       "HostErrorResponse": {
         "additionalProperties": false,
+        "description": "Expose an allowlisted Host failure code/message and optional local correlation IDs.",
         "properties": {
           "code": {
             "enum": [
@@ -108,6 +109,7 @@
       },
       "HostResourceContent": {
         "additionalProperties": false,
+        "description": "Present a complete MCP Apps resource content item without deployment identifiers.",
         "properties": {
           "blob": {
             "anyOf": [
@@ -165,6 +167,7 @@
       },
       "HostRunCancelledPayload": {
         "additionalProperties": false,
+        "description": "SSE terminal payload for settled cancellation, not stop-request acceptance.",
         "properties": {
           "kind": {
             "const": "run.cancelled",
@@ -178,6 +181,7 @@
       },
       "HostRunCompletedPayload": {
         "additionalProperties": false,
+        "description": "SSE terminal payload with output and usage after required execution settlement.",
         "properties": {
           "kind": {
             "const": "run.completed",
@@ -202,6 +206,7 @@
       },
       "HostRunFailedPayload": {
         "additionalProperties": false,
+        "description": "SSE terminal payload containing a safe public Host error.",
         "properties": {
           "error": {
             "$ref": "#/$defs/HostErrorResponse"
@@ -221,6 +226,7 @@
       },
       "HostRunStartedPayload": {
         "additionalProperties": false,
+        "description": "SSE payload identifying the Target after Run admission.",
         "properties": {
           "kind": {
             "const": "run.started",
@@ -241,6 +247,7 @@
       },
       "HostTextCompletedPayload": {
         "additionalProperties": false,
+        "description": "SSE payload publishing the assembled assistant text.",
         "properties": {
           "kind": {
             "const": "assistant.text.completed",
@@ -261,6 +268,7 @@
       },
       "HostTextDeltaPayload": {
         "additionalProperties": false,
+        "description": "SSE payload appending one assistant text fragment.",
         "properties": {
           "delta": {
             "title": "Delta",
@@ -281,6 +289,7 @@
       },
       "HostToolCompletedPayload": {
         "additionalProperties": false,
+        "description": "SSE payload pairing a successful MCP result with its tool invocation.",
         "properties": {
           "kind": {
             "const": "tool.completed",
@@ -311,6 +320,7 @@
       },
       "HostToolFailedPayload": {
         "additionalProperties": false,
+        "description": "SSE payload pairing sanitized failure evidence and any result with its invocation.",
         "properties": {
           "error_code": {
             "title": "Error Code",
@@ -358,6 +368,7 @@
       },
       "HostToolResult": {
         "additionalProperties": false,
+        "description": "Preserve public MCP tool content, structured output, error state, and metadata.",
         "properties": {
           "content": {
             "default": [],
@@ -403,6 +414,7 @@
       },
       "HostToolStartedPayload": {
         "additionalProperties": false,
+        "description": "SSE payload with a stable tool-invocation ID, public tool name, and arguments.",
         "properties": {
           "arguments": {
             "additionalProperties": {
@@ -437,6 +449,7 @@
       },
       "HostWidget": {
         "additionalProperties": false,
+        "description": "Public widget payload linked to a tool invocation and its fresh resource contents.",
         "properties": {
           "application_resource_uri": {
             "title": "Application Resource Uri",
@@ -488,6 +501,7 @@
       },
       "HostWidgetCreatedPayload": {
         "additionalProperties": false,
+        "description": "SSE payload exposing an attributed widget ready for presentation.",
         "properties": {
           "kind": {
             "const": "widget.created",
@@ -507,6 +521,7 @@
       },
       "HostWidgetFailedPayload": {
         "additionalProperties": false,
+        "description": "SSE payload preserving tool output when the associated UI resource is unavailable.",
         "properties": {
           "application_resource_uri": {
             "title": "Application Resource Uri",
@@ -548,6 +563,7 @@
       "JsonValue": {},
       "TokenUsage": {
         "additionalProperties": false,
+        "description": "Normalized non-negative input and output token counts.",
         "properties": {
           "input_tokens": {
             "default": 0,
@@ -567,6 +583,7 @@
       }
     },
     "additionalProperties": false,
+    "description": "Sequence a discriminated SSE payload with local event, Session, and Run identities.",
     "properties": {
       "created_at": {
         "format": "date-time",
@@ -664,6 +681,7 @@
       "schemas": {
         "AgentHistoryMessage": {
           "additionalProperties": false,
+          "description": "Present one runtime-owned message with supported content and optional tool correlation.",
           "properties": {
             "content": {
               "items": {
@@ -752,6 +770,7 @@
         },
         "AgentHistoryPage": {
           "additionalProperties": false,
+          "description": "Attach a runtime history page to the stable local Agent Session identity.",
           "properties": {
             "has_more": {
               "anyOf": [
@@ -790,6 +809,7 @@
         },
         "AgentHostCapabilitySnapshot": {
           "additionalProperties": false,
+          "description": "Report Target selection, independent runtime evidence, and single-Run product features.",
           "properties": {
             "compatibility_runtime": {
               "anyOf": [
@@ -845,6 +865,7 @@
         },
         "AgentHostFeatures": {
           "additionalProperties": false,
+          "description": "Effective feature states, including explicitly unimplemented Host behaviors.",
           "properties": {
             "compatibility_streaming": {
               "$ref": "#/components/schemas/EffectiveCapability"
@@ -906,6 +927,7 @@
         },
         "AgentRuntimeProfileResponse": {
           "additionalProperties": false,
+          "description": "Expose selected integration/interface and locally implemented capability names.",
           "properties": {
             "capabilities": {
               "items": {
@@ -934,6 +956,7 @@
         },
         "AgentSessionRunStatus": {
           "additionalProperties": false,
+          "description": "Expose the native Target lease's local Session/Run identity and active or unsettled state.",
           "properties": {
             "run_id": {
               "format": "uuid",
@@ -964,6 +987,7 @@
         },
         "AgentTargetAssignmentResponse": {
           "additionalProperties": false,
+          "description": "Expose the declared stable Gateway endpoint URL an operator configures remotely.",
           "properties": {
             "advertised_url": {
               "title": "Advertised Url",
@@ -1000,6 +1024,7 @@
         },
         "AgentTargetResponse": {
           "additionalProperties": false,
+          "description": "Present the configured Target, runtime profile, and declared endpoint assignment.",
           "properties": {
             "assignment": {
               "$ref": "#/components/schemas/AgentTargetAssignmentResponse"
@@ -1021,6 +1046,7 @@
           "type": "object"
         },
         "BridgeSessionStatus": {
+          "description": "Durable lifecycle states maintained by the Gateway Session coordinator.",
           "enum": [
             "starting",
             "active",
@@ -1033,6 +1059,7 @@
         },
         "ConfiguredKeyResponse": {
           "additionalProperties": false,
+          "description": "Reveal that a header/environment key is configured without returning its value.",
           "properties": {
             "configured": {
               "const": true,
@@ -1053,6 +1080,7 @@
         },
         "CreateHostSessionRequest": {
           "additionalProperties": false,
+          "description": "Create a native conversation with optional title metadata.",
           "properties": {
             "title": {
               "anyOf": [
@@ -1071,6 +1099,7 @@
         },
         "EffectiveCapability": {
           "additionalProperties": false,
+          "description": "Separate implementation, deployment selection, remote support, and availability.",
           "properties": {
             "availability": {
               "enum": [
@@ -1126,6 +1155,7 @@
           "type": "object"
         },
         "EndpointMode": {
+          "description": "Select transparent single-upstream or namespaced aggregate routing.",
           "enum": [
             "passthrough",
             "aggregate"
@@ -1135,6 +1165,7 @@
         },
         "ErrorRaisedEventResponse": {
           "additionalProperties": false,
+          "description": "Present recorded diagnostic error details under the trusted deployment profile.",
           "properties": {
             "created_at": {
               "format": "date-time",
@@ -1177,6 +1208,7 @@
         },
         "GatewayCapabilities": {
           "additionalProperties": false,
+          "description": "Report implemented Gateway read/inspection features and explicit mutation absence.",
           "properties": {
             "enabled": {
               "const": true,
@@ -1214,6 +1246,7 @@
         },
         "GatewayStatusResponse": {
           "additionalProperties": false,
+          "description": "Summarize local process publication separately from the saved topology snapshot.",
           "properties": {
             "advertised_base_url": {
               "anyOf": [
@@ -1265,6 +1298,7 @@
         },
         "HistoryPageQuery": {
           "additionalProperties": false,
+          "description": "Bound runtime history reads with explicit page size, offset, and ordering.",
           "properties": {
             "limit": {
               "default": 100,
@@ -1294,6 +1328,7 @@
         },
         "HistoryText": {
           "additionalProperties": false,
+          "description": "Represent supported textual content in runtime-owned history.",
           "properties": {
             "kind": {
               "const": "text",
@@ -1314,6 +1349,7 @@
         },
         "HistoryToolCall": {
           "additionalProperties": false,
+          "description": "Normalize a historical tool request and its parsed JSON arguments.",
           "properties": {
             "arguments": {
               "additionalProperties": {
@@ -1349,6 +1385,7 @@
         },
         "HistoryUnsupportedContent": {
           "additionalProperties": false,
+          "description": "Identify unsupported historical content without exposing its opaque payload.",
           "properties": {
             "content_type": {
               "minLength": 1,
@@ -1370,6 +1407,7 @@
         },
         "HostErrorResponse": {
           "additionalProperties": false,
+          "description": "Expose an allowlisted Host failure code/message and optional local correlation IDs.",
           "properties": {
             "code": {
               "enum": [
@@ -1426,6 +1464,7 @@
         },
         "HostReconcileResponse": {
           "additionalProperties": false,
+          "description": "Report whether explicit Session-bound reconciliation settled durable Run ownership.",
           "properties": {
             "run_id": {
               "format": "uuid",
@@ -1452,6 +1491,7 @@
         },
         "HostSessionPageResponse": {
           "additionalProperties": false,
+          "description": "Paginate local Agent Session metadata without loading remote transcripts.",
           "properties": {
             "has_more": {
               "title": "Has More",
@@ -1487,6 +1527,7 @@
         },
         "HostSessionResponse": {
           "additionalProperties": false,
+          "description": "Public local Session metadata without opaque remote deployment or Session IDs.\n\nA missing native `target_run` does not establish compatibility Target idleness.",
           "properties": {
             "binding_state": {
               "enum": [
@@ -1547,6 +1588,7 @@
         },
         "HostStopResponse": {
           "additionalProperties": false,
+          "description": "Acknowledge Session-bound cancellation while leaving execution settlement unconfirmed.",
           "properties": {
             "accepted": {
               "title": "Accepted",
@@ -1580,6 +1622,7 @@
         "JsonValue": {},
         "ManagedEndpointBindingResponse": {
           "additionalProperties": false,
+          "description": "Expose current binding identity, routing order, and exact captured revision references.",
           "properties": {
             "binding_id": {
               "format": "uuid",
@@ -1635,6 +1678,7 @@
         },
         "ManagedEndpointResponse": {
           "additionalProperties": false,
+          "description": "Expose a managed endpoint, current bindings, stable path, and declared advertised URL.",
           "properties": {
             "advertised_url": {
               "anyOf": [
@@ -1704,6 +1748,7 @@
         },
         "ManagedUpstreamResponse": {
           "additionalProperties": false,
+          "description": "Expose one managed upstream head and its redacted current connection definition.",
           "properties": {
             "connection": {
               "discriminator": {
@@ -1767,6 +1812,7 @@
         },
         "ProductCapabilitiesResponse": {
           "additionalProperties": false,
+          "description": "Combine independent Gateway and Agent Host capability/availability views.",
           "properties": {
             "agent_host": {
               "$ref": "#/components/schemas/AgentHostCapabilitySnapshot"
@@ -1784,6 +1830,7 @@
         },
         "ReadinessResponse": {
           "additionalProperties": false,
+          "description": "Report successful local bootstrap, publication, serving, and database readiness.",
           "properties": {
             "status": {
               "const": "ready",
@@ -1797,6 +1844,7 @@
         },
         "ResourceContentResponse": {
           "additionalProperties": false,
+          "description": "Present complete persisted text/binary resource content and item metadata.",
           "properties": {
             "blob": {
               "anyOf": [
@@ -1849,6 +1897,7 @@
         },
         "ResourceReadEventResponse": {
           "additionalProperties": false,
+          "description": "Present a recorded resource read with complete persisted contents.",
           "properties": {
             "created_at": {
               "format": "date-time",
@@ -1884,6 +1933,7 @@
         },
         "ResourceReadRecordResponse": {
           "additionalProperties": false,
+          "description": "Present a diagnostic resource-read result without internal operation correlation.",
           "properties": {
             "contents": {
               "items": {
@@ -1917,6 +1967,7 @@
         },
         "RevisionMetadataResponse": {
           "additionalProperties": false,
+          "description": "Expose current immutable revision identity, number, and creation time.",
           "properties": {
             "created_at": {
               "format": "date-time",
@@ -1943,6 +1994,7 @@
         },
         "RuntimeCapabilityObservation": {
           "additionalProperties": false,
+          "description": "Timestamped discovery availability and support evidence for one runtime interface.",
           "properties": {
             "availability": {
               "enum": [
@@ -1984,6 +2036,7 @@
         },
         "RuntimeSupport": {
           "additionalProperties": false,
+          "description": "Tri-state remote support evidence; absent proof remains unknown, not false.",
           "properties": {
             "compatibility_streaming": {
               "anyOf": [
@@ -2068,6 +2121,7 @@
         },
         "SequencedSessionEventResponse": {
           "additionalProperties": false,
+          "description": "Pair an HTTP diagnostic event with its persisted monotonic sequence.",
           "properties": {
             "event": {
               "discriminator": {
@@ -2121,6 +2175,7 @@
         },
         "SessionEventPageResponse": {
           "additionalProperties": false,
+          "description": "Return ordered diagnostic events and an optional next sequence boundary.",
           "properties": {
             "items": {
               "items": {
@@ -2150,6 +2205,7 @@
         },
         "SessionPageResponse": {
           "additionalProperties": false,
+          "description": "Return bridge Session history with an opaque next-page cursor.",
           "properties": {
             "items": {
               "items": {
@@ -2179,6 +2235,7 @@
         },
         "SessionResponse": {
           "additionalProperties": false,
+          "description": "Expose durable bridge lifecycle metadata and its captured endpoint revision.",
           "properties": {
             "closed_at": {
               "anyOf": [
@@ -2248,6 +2305,7 @@
         },
         "SessionSnapshotResponse": {
           "additionalProperties": false,
+          "description": "Present current complete Session diagnostics for the trusted management profile.",
           "properties": {
             "active_tool_calls": {
               "items": {
@@ -2333,6 +2391,7 @@
         },
         "SessionStartedEventResponse": {
           "additionalProperties": false,
+          "description": "Present the recorded Session initialization event.",
           "properties": {
             "created_at": {
               "format": "date-time",
@@ -2374,6 +2433,7 @@
         },
         "SseConnectionResponse": {
           "additionalProperties": false,
+          "description": "Public legacy SSE connection details with header values redacted.",
           "properties": {
             "headers": {
               "items": {
@@ -2402,6 +2462,7 @@
         },
         "StartHostSessionRunRequest": {
           "additionalProperties": false,
+          "description": "Submit only new input to a bound Session, never replayed conversation history.",
           "properties": {
             "input_text": {
               "minLength": 1,
@@ -2418,6 +2479,7 @@
         },
         "StdioConnectionResponse": {
           "additionalProperties": false,
+          "description": "Public subprocess launch details with environment values redacted.",
           "properties": {
             "args": {
               "items": {
@@ -2466,6 +2528,7 @@
         },
         "StreamableHttpConnectionResponse": {
           "additionalProperties": false,
+          "description": "Public streamable HTTP connection details with header values redacted.",
           "properties": {
             "headers": {
               "items": {
@@ -2499,6 +2562,7 @@
         },
         "ToolCallCompletedEventResponse": {
           "additionalProperties": false,
+          "description": "Present a recorded tool invocation result or failed state.",
           "properties": {
             "call": {
               "$ref": "#/components/schemas/ToolCallRecordResponse"
@@ -2534,6 +2598,7 @@
         },
         "ToolCallRecordResponse": {
           "additionalProperties": false,
+          "description": "Present observed invocation input, lifecycle timing, state, and result.",
           "properties": {
             "arguments": {
               "additionalProperties": true,
@@ -2591,6 +2656,7 @@
         },
         "ToolCallResultResponse": {
           "additionalProperties": false,
+          "description": "Present complete persisted tool output without diagnostic truncation.",
           "properties": {
             "content": {
               "items": {
@@ -2628,6 +2694,7 @@
         },
         "ToolCallStartedEventResponse": {
           "additionalProperties": false,
+          "description": "Present a recorded tool invocation start.",
           "properties": {
             "call": {
               "$ref": "#/components/schemas/ToolCallRecordResponse"
@@ -2663,6 +2730,7 @@
         },
         "ToolDescriptorResponse": {
           "additionalProperties": false,
+          "description": "Present complete observed tool discovery fields for trusted diagnostic reads.",
           "properties": {
             "annotations": {
               "additionalProperties": true,
@@ -2737,6 +2805,7 @@
         },
         "ToolDiscoveredEventResponse": {
           "additionalProperties": false,
+          "description": "Present one recorded tool discovery event.",
           "properties": {
             "created_at": {
               "format": "date-time",
@@ -2772,6 +2841,7 @@
         },
         "TopologyResponse": {
           "additionalProperties": false,
+          "description": "Present one consistent managed topology snapshot, including disabled heads.",
           "properties": {
             "advertised_base_url": {
               "anyOf": [
@@ -2809,6 +2879,7 @@
         },
         "UpstreamAvailabilityChangedEventResponse": {
           "additionalProperties": false,
+          "description": "Present a binding's recorded availability transition.",
           "properties": {
             "availability": {
               "$ref": "#/components/schemas/UpstreamAvailabilityResponse"
@@ -2844,6 +2915,7 @@
         },
         "UpstreamAvailabilityResponse": {
           "additionalProperties": false,
+          "description": "Present binding-revision availability with initialization or failure evidence.",
           "properties": {
             "binding_revision_id": {
               "title": "Binding Revision Id",
@@ -2922,6 +2994,7 @@
         },
         "UpstreamInitializationResponse": {
           "additionalProperties": false,
+          "description": "Present persisted initialization identity and capability evidence for inspection.",
           "properties": {
             "instructions": {
               "anyOf": [
@@ -3009,6 +3082,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3050,6 +3124,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3196,6 +3271,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3237,6 +3313,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3278,6 +3355,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3319,6 +3397,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3393,6 +3472,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3434,6 +3514,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3475,6 +3556,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3516,6 +3598,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3613,6 +3696,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3654,6 +3738,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3695,6 +3780,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3736,6 +3822,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3810,6 +3897,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3851,6 +3939,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3892,6 +3981,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3933,6 +4023,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -3995,6 +4086,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -4036,6 +4128,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -4077,6 +4170,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -4118,6 +4212,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -4180,6 +4275,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -4221,6 +4317,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -4262,6 +4359,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -4303,6 +4401,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",
@@ -5111,6 +5210,7 @@
                 "application/problem+json": {
                   "schema": {
                     "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
                     "properties": {
                       "code": {
                         "title": "Code",

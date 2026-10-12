@@ -21,6 +21,13 @@ EVENT_ADAPTER = TypeAdapter(SessionEvent)
 
 
 class SqlAlchemySessionInspectionReader:
+    """Read complete snapshots and sequence-paginated diagnostic events from SQLite.
+
+    `get_snapshot`/`list_events` structurally implement the management read port,
+    without exposing store mutation or live waiters. Wired by [compose_gateway](../../composition/gateway.py).
+    Contract: [SessionInspectionReader](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py).
+    """
+
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 

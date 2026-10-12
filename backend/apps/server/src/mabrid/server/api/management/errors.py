@@ -12,6 +12,8 @@ PROBLEM_MEDIA_TYPE = "application/problem+json"
 
 
 class ProblemDetails(BaseModel):
+    """RFC 9457 management error document with a stable product failure code."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     type: str
@@ -33,6 +35,8 @@ def problem_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
 
 @dataclass(frozen=True)
 class ManagementProblem(Exception):
+    """Carry an explicit management Problem Details document to the HTTP error handler."""
+
     problem: ProblemDetails
 
 

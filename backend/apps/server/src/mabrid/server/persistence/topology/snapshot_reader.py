@@ -29,6 +29,14 @@ from .mappers import as_utc
 
 
 class SqlAlchemyTopologySnapshotReader:
+    """Read enabled/disabled topology heads and revision references in one transaction.
+
+    `read_snapshot` structurally implements the management read port and redacts
+    connection values through explicit mapping; runtime publication is separate.
+    Contract: [TopologySnapshotReader](../../../../../../../packages/application/src/mabrid/application/gateway/topology/ports.py).
+    Composition: [compose_gateway](../../composition/gateway.py).
+    """
+
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 

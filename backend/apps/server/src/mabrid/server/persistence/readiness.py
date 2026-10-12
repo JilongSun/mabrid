@@ -11,6 +11,13 @@ logger = get_logger(__name__)
 
 
 class SqliteReadinessProbe:
+    """Check local SQLite availability without querying remote agents or upstreams.
+
+    Async `is_ready` provides a bound-method callable returning an awaitable bool;
+    the object itself has no `__call__`. [GatewayManagementComposition](../composition/gateway.py)
+    combines this evidence with local publication before serving readiness.
+    """
+
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 

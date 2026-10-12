@@ -18,6 +18,8 @@ from .base import Base
 
 
 class BridgeSessionRow(Base):
+    """Store bridge lifecycle history pinned to an endpoint revision, not live transport state."""
+
     __tablename__ = "bridge_sessions"
     __table_args__ = (
         Index("ix_bridge_sessions_endpoint_status_created", "endpoint_id", "status", "created_at"),
@@ -42,6 +44,8 @@ class BridgeSessionRow(Base):
 
 
 class SessionEventRow(Base):
+    """Append a validated diagnostic event with a Session-local monotonic sequence."""
+
     __tablename__ = "session_events"
     __table_args__ = (
         UniqueConstraint("session_id", "sequence", name="uq_session_events_session_sequence"),
@@ -61,6 +65,8 @@ class SessionEventRow(Base):
 
 
 class SessionSnapshotRow(Base):
+    """Store the replaceable current inspection projection alongside its event count."""
+
     __tablename__ = "session_snapshots"
 
     session_id: Mapped[UUID] = mapped_column(

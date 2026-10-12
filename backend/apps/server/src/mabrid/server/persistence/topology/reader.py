@@ -26,6 +26,14 @@ from .mappers import as_utc, upstream_revision_from_row
 
 
 class SqlAlchemyTopologyReader:
+    """Materialize immutable revisions for enabled runtime endpoint publication.
+
+    Revision listing, slug resolution, and captured-revision lookup structurally
+    implement the application read port. [compose_gateway](../../composition/gateway.py)
+    injects this reader, not the all-heads management snapshot reader.
+    Contract: [TopologyReader](../../../../../../../packages/application/src/mabrid/application/gateway/topology/ports.py).
+    """
+
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 

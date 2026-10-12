@@ -17,6 +17,12 @@ from sqlalchemy.ext.asyncio import (
 
 
 class SqliteDatabase:
+    """Own the async engine, short-lived Session factory, migrations, and disposal.
+
+    [bootstrap_server](../composition/bootstrap.py) constructs this deployment
+    resource; application services receive adapters, never its SQLAlchemy objects.
+    """
+
     def __init__(self, path: Path) -> None:
         self.path = path
         self.url = f"sqlite+aiosqlite:///{path.as_posix()}"

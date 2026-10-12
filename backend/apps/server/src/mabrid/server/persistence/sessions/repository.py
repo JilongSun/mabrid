@@ -18,6 +18,13 @@ from ..schema import BridgeSessionRow
 
 
 class SqlAlchemyBridgeSessionRepository:
+    """Persist Gateway lifecycle records, not live MCP connections or correlation maps.
+
+    `add`/`update`/`get`/`list` structurally implement the application repository.
+    [compose_gateway](../../composition/gateway.py) injects it into the coordinator.
+    Contract: [BridgeSessionRepository](../../../../../../../packages/application/src/mabrid/application/gateway/sessions/ports.py).
+    """
+
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 

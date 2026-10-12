@@ -33,6 +33,8 @@ class ConfigError(RuntimeError):
 
 @dataclass(frozen=True)
 class LoadedBridgeConfig:
+    """Pair validated file settings with the source path used to resolve relative resources."""
+
     path: Path
     config: MabridConfig
 

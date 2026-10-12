@@ -28,6 +28,8 @@ def to_camel(value: str) -> str:
 
 
 class CamelModel(BaseModel):
+    """Validate deployment-file models using the agreed camel-case configuration syntax."""
+
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
@@ -36,6 +38,8 @@ class CamelModel(BaseModel):
 
 
 class BridgeRuntimeConfig(CamelModel):
+    """Configure listener, advertised origin, identity override, and transport timeout."""
+
     api_host: str = "127.0.0.1"
     api_port: int = 8765
     advertised_base_url: str | None = None
@@ -49,16 +53,22 @@ class BridgeRuntimeConfig(CamelModel):
 
 
 class StorageConfig(CamelModel):
+    """Select the local SQLite path and startup migration policy."""
+
     sqlite_path: Path = Path("backend/var/mabrid.db")
     auto_migrate: bool = True
 
 
 class HermesSessionFileConfig(CamelModel):
+    """Declare native API root and stable deployment binding for remote Session references."""
+
     api_root: AnyHttpUrl
     binding_id: str = Field(min_length=1)
 
 
 class HermesAgentRuntimeFileConfig(CamelModel):
+    """Transitional YAML runtime selection/connection settings with an environment-secret reference."""
+
     integration: Literal["hermes"] = "hermes"
     interface: Literal["openai-chat-completions"] = "openai-chat-completions"
     base_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8642/v1")
@@ -68,6 +78,8 @@ class HermesAgentRuntimeFileConfig(CamelModel):
 
 
 class AgentHostFileConfig(CamelModel):
+    """Transitional YAML Target, endpoint assignment, and Host feature selection."""
+
     enabled: bool = False
     mcp_apps_enabled: bool = False
     target_id: str | None = Field(default=None, min_length=1)
@@ -86,6 +98,8 @@ class AgentHostFileConfig(CamelModel):
 
 
 class UpstreamFileConfig(CamelModel):
+    """Validate a transitional upstream seed before resolving transport-specific settings."""
+
     transport: Literal["stdio", "sse", "streamable-http"]
     command: str | None = None
     args: list[str] = Field(default_factory=list)
@@ -104,6 +118,8 @@ class UpstreamFileConfig(CamelModel):
 
 
 class EndpointBindingFileConfig(CamelModel):
+    """Declare a seed binding by upstream name, namespace, order, and enablement."""
+
     upstream: str
     namespace: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
     priority: int = 0
@@ -111,6 +127,8 @@ class EndpointBindingFileConfig(CamelModel):
 
 
 class EndpointFileConfig(CamelModel):
+    """Validate one transitional endpoint seed and its explicit upstream bindings."""
+
     display_name: str | None = None
     mode: Literal["passthrough", "aggregate"] = "passthrough"
     bindings: list[EndpointBindingFileConfig]
@@ -118,6 +136,8 @@ class EndpointFileConfig(CamelModel):
 
 
 class MabridConfig(CamelModel):
+    """Combine deployment settings with temporary topology seeds and Agent Host configuration."""
+
     bridge: BridgeRuntimeConfig = Field(default_factory=BridgeRuntimeConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     agent_host: AgentHostFileConfig = Field(default_factory=AgentHostFileConfig)

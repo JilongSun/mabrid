@@ -133,6 +133,12 @@ async def _admit(request: Request, source: AsyncGenerator[HostEvent, None]) -> H
 
 
 class _HostRoute(APIRoute):
+    """Sanitize unexpected first-party route failures without swallowing cancellation.
+
+    Explicitly inherit FastAPI's route adapter; `get_route_handler` returns a
+    guarded async request callable, while validation keeps the shared safe handler.
+    """
+
     def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
         handler = super().get_route_handler()
 
