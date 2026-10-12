@@ -38,6 +38,7 @@ class SqlAlchemyTopologyReader:
         self._session_factory = session_factory
 
     async def list_current_revisions(self) -> list[EndpointTopologyRevision]:
+        """Implement [TopologyReader.list_current_revisions](../../../../../../../packages/application/src/mabrid/application/gateway/topology/ports.py:20)."""
         async with self._session_factory() as session:
             revision_ids = (
                 await session.scalars(
@@ -58,6 +59,7 @@ class SqlAlchemyTopologyReader:
         self,
         endpoint_slug: str,
     ) -> EndpointTopologyRevision | None:
+        """Implement [TopologyReader.resolve_current_revision](../../../../../../../packages/application/src/mabrid/application/gateway/topology/ports.py:22)."""
         async with self._session_factory() as session:
             revision_id = await session.scalar(
                 select(EndpointRow.current_revision_id).where(
@@ -68,6 +70,7 @@ class SqlAlchemyTopologyReader:
             return await _load_revision(session, revision_id) if revision_id is not None else None
 
     async def get_revision(self, revision_id: UUID) -> EndpointTopologyRevision | None:
+        """Implement [TopologyReader.get_revision](../../../../../../../packages/application/src/mabrid/application/gateway/topology/ports.py:27)."""
         async with self._session_factory() as session:
             row = await session.get(EndpointRevisionRow, revision_id)
             return await _revision_from_row(session, row) if row is not None else None

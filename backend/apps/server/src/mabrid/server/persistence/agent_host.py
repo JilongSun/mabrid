@@ -34,6 +34,7 @@ class SqliteAgentSessionRepository:
         self._sessions = sessions
 
     async def add(self, session: AgentSessionRecord) -> None:
+        """Implement [AgentSessionRepository.add](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py:81)."""
         async with self._sessions.begin() as transaction:
             transaction.add(
                 AgentSessionRow(
@@ -47,6 +48,7 @@ class SqliteAgentSessionRepository:
             )
 
     async def get(self, session_id: UUID) -> AgentSessionRecord | None:
+        """Implement [AgentSessionRepository.get](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py:83)."""
         async with self._sessions() as transaction:
             row = await transaction.get(AgentSessionRow, session_id)
             return _record(row) if row is not None else None
@@ -54,6 +56,7 @@ class SqliteAgentSessionRepository:
     async def list_sessions(
         self, *, target_id: str, limit: int, offset: int
     ) -> tuple[AgentSessionRecord, ...]:
+        """Implement [AgentSessionRepository.list_sessions](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py:85)."""
         if not 1 <= limit <= 200 or offset < 0:
             raise ValueError("Invalid Agent Session pagination")
         async with self._sessions() as transaction:
@@ -73,6 +76,7 @@ class SqliteAgentSessionRepository:
         expected: RuntimeSessionReference,
         replacement: RuntimeSessionReference,
     ) -> bool:
+        """Implement [AgentSessionRepository.update_runtime_session](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py:89)."""
         if replacement.runtime_binding_id != expected.runtime_binding_id:
             raise ValueError("Agent Session cannot migrate to another runtime deployment")
         async with self._sessions.begin() as transaction:
@@ -89,6 +93,7 @@ class SqliteAgentSessionRepository:
             return result.scalar_one_or_none() is not None
 
     async def get_unsettled_run(self, target_id: str) -> UnsettledSessionRun | None:
+        """Implement [AgentSessionRepository.get_unsettled_run](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py:97)."""
         async with self._sessions() as transaction:
             row = await transaction.get(UnsettledAgentRunRow, target_id)
             if row is None:
@@ -102,6 +107,7 @@ class SqliteAgentSessionRepository:
             )
 
     async def claim_run(self, session: AgentSessionRecord, run_id: UUID) -> bool:
+        """Implement [AgentSessionRepository.claim_run](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py:99)."""
         try:
             async with self._sessions.begin() as transaction:
                 transaction.add(
@@ -119,6 +125,7 @@ class SqliteAgentSessionRepository:
     async def record_runtime_run(
         self, target_id: str, run_id: UUID, handle: RuntimeRunHandle
     ) -> None:
+        """Implement [AgentSessionRepository.record_runtime_run](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py:101)."""
         async with self._sessions.begin() as transaction:
             result = await transaction.execute(
                 update(UnsettledAgentRunRow)
@@ -134,6 +141,7 @@ class SqliteAgentSessionRepository:
                 raise RuntimeError("Unsettled Run does not belong to the provided runtime handle")
 
     async def release_run(self, target_id: str, run_id: UUID) -> None:
+        """Implement [AgentSessionRepository.release_run](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py:105)."""
         async with self._sessions.begin() as transaction:
             result = await transaction.execute(
                 delete(UnsettledAgentRunRow)

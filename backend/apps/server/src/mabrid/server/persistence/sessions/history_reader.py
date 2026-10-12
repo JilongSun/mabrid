@@ -31,6 +31,7 @@ class SqlAlchemySessionHistoryReader:
         self._session_factory = session_factory
 
     async def list_sessions(self, request: SessionPageRequest) -> SessionPage:
+        """Implement [SessionHistoryReader.list_sessions](../../../../../../../packages/application/src/mabrid/application/gateway/sessions/ports.py:35)."""
         statement = select(BridgeSessionRow)
         if request.endpoint_id is not None:
             statement = statement.where(BridgeSessionRow.endpoint_id == request.endpoint_id)
@@ -65,6 +66,7 @@ class SqlAlchemySessionHistoryReader:
         return SessionPage(items=records, next_keyset=next_keyset)
 
     async def get_session(self, session_id: UUID) -> BridgeSessionRecord | None:
+        """Implement [SessionHistoryReader.get_session](../../../../../../../packages/application/src/mabrid/application/gateway/sessions/ports.py:37)."""
         async with self._session_factory() as session:
             row = await session.get(BridgeSessionRow, session_id)
         return _session_from_row(row) if row is not None else None

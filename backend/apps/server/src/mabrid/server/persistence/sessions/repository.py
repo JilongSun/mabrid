@@ -29,6 +29,7 @@ class SqlAlchemyBridgeSessionRepository:
         self._session_factory = session_factory
 
     async def add(self, session: BridgeSessionRecord) -> None:
+        """Implement [BridgeSessionRepository.add](../../../../../../../packages/application/src/mabrid/application/gateway/sessions/ports.py:19)."""
         try:
             async with self._session_factory.begin() as db_session:
                 db_session.add(_to_row(session))
@@ -36,6 +37,7 @@ class SqlAlchemyBridgeSessionRepository:
             raise ValueError(f"Bridge session already exists: {session.session_id}") from exc
 
     async def update(self, session: BridgeSessionRecord) -> None:
+        """Implement [BridgeSessionRepository.update](../../../../../../../packages/application/src/mabrid/application/gateway/sessions/ports.py:21)."""
         async with self._session_factory.begin() as db_session:
             row = await db_session.get(BridgeSessionRow, session.session_id)
             if row is None:
@@ -43,11 +45,13 @@ class SqlAlchemyBridgeSessionRepository:
             _update_row(row, session)
 
     async def get(self, session_id: UUID) -> BridgeSessionRecord | None:
+        """Implement [BridgeSessionRepository.get](../../../../../../../packages/application/src/mabrid/application/gateway/sessions/ports.py:23)."""
         async with self._session_factory() as session:
             row = await session.get(BridgeSessionRow, session_id)
             return _from_row(row) if row is not None else None
 
     async def list(self, endpoint_id: UUID | None = None) -> list[BridgeSessionRecord]:
+        """Implement [BridgeSessionRepository.list](../../../../../../../packages/application/src/mabrid/application/gateway/sessions/ports.py:25)."""
         statement = select(BridgeSessionRow).order_by(BridgeSessionRow.created_at.desc())
         if endpoint_id is not None:
             statement = statement.where(BridgeSessionRow.endpoint_id == endpoint_id)

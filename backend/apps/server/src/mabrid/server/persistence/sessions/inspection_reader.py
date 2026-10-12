@@ -32,6 +32,7 @@ class SqlAlchemySessionInspectionReader:
         self._session_factory = session_factory
 
     async def get_snapshot(self, session_id: UUID) -> BridgeSessionSnapshot | None:
+        """Implement [SessionInspectionReader.get_snapshot](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:101)."""
         async with self._session_factory() as session:
             if await session.get(BridgeSessionRow, session_id) is None:
                 return None
@@ -44,6 +45,7 @@ class SqlAlchemySessionInspectionReader:
         self,
         request: SessionEventPageRequest,
     ) -> SessionEventPage | None:
+        """Implement [SessionInspectionReader.list_events](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:103)."""
         async with self._session_factory() as session:
             if await session.get(BridgeSessionRow, request.session_id) is None:
                 return None

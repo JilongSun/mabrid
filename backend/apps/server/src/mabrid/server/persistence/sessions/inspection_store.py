@@ -71,6 +71,8 @@ class SqlAlchemyBridgeSessionStore:
         self,
         upstream: UpstreamInitialization | None = None,
     ) -> SessionStartedEvent:
+        """Implement [BridgeSessionStore.start](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:37)."""
+
         def mutate(snapshot: BridgeSessionSnapshot) -> SessionStartedEvent:
             snapshot.status = SessionStatus.READY
             snapshot.upstream = upstream
@@ -79,6 +81,7 @@ class SqlAlchemyBridgeSessionStore:
         return await self._mutate(mutate)
 
     async def register_tools(self, tools: list[ToolDescriptor]) -> list[ToolDiscoveredEvent]:
+        """Implement [BridgeSessionStore.register_tools](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:42)."""
         async with self._lock:
             async with self._session_factory.begin() as session:
                 snapshot = await self._load_snapshot(session)
@@ -101,6 +104,8 @@ class SqlAlchemyBridgeSessionStore:
         *,
         call_id: str | None = None,
     ) -> ToolCallStartedEvent:
+        """Implement [BridgeSessionStore.start_tool_call](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:44)."""
+
         def mutate(snapshot: BridgeSessionSnapshot) -> ToolCallStartedEvent:
             call = ToolCallRecord(
                 call_id=call_id or str(uuid4()),
@@ -120,6 +125,8 @@ class SqlAlchemyBridgeSessionStore:
         *,
         failed: bool = False,
     ) -> ToolCallCompletedEvent:
+        """Implement [BridgeSessionStore.complete_tool_call](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:52)."""
+
         def mutate(snapshot: BridgeSessionSnapshot) -> ToolCallCompletedEvent:
             call = next(
                 (item for item in snapshot.active_tool_calls if item.call_id == call_id),
@@ -140,6 +147,8 @@ class SqlAlchemyBridgeSessionStore:
         return await self._mutate(mutate)
 
     async def record_resource_read(self, read: ResourceReadRecord) -> ResourceReadEvent:
+        """Implement [BridgeSessionStore.record_resource_read](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:60)."""
+
         def mutate(snapshot: BridgeSessionSnapshot) -> ResourceReadEvent:
             read_index = {item.requested_uri: item for item in snapshot.resource_reads}
             read_index[read.requested_uri] = read
@@ -152,6 +161,7 @@ class SqlAlchemyBridgeSessionStore:
         self,
         availability: list[UpstreamAvailability],
     ) -> list[UpstreamAvailabilityChangedEvent]:
+        """Implement [BridgeSessionStore.set_upstream_availability](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:62)."""
         async with self._lock:
             async with self._session_factory.begin() as session:
                 snapshot = await self._load_snapshot(session)
@@ -189,6 +199,8 @@ class SqlAlchemyBridgeSessionStore:
         message: str,
         details: dict[str, object] | None = None,
     ) -> ErrorRaisedEvent:
+        """Implement [BridgeSessionStore.record_error](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:67)."""
+
         def mutate(snapshot: BridgeSessionSnapshot) -> ErrorRaisedEvent:
             snapshot.status = SessionStatus.ERROR
             snapshot.last_error = message
@@ -201,10 +213,12 @@ class SqlAlchemyBridgeSessionStore:
         return await self._mutate(mutate)
 
     async def snapshot(self) -> BridgeSessionSnapshot:
+        """Implement [BridgeSessionStore.snapshot](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:73)."""
         async with self._session_factory() as session:
             return await self._load_snapshot(session)
 
     async def events(self, after_index: int = 0) -> list[SessionEvent]:
+        """Implement [BridgeSessionStore.events](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:75)."""
         async with self._session_factory() as session:
             rows = (
                 await session.scalars(
@@ -219,6 +233,7 @@ class SqlAlchemyBridgeSessionStore:
             return [EVENT_ADAPTER.validate_python(row.payload_json) for row in rows]
 
     async def wait_for_events(self, after_index: int = 0) -> list[SessionEvent]:
+        """Implement [BridgeSessionStore.wait_for_events](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:77)."""
         while True:
             async with self._lock:
                 events = await self.events(after_index)
@@ -309,12 +324,14 @@ class SqlAlchemyBridgeSessionStoreFactory:
         self._lock = anyio.Lock()
 
     async def create(self, session_id: UUID) -> BridgeSessionStore:
+        """Implement [BridgeSessionStoreFactory.create](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:87)."""
         async with self._lock:
             if session_id in self._stores:
                 raise ValueError(f"Session store already exists: {session_id}")
             return self._create_store(session_id)
 
     async def get(self, session_id: UUID) -> BridgeSessionStore | None:
+        """Implement [BridgeSessionStoreFactory.get](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:89)."""
         async with self._lock:
             store = self._stores.get(session_id)
             if store is not None:
@@ -324,6 +341,7 @@ class SqlAlchemyBridgeSessionStoreFactory:
             return self._create_store(session_id) if exists is not None else None
 
     async def remove(self, session_id: UUID) -> None:
+        """Implement [BridgeSessionStoreFactory.remove](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:91)."""
         async with self._lock:
             self._stores.pop(session_id, None)
 

@@ -41,6 +41,7 @@ class SqlAlchemyTopologySnapshotReader:
         self._session_factory = session_factory
 
     async def read_snapshot(self) -> TopologySnapshot:
+        """Implement [TopologySnapshotReader.read_snapshot](../../../../../../../packages/application/src/mabrid/application/gateway/topology/ports.py:37)."""
         async with self._session_factory.begin() as session:
             upstream_heads = list(
                 await session.scalars(select(UpstreamServerRow).order_by(UpstreamServerRow.slug))
