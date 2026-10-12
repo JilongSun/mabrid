@@ -1,5 +1,6 @@
 {
   "recommendations": [
-    "antunesdq.comment-linker"
+    "antunesdq.comment-linker",
+    "charliermarsh.ruff"
   ]
 }
