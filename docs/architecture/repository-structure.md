@@ -66,11 +66,26 @@ important ownership/lifecycle invariants. Protocols and concrete adapters additi
 structural relationship, matching methods or properties, and the actual consumer or composition
 site. A matching method name alone does not prove conformance: parameter and return types matter.
 
-Class docstrings use Markdown source links that Pylance preserves in hover documentation. Link
-labels name the class or function; targets are portable paths relative to the documenting source
-file. Follow a link to the owning file and select the named symbol in the editor outline. These
-links do not change inheritance, create a nominal type hierarchy, or guarantee a language server's
-automatic Go to Implementation results for structural typing.
+Class docstrings use source references such as `[PortName](../ports.py:42)`: labels name the class
+or function, targets are paths relative to the documenting source file, and the suffix is the
+declaration's 1-based line number. Keep these references current when declarations move.
+
+Install the workspace-recommended **Comment Linker** (`antunesdq.comment-linker`) extension to
+Ctrl+Click a label in Python source and open the target at its declaration. In a remote/WSL window,
+make sure the extension is enabled for that window's Python files. This uses an extension-provided
+document link, not Pylance symbol resolution; F12 on docstring text is not part of this contract.
+The extension's published provider has been checked against these docstrings for link ranges,
+relative file resolution, and line fragments. That check does not exercise editor mouse clicks.
+
+The `:42` suffix is provider-specific, not a standard Markdown file fragment. Keep ordinary
+Markdown documents' file links in standard Markdown form, and do not rely on Pylance hover to open
+the docstring references. The application and its tests do not require the editor extension.
+
+Use the links in this Markdown document as file-navigation entry points, or use Go to Definition on
+existing code identifiers and type annotations when the extension is unavailable. Select a named
+class/function in the destination file's outline. Neither route changes inheritance or guarantees
+automatic Go to Implementation
+results for structural typing. Do not add imports or base classes solely to enable navigation.
 
 For a concrete example, start at
 [SqliteAgentSessionRepository](../../backend/apps/server/src/mabrid/server/persistence/agent_host.py),
@@ -81,8 +96,17 @@ contract and consumer, then inspect
 for actual injection. Observer factories, store reader views, and async bound-method callbacks use
 the same documented approach without adding base classes or documentation-only imports.
 
+For the Gateway history-reader boundary, use these Markdown links:
+
+- Implementation: [SqlAlchemySessionHistoryReader](../../backend/apps/server/src/mabrid/server/persistence/sessions/history_reader.py).
+- Contract: [SessionHistoryReader](../../backend/packages/application/src/mabrid/application/gateway/sessions/ports.py).
+- Injection and typed management view: [compose_gateway](../../backend/apps/server/src/mabrid/server/composition/gateway.py).
+
+The composition module already imports the Protocol for a real field annotation, so that identifier
+is a Python navigation target; the same name inside the implementation's docstring is only text.
+
 [Architecture tests](../../backend/tests/test_architecture.py) require class docstrings and verify
-that source links resolve to files containing the named symbols. Descriptive Pydantic schema
+that source references resolve to named declarations at the recorded lines. Descriptive Pydantic schema
 changes are reflected in the frozen frontend contract without altering its fields or validation.
 
 ## Ownership

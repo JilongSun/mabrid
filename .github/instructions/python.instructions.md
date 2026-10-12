@@ -29,9 +29,13 @@ applyTo: ["**/*.py"]
 - For Protocols and structural implementations, name the contract, matching methods/properties,
 	and the actual consumer or composition site. Distinguish structural conformance from inheritance;
 	document callable factories and reader views when they fulfill a port without a base class.
-- Use Markdown links such as `[PortName](../ports.py)` to the symbol's actual Python source file,
-	relative to the documenting file, so Pylance hover can preserve navigable links. Verify the file
-	and named symbol exist; do not invent editor inheritance support or use machine-specific paths.
+- Use source references such as `[PortName](../ports.py:42)` in Python docstrings, relative to the
+	documenting file, with the named declaration's current 1-based line number. Architecture tests
+	verify both the symbol and its line; update incoming references when a declaration moves.
+	The recommended Comment Linker extension provides Ctrl+Click on these labels in Python source.
+	This is extension-backed file navigation, not Pylance/F12 symbol resolution or inheritance.
+	Without that extension, use architecture Markdown links or existing code identifiers. Do not
+	infer clickable navigation from hover Markdown alone or use machine-specific absolute paths.
 - Do not add imports, base classes, wrappers, or runtime behavior solely for documentation. Follow
 	the existing Protocol pattern and public facade boundaries.
 - Class docstrings can change Pydantic schema descriptions. Check that fields and validation stay
