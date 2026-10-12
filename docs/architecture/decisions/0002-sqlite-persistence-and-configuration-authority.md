@@ -11,6 +11,11 @@ and persisted MCP transport correlation. The SQLite authority and transaction de
 ADR 0014 keeps seed-if-empty as the only v0.1 topology input and moves all later topology
 mutation, import, and re-seed contracts beyond v0.1.
 
+ADR 0014's 2026-10-10 clarification distinguishes bootstrap protection from management mutability:
+future frontend-backed commands must edit existing managed state without a database reset, while
+normal startup still must not overwrite it from YAML. Agent Host configuration currently remains
+YAML-managed; its transition to authoritative managed storage is separate pending work.
+
 ## Context
 
 The bridge currently creates in-memory repositories and an in-memory session store factory in `mcp/builder.py`. These implementations are useful for controlled tests and debugger runs, but all topology, session records, snapshots, and events disappear when the process exits.

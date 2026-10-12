@@ -8,6 +8,12 @@ ADR 0014 moves this write-management design beyond v0.1. The v0.1 topology is se
 exposed through read-only management and inspection APIs; the mutation model below remains the
 basis for a later writable management milestone.
 
+ADR 0014's 2026-10-10 clarification extends the future frontend configuration workflow to Mabrid's
+Agent Host/Target/runtime settings and records first-run setup, non-destructive updates to existing
+databases, and explicit YAML migration as pending requirements. `seed-if-empty` is not a permanent
+management write lock. Restart-applied topology remains the baseline; safe Agent Host configuration
+application needs a separate detailed contract and does not imply runtime hot reload.
+
 ## Context
 
 The first release is primarily a personal client and trusted self-hosted Web application. The

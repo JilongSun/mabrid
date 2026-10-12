@@ -2,8 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-09-11
+- Clarified: 2026-10-10; post-v0.1 product-configuration ownership
 - Amends: ADR 0001, ADR 0002, ADR 0003, ADR 0004, ADR 0008, ADR 0010, and ADR 0011 for
-  v0.1 scope only
+  v0.1 scope only; clarifies the future configuration surface described by ADR 0011 and ADR 0012
 
 ## Context
 
@@ -167,6 +168,80 @@ The following ADR 0008 behaviors move out of v0.1 but remain the intended basis 
 No v0.1 HTTP route writes topology, edits YAML, restarts the process, or refreshes the live
 coordinator.
 
+### Post-v0.1 product-configuration ownership
+
+The read-only boundary and frozen seeded database are v0.1 limitations, not the permanent product
+configuration model. The accepted direction is first-party frontend configuration through typed
+backend management APIs, with SQLite as the authoritative product-configuration store. The frontend
+is an editing surface, not a second source of truth, YAML editor, or direct database client.
+
+The future managed scope includes both:
+
+- Gateway upstreams, transport connection settings, endpoints, and endpoint-owned bindings; and
+- Mabrid's Agent Host enablement, Target configuration and endpoint assignment, runtime integration
+  and interface selection, runtime connection settings, native-session deployment binding, and
+  supported product feature settings.
+
+Agent Host configuration is currently resolved from YAML and environment-secret references at each
+startup; it is not seeded into SQLite like topology. Persisting Agent Sessions and Run ownership
+does not persist the Target's configuration. Migrating these Agent Host settings to managed storage
+is therefore a separate pending part of the future configuration workflow, not already delivered
+by topology persistence or the read-only Target API. The single-Target constraint remains unchanged;
+editable runtime selection does not authorize multiple active Targets or a runtime registry.
+
+YAML remains appropriate for process and deployment concerns such as listener bind settings,
+database location, logging, migrations, and bootstrap policy. Product topology and Agent Host
+settings in YAML are transitional, not the intended permanent configuration workflow. Secret
+material remains behind server-owned resolution and a separately designed secret-reference
+contract; ordinary management reads must not return it. The exact setting classification, managed
+schema, API commands, and compatibility policy require a follow-up design before implementation.
+
+This manages Mabrid's connection to an external agent runtime, not that runtime's internal
+configuration, models, tools, transcript, or process. A managed endpoint assignment still does not
+rewrite Hermes configuration or prove that Hermes uses the assigned URL.
+
+### Existing-database evolution and first-run setup
+
+`seed-if-empty` is a bootstrap guard against implicit YAML overwrites, not a database write lock.
+The v0.1 database is effectively frozen because no supported topology mutation commands exist.
+Future management commands must be able to revise an existing populated database without deleting
+the database, losing history, or rerunning the seed. Normal startup must still never merge YAML
+over managed state merely because the YAML file changed.
+
+The later configuration milestone must provide:
+
+- first-run frontend setup without requiring hand-written product configuration in YAML;
+- non-destructive edits to existing topology and Agent Host configuration, using backend validation,
+  transaction boundaries, concurrency protection, and the topology revision semantics of ADR 0008;
+- an explicit transition for existing seeded topology and YAML-managed Agent Host settings, with
+  defined precedence, validation, failure behavior, and secret-reference handling; and
+- preservation of stable identities, topology revision references, Session metadata, inspection
+  history, and unresolved Run ownership when migrating configuration storage.
+
+An optional seed/import compatibility surface, if retained, needs its own explicit contract. It
+must not become a competing live authority or implicitly overwrite existing managed settings.
+Destructive reset remains only the documented v0.1 developer-preview workaround, not the future
+configuration update mechanism.
+
+### Saved configuration and runtime application
+
+Saving managed configuration and applying it to the running process are separate operations.
+Restart-applied topology under ADR 0008 remains the baseline; frontend editing does not require
+hot reload or an HTTP process-restart endpoint. A future Agent Host configuration design must also
+specify validation against the effective endpoint assignment, saved-versus-running status, and safe
+application while a Run is active or its remote state is unknown. This ADR does not select a new
+live runtime-switching mechanism.
+
+Changing a runtime URL, integration, Target, or deployment binding must not silently reassign old
+Agent Sessions to another remote deployment or release an unsettled Run lease. A configuration
+storage migration preserves the existing deployment binding; an actual deployment change requires
+explicit binding semantics and must retain the protections established by ADR 0016. Neither saved
+configuration nor a restart alone proves remote execution has exited.
+
+These are accepted future requirements, not new v0.1 release gates, frozen write APIs, or an
+implementation authorization. Their detailed contracts and implementation remain deferred until
+the owner explicitly starts the writable configuration milestone.
+
 ## Consequences
 
 - The v0.1 backend gains a useful topology and diagnostics surface without committing to an
@@ -183,6 +258,9 @@ coordinator.
 ## Explicitly Deferred
 
 - All topology mutation HTTP APIs and application commands.
+- First-run frontend setup and non-destructive management of populated configuration databases.
+- Persisted, frontend-managed Agent Host/Target/runtime configuration and its YAML transition.
+- Agent Host configuration-application and deployment-binding change contracts.
 - A topology writer, unit of work, and optimistic concurrency contract.
 - Revision-history APIs.
 - Secret references, encryption, and write-time credential semantics.

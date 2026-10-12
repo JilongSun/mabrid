@@ -28,9 +28,9 @@ Implementation states:
 | [0009](decisions/0009-mabrid-product-identity.md) | Accepted; timing amended by 0013 and 2026-10-10 owner sequence | Partial | Repository-local Mabrid identity is complete; remote rename/About/update awaits owner action; the local checkout is intentionally retained and frontend identity follows its rewrite |
 | [0010](decisions/0010-application-contexts-and-capability-composition.md) | Accepted; amended by 0011, 0012, 0013, 0014, 0015, and 0016 | Partial | v0.1 contexts, typed assembly, native bindings, widget presentation, effective capabilities, and frozen contracts exist; deployed frontend workflow remains release work; product Host actions are deferred |
 | [0011](decisions/0011-single-agent-target-and-endpoint-assignment.md) | Accepted; amended by 0012, 0014, 0015, and 0016 | Partial | Single Target, endpoint ownership, Run coordination, durable Sessions, restart ownership, and frozen controls complete the backend prerequisite; deployed endpoint/agent validation remains release work |
-| [0012](decisions/0012-agent-runtime-profiles-and-integration-composition.md) | Accepted; amended by 0015 and 0016 | Partial | Profiles, selected Hermes native interfaces, typed discovery, explicit deployment selection, effective support/availability, and frozen frontend contracts exist; external deployment certification remains release work |
+| [0012](decisions/0012-agent-runtime-profiles-and-integration-composition.md) | Accepted; amended by 0015 and 0016; future configuration ownership clarified by 0014 | Partial | Runtime profiles, discovery, capabilities, and frozen contracts exist; external deployment certification remains release work; frontend-managed runtime configuration is deferred |
 | [0013](decisions/0013-backend-semantic-boundaries-and-mabrid-code-identity.md) | Accepted | Implemented | Backend contexts are modularized, MCP transport is core-owned, provisional contracts are removed, and Mabrid code identity is adopted |
-| [0014](decisions/0014-read-only-v0-1-management-plane.md) | Accepted | Implemented | v0.1 exposes read-only topology, status, readiness, Agent Target assignment, and session inspection while topology mutations remain deferred |
+| [0014](decisions/0014-read-only-v0-1-management-plane.md) | Accepted; future configuration ownership clarified 2026-10-10 | Implemented (v0.1 read-only scope) | Read-only management is complete; frontend-managed topology and Agent Host/runtime settings, first-run setup, non-destructive database updates, and YAML transition remain post-v0.1 requirements |
 | [0015](decisions/0015-agent-host-runs-and-mcp-apps-endpoint-composition.md) | Accepted; amended by 0016 | Partial | Run attribution, fresh resources, widget composition, timely delivery, and frozen HTTP contracts exist; deployed/rendered workflow and release validation remain pending; product Host actions are deferred |
 | [0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md) | Accepted | Implemented | All eight backend batches and six frontend prerequisites are complete with frozen contracts, controlled evidence, and migration/post-migration review handoff; frontend and release work remain separate |
 
@@ -76,3 +76,20 @@ validation remain release work. First-party Agent Host and read-only management 
 follow the reviewed backend contracts. Writable topology management is outside v0.1 under ADR 0014;
 product Host actions are outside v0.1 under ADR 0016. Desktop and broader future ideas do not expand
 this milestone.
+
+## Future Configuration Milestone
+
+ADR 0014 records the accepted post-v0.1 direction, not a delivered write-management feature:
+first-party frontend workflows edit both Gateway topology and Mabrid's Agent Host/Target/runtime
+settings through backend management APIs backed by authoritative storage. YAML product configuration
+is transitional; process/deployment configuration and server-owned secret resolution remain
+separate. Agent Host configuration is currently loaded from YAML at startup, not persisted merely
+because Agent Sessions are persisted.
+
+The later milestone must cover first-run setup, non-destructive edits of populated databases,
+explicit migration from existing YAML/seeded state, credential references, and saved-versus-running
+configuration semantics. `seed-if-empty` must not block management writes, but startup must continue
+to avoid implicit YAML overwrites. Stable Session/deployment bindings, historical revision
+references, and unsettled Run ownership must survive migration. This does not authorize hot reload,
+remote agent administration, a multi-target registry, or implementation before a separate owner
+request, and it does not reopen the completed v0.1 read-only contract baseline.

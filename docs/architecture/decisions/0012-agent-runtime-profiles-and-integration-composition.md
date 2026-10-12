@@ -1,6 +1,6 @@
 # ADR 0012: Agent Runtime Profiles and Integration Composition
 
-- Status: Accepted; amended by ADR 0015 and ADR 0016
+- Status: Accepted; amended by ADR 0015 and ADR 0016; future configuration ownership clarified by ADR 0014
 - Date: 2026-08-25
 - Amends: ADR 0010 and ADR 0011
 
@@ -13,6 +13,13 @@ capabilities, and remote runtime availability before the frontend rewrite. It su
 general deferral of those behaviors below without selecting an unverified Hermes wire interface.
 The narrow-port and conservative-capability rules remain in force. Standard Responses ingress
 is not added to the v0.1 requirements.
+
+ADR 0014's 2026-10-10 clarification records the post-v0.1 configuration direction: the YAML
+`agentHost` example below is transitional. Mabrid's Target, endpoint assignment, and runtime
+selection/connection settings will be managed through first-party frontend workflows and backend
+APIs, persisted separately from Agent Sessions. Process/deployment settings and server-owned secret
+resolution retain their boundaries. Migration and safe runtime application remain pending; this
+does not add a write API, runtime hot reload, or management of Hermes's internal configuration.
 
 ## Context
 
