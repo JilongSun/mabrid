@@ -109,9 +109,11 @@ class AggregateRouter:
 
     @property
     def identity(self) -> UpstreamIdentity:
+        """Implement [McpSessionRouter.identity](ports.py:17)."""
         return self._identity
 
     async def start(self) -> None:
+        """Implement [McpSessionRouter.start](ports.py:19)."""
         for bound in self._bindings:
             await bound.runtime.start_worker(self._worker_task_group)
         try:
@@ -127,6 +129,7 @@ class AggregateRouter:
             raise
 
     async def close(self) -> None:
+        """Implement [McpSessionRouter.close](ports.py:21)."""
         errors: list[Exception] = []
         for bound in self._bindings:
             try:
@@ -137,6 +140,7 @@ class AggregateRouter:
             raise ExceptionGroup("Failed to close aggregate upstream workers", errors)
 
     async def list_tools(self) -> list[ToolDescriptor]:
+        """Implement [McpMethodRouter.list_tools](../contracts/methods.py:24)."""
         discovered: dict[str, list[ToolDescriptor]] = {}
         failures: dict[str, Exception] = {}
 
@@ -169,6 +173,7 @@ class AggregateRouter:
         tool_name: str,
         arguments: dict[str, Any],
     ) -> ToolCallResult:
+        """Implement [McpMethodRouter.call_tool](../contracts/methods.py:26)."""
         route = self._tool_routes.get(tool_name)
         if route is None:
             await self.list_tools()
@@ -189,6 +194,7 @@ class AggregateRouter:
         return result.model_copy(update={"content": self._public_content(bound, result.content)})
 
     async def load_tool_resource(self, tool_name: str, operation_key: str) -> None:
+        """Implement [McpMethodRouter.load_tool_resource](../contracts/methods.py:28)."""
         route = self._tool_routes.get(tool_name)
         if route is None:
             return
@@ -215,6 +221,7 @@ class AggregateRouter:
             )
 
     async def list_resources(self) -> list[ResourceDescriptor]:
+        """Implement [McpMethodRouter.list_resources](../contracts/methods.py:30)."""
         discovered: dict[str, list[ResourceDescriptor]] = {}
         failures: dict[str, Exception] = {}
 
@@ -242,6 +249,7 @@ class AggregateRouter:
         ]
 
     async def read_resource(self, uri: str) -> ReadResourceResult:
+        """Implement [McpMethodRouter.read_resource](../contracts/methods.py:32)."""
         return await self._read_resource(uri)
 
     async def _read_resource(

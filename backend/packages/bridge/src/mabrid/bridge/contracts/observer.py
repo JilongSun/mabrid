@@ -22,4 +22,5 @@ class NoOpBridgeObserver:
     """Structurally implement [BridgeObserver](observer.py:10) by discarding `observe` calls."""
 
     async def observe(self, event: BridgeObservation) -> None:
+        """Implement [BridgeObserver.observe](observer.py:18)."""
         return None

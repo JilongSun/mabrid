@@ -28,6 +28,7 @@ class DefaultUpstreamClientFactory:
     """Structurally implement [UpstreamClientFactory](factory.py:17) via transport selection."""
 
     def create(self, config: UpstreamConfig) -> UpstreamClient:
+        """Implement [UpstreamClientFactory.create](factory.py:24)."""
         return build_upstream_client(config)
 
 

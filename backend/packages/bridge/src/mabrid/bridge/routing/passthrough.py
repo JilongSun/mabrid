@@ -45,9 +45,11 @@ class PassthroughRouter:
 
     @property
     def identity(self) -> UpstreamIdentity:
+        """Implement [McpSessionRouter.identity](ports.py:17)."""
         return self._runtime.identity
 
     async def start(self) -> None:
+        """Implement [McpSessionRouter.start](ports.py:19)."""
         await self._runtime.start_worker(self._worker_task_group)
         try:
             await self._runtime.start()
@@ -64,9 +66,11 @@ class PassthroughRouter:
             raise
 
     async def close(self) -> None:
+        """Implement [McpSessionRouter.close](ports.py:21)."""
         await self._runtime.shutdown_worker()
 
     async def list_tools(self) -> list[ToolDescriptor]:
+        """Implement [McpMethodRouter.list_tools](../contracts/methods.py:24)."""
         tools = await self._runtime.refresh_tools()
         await self._observer.observe(
             ToolsPublished(session_key=self._session_key, tools=tuple(tools))
@@ -78,9 +82,11 @@ class PassthroughRouter:
         tool_name: str,
         arguments: dict[str, Any],
     ) -> ToolCallResult:
+        """Implement [McpMethodRouter.call_tool](../contracts/methods.py:26)."""
         return await self._runtime.call_tool(tool_name, arguments)
 
     async def load_tool_resource(self, tool_name: str, operation_key: str) -> None:
+        """Implement [McpMethodRouter.load_tool_resource](../contracts/methods.py:28)."""
         tool = self._runtime.tool(tool_name)
         if tool is None or tool.ui_resource_uri is None:
             return
@@ -101,9 +107,11 @@ class PassthroughRouter:
             )
 
     async def list_resources(self) -> list[ResourceDescriptor]:
+        """Implement [McpMethodRouter.list_resources](../contracts/methods.py:30)."""
         return await self._runtime.refresh_resources()
 
     async def read_resource(self, uri: str) -> ReadResourceResult:
+        """Implement [McpMethodRouter.read_resource](../contracts/methods.py:32)."""
         return await self._read_resource(uri)
 
     async def _read_resource(

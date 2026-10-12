@@ -108,7 +108,7 @@ def test_docstring_source_links_resolve_to_named_symbols() -> None:
                 ):
                     continue
                 for symbol, target, line in re.findall(
-                    r"\[([A-Za-z_]\w*)\]\(([^)]+\.py)(?::([^)]*))?\)",
+                    r"\[([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\]\(([^)]+\.py)(?::([^)]*))?\)",
                     ast.get_docstring(node) or "",
                 ):
                     destination = (path.parent / target).resolve()
@@ -121,6 +121,13 @@ def test_docstring_source_links_resolve_to_named_symbols() -> None:
                         for item in ast.walk(target_module)
                         if isinstance(item, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
                     }
+                    for target_class in ast.walk(target_module):
+                        if isinstance(target_class, ast.ClassDef):
+                            declarations.update(
+                                (f"{target_class.name}.{member.name}", member.lineno)
+                                for member in target_class.body
+                                if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
+                            )
                     if not any(name == symbol for name, declaration_line in declarations):
                         failures.append(
                             f"{path.relative_to(BACKEND_ROOT)}: missing {symbol} in {target}"
@@ -133,6 +140,93 @@ def test_docstring_source_links_resolve_to_named_symbols() -> None:
                         failures.append(
                             f"{path.relative_to(BACKEND_ROOT)}: {symbol} is not declared at {target}:{line}"
                         )
+    assert failures == []
+
+
+def test_protocol_implementations_link_back_to_their_contract_methods() -> None:
+    contracts = {
+        "AggregateRouter": ("McpSessionRouter",),
+        "PassthroughRouter": ("McpSessionRouter",),
+        "NoOpBridgeObserver": ("BridgeObserver",),
+        "CompositeBridgeObserver": ("BridgeObserver",),
+        "SessionInspectionProjector": ("BridgeObserver",),
+        "AgentOperationAttributionObserver": ("BridgeObserver",),
+        "_ToolActivityObserver": ("BridgeObserver",),
+        "_HostObserver": ("BridgeObserver",),
+        "McpAppsLifecycleProjector": ("BridgeObserver",),
+        "BridgeDownstreamServer": ("McpTransportSession",),
+        "GatewayMcpSessionBroker": ("McpSessionBroker",),
+        "DefaultUpstreamClientFactory": ("UpstreamClientFactory",),
+        "StdioUpstreamClient": ("UpstreamClient",),
+        "SseUpstreamClient": ("UpstreamClient",),
+        "StreamableHttpUpstreamClient": ("UpstreamClient",),
+        "InMemoryOperationRunAttributionRegistry": (
+            "OperationRunAttributionRegistry",
+            "OperationAttributionReader",
+        ),
+        "HermesChatCompletionsAdapter": (
+            "AgentRuntime",
+            "ManagedAgentRuntime",
+            "RuntimeCapabilityProbe",
+        ),
+        "HermesSessionAdapter": (
+            "RuntimeSessionCatalog",
+            "RuntimeSessionHistory",
+            "RuntimeSessionExecution",
+            "RuntimeSessionRunControl",
+            "RuntimeCapabilityProbe",
+        ),
+        "HostRunSettlement": ("AgentRunSettlement",),
+        "SqliteAgentSessionRepository": ("AgentSessionRepository",),
+        "SqlAlchemyBridgeSessionStore": ("BridgeSessionStore",),
+        "SqlAlchemyBridgeSessionStoreFactory": ("BridgeSessionStoreFactory",),
+        "SqlAlchemySessionInspectionReader": ("SessionInspectionReader",),
+        "SqlAlchemyBridgeSessionRepository": ("BridgeSessionRepository",),
+        "SqlAlchemySessionHistoryReader": ("SessionHistoryReader",),
+        "SqlAlchemyTopologyReader": ("TopologyReader",),
+        "SqlAlchemyTopologySnapshotReader": ("TopologySnapshotReader",),
+        "AgentHostService": ("AgentRunEventSource",),
+        "AgentSessionService": ("SessionRunEventSource",),
+        "InMemoryWidgetEventStore": ("WidgetEventStore", "WidgetEventReader"),
+        "InMemoryToolActivityStore": ("ToolActivityReader",),
+        "CompositeBridgeSessionObserverFactory": ("BridgeSessionObserverFactory",),
+        "AgentOperationAttributionObserverFactory": ("BridgeSessionObserverFactory",),
+        "AgentToolActivityObserverFactory": ("BridgeSessionObserverFactory",),
+        "HostObservationFactory": ("BridgeSessionObserverFactory",),
+        "McpAppsLifecycleObserverFactory": ("BridgeSessionObserverFactory",),
+    }
+    classes = {
+        node.name: node
+        for source_root in SOURCE_ROOTS.values()
+        for path in source_root.rglob("*.py")
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.ClassDef)
+    }
+
+    def methods(name: str) -> dict[str, tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]]:
+        result: dict[str, tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]] = {}
+        for base in classes[name].bases:
+            base_name = ast.unparse(base).split("[")[0].split(".")[-1]
+            if base_name in classes:
+                result.update(methods(base_name))
+        result.update(
+            (member.name, (name, member))
+            for member in classes[name].body
+            if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
+        )
+        return result
+
+    failures: list[str] = []
+    for implementation, protocols in contracts.items():
+        implementation_methods = methods(implementation)
+        for protocol in protocols:
+            if f"[{protocol}](" not in (ast.get_docstring(classes[implementation]) or ""):
+                failures.append(f"{implementation}: missing class reference to {protocol}")
+            for member_name, (declaring_protocol, declaration) in methods(protocol).items():
+                method = implementation_methods.get(member_name)
+                label = f"{declaring_protocol}.{member_name}"
+                if method is None or f"[{label}](" not in (ast.get_docstring(method[1]) or ""):
+                    failures.append(f"{implementation}.{member_name}: missing reference to {label}")
     assert failures == []
 
 

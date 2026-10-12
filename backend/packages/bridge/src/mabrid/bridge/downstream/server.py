@@ -55,9 +55,11 @@ class BridgeDownstreamServer:
             yield
 
     async def handle_streamable_http(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Implement [McpTransportSession.handle_streamable_http](asgi.py:27)."""
         await self._streamable_http.handle_request(scope, receive, send)
 
     async def handle_sse(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Implement [McpTransportSession.handle_sse](asgi.py:34)."""
         async with self._sse_transport.connect_sse(scope, receive, send) as streams:
             await self._server.run(
                 streams[0],
@@ -66,6 +68,7 @@ class BridgeDownstreamServer:
             )
 
     async def handle_sse_post(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Implement [McpTransportSession.handle_sse_post](asgi.py:41)."""
         query_string = scope.get("query_string", b"")
         if b"sessionId=" in query_string and b"session_id=" not in query_string:
             scope = dict(scope)

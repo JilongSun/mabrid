@@ -66,6 +66,18 @@ important ownership/lifecycle invariants. Protocols and concrete adapters additi
 structural relationship, matching methods or properties, and the actual consumer or composition
 site. A matching method name alone does not prove conformance: parameter and return types matter.
 
+Review navigation starts at the implementation, not at a reverse implementation index. Every
+contract-facing concrete method/property links directly to its declaring Protocol member, for
+example `[BridgeObserver.observe](relative/observer.py:18)`. Class links remain useful context,
+but do not replace this method-level entry point. Private observers, factory methods, shared
+base-class implementations, and multiple reader/writer views follow the same rule. An inherited
+Protocol member links to the Protocol that actually declares it.
+
+Check the actual typed consumer and composition before calling a relationship an implementation.
+For example, the Host observer implements `BridgeObserver`; Host presentation streams consume
+event-source Protocols but yield different envelopes. A transport base supplies shared client
+methods but needs a subclass's connection setup to satisfy the complete upstream client port.
+
 Class docstrings use source references such as `[PortName](../ports.py:42)`: labels name the class
 or function, targets are paths relative to the documenting source file, and the suffix is the
 declaration's 1-based line number. Keep these references current when declarations move.
@@ -105,8 +117,10 @@ For the Gateway history-reader boundary, use these Markdown links:
 The composition module already imports the Protocol for a real field annotation, so that identifier
 is a Python navigation target; the same name inside the implementation's docstring is only text.
 
-[Architecture tests](../../backend/tests/test_architecture.py) require class docstrings and verify
-that source references resolve to named declarations at the recorded lines. Descriptive Pydantic schema
+[Architecture tests](../../backend/tests/test_architecture.py) require class docstrings, check the
+audited implementation-to-Protocol method references, and verify qualified declarations and their
+recorded lines. The implementation inventory is a documentation regression guard, not proof of
+type compatibility or a production adapter registry. Descriptive Pydantic schema
 changes are reflected in the frozen frontend contract without altering its fields or validation.
 
 ## Ownership

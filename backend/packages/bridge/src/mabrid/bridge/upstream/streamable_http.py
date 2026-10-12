@@ -22,6 +22,7 @@ class StreamableHttpUpstreamClient(BaseSessionUpstreamClient):
     """
 
     async def connect(self, config: UpstreamConfig) -> UpstreamIdentity:
+        """Implement [UpstreamClient.connect](runtime.py:35)."""
         if not isinstance(config, StreamableHttpUpstreamConfig):
             raise ValueError(
                 "streamable HTTP upstream client requires streamable HTTP configuration"

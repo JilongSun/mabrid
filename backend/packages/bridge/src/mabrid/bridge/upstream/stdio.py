@@ -16,6 +16,7 @@ class StdioUpstreamClient(BaseSessionUpstreamClient):
     """
 
     async def connect(self, config: UpstreamConfig) -> UpstreamIdentity:
+        """Implement [UpstreamClient.connect](runtime.py:35)."""
         if not isinstance(config, StdioUpstreamConfig):
             raise ValueError("stdio upstream client requires stdio configuration")
         if self._session is not None:

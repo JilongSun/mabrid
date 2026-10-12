@@ -65,18 +65,23 @@ class BridgeSession:
             yield
 
     async def list_tools(self) -> list[ToolDescriptor]:
+        """Forward to [McpMethodRouter.list_tools](../contracts/methods.py:24)."""
         return await self._router.list_tools()
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolCallResult:
+        """Forward to [McpMethodRouter.call_tool](../contracts/methods.py:26)."""
         return await self._router.call_tool(tool_name, arguments)
 
     async def load_tool_resource(self, tool_name: str, operation_key: str) -> None:
+        """Forward to [McpMethodRouter.load_tool_resource](../contracts/methods.py:28)."""
         await self._router.load_tool_resource(tool_name, operation_key)
 
     async def list_resources(self) -> list[ResourceDescriptor]:
+        """Forward to [McpMethodRouter.list_resources](../contracts/methods.py:30)."""
         return await self._router.list_resources()
 
     async def read_resource(self, uri: str) -> ReadResourceResult:
+        """Forward to [McpMethodRouter.read_resource](../contracts/methods.py:32)."""
         return await self._router.read_resource(uri)
 
     async def aclose(self) -> None:

@@ -35,11 +35,13 @@ class BaseSessionUpstreamClient:
         self._session: ClientSession | None = None
 
     async def list_tools(self) -> list[ToolDescriptor]:
+        """Implement [UpstreamClient.list_tools](runtime.py:37)."""
         session = self._require_session()
         result = await session.list_tools()
         return [self._map_tool(tool) for tool in result.tools]
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolCallResult:
+        """Implement [UpstreamClient.call_tool](runtime.py:39)."""
         session = self._require_session()
         result = await session.call_tool(tool_name, arguments=arguments)
         return ToolCallResult(
@@ -50,11 +52,13 @@ class BaseSessionUpstreamClient:
         )
 
     async def list_resources(self) -> list[ResourceDescriptor]:
+        """Implement [UpstreamClient.list_resources](runtime.py:41)."""
         session = self._require_session()
         result = await session.list_resources()
         return [self._map_resource(resource) for resource in result.resources]
 
     async def read_resource(self, uri: str) -> ReadResourceResult:
+        """Implement [UpstreamClient.read_resource](runtime.py:43)."""
         session = self._require_session()
         result = await session.read_resource(AnyUrl(uri))
         if not result.contents:
@@ -65,6 +69,7 @@ class BaseSessionUpstreamClient:
         )
 
     async def close(self) -> None:
+        """Implement [UpstreamClient.close](runtime.py:45)."""
         stack = self._stack
         self._stack = None
         self._session = None

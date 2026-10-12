@@ -16,6 +16,7 @@ class SseUpstreamClient(BaseSessionUpstreamClient):
     """
 
     async def connect(self, config: UpstreamConfig) -> UpstreamIdentity:
+        """Implement [UpstreamClient.connect](runtime.py:35)."""
         if not isinstance(config, SseUpstreamConfig):
             raise ValueError("SSE upstream client requires SSE configuration")
         if self._session is not None:

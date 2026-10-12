@@ -31,8 +31,10 @@ belong to the product.
 - Prefer typed, contract-first boundaries and small explicit implementations.
 - Document production classes as well as modules: explain responsibility, ownership, and important
 	invariants so reviewers can follow the architecture without reconstructing every call site.
-- Make structural Protocol and callable relationships explicit in class documentation, with
-	verified source navigation links. Do not change inheritance merely to visualize these relationships.
+- Make structural Protocol and callable relationships explicit from the implementation back to
+	its contract. Link implementation classes and contract-facing methods to verified declarations;
+	do not require Protocol-to-implementation indexes. Establish relationships from signatures,
+	typed consumers, and composition, not matching names. Do not change inheritance for navigation.
 - Preserve cross-platform behavior and avoid OS-specific path or shell assumptions.
 - Do not expose management, persistence, routing, or debugging concepts in model-visible MCP
 	descriptions unless the protocol contract requires them.

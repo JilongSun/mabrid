@@ -29,6 +29,14 @@ applyTo: ["**/*.py"]
 - For Protocols and structural implementations, name the contract, matching methods/properties,
 	and the actual consumer or composition site. Distinguish structural conformance from inheritance;
 	document callable factories and reader views when they fulfill a port without a base class.
+- Navigation is implementation-to-contract: give each concrete contract-facing method or property
+	a direct `[PortName.method](../ports.py:42)` reference to its declaring Protocol member, including
+	private/composed observers and inherited implementations. Class references do not replace method
+	references. Link all applicable reader/writer views; use the original declaring Protocol for an
+	inherited member. Do not build a reverse implementation index in Protocol documentation.
+- Verify the complete signature, return/event shape, typed consumer, and actual injection before
+	claiming conformance. Distinguish implementations from consumers, forwarding facades, and partial
+	base classes. Same method names or compatible shapes alone do not establish design intent.
 - Use source references such as `[PortName](../ports.py:42)` in Python docstrings, relative to the
 	documenting file, with the named declaration's current 1-based line number. Architecture tests
 	verify both the symbol and its line; update incoming references when a declaration moves.
