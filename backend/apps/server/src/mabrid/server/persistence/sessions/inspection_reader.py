@@ -24,8 +24,8 @@ class SqlAlchemySessionInspectionReader:
     """Read complete snapshots and sequence-paginated diagnostic events from SQLite.
 
     `get_snapshot`/`list_events` structurally implement the management read port,
-    without exposing store mutation or live waiters. Wired by [compose_gateway](../../composition/gateway.py).
-    Contract: [SessionInspectionReader](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py).
+    without exposing store mutation or live waiters. Wired by [compose_gateway](../../composition/gateway.py:78).
+    Contract: [SessionInspectionReader](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:94).
     """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:

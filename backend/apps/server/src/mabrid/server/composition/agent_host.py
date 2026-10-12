@@ -60,7 +60,7 @@ class AgentHostManagementView:
 class AgentHostComposition:
     """Own configured runtime clients and expose typed application/presentation capabilities.
 
-    [compose_agent_host](agent_host.py) injects structurally compatible adapters;
+    [compose_agent_host](agent_host.py:87) injects structurally compatible adapters;
     `close` releases native then compatibility clients under cancellation shielding.
     This deployment container does not own the remote runtime's conversation loop.
     """
@@ -91,7 +91,7 @@ async def compose_agent_host(
 ) -> AgentHostComposition | None:
     """Construct one Target's concrete adapters and pass their narrow behavior views.
 
-    [HermesChatCompletionsAdapter](../../../../../../packages/application/src/mabrid/application/agent_host/integrations/hermes/chat_completions.py)
+    [HermesChatCompletionsAdapter](../../../../../../packages/application/src/mabrid/application/agent_host/integrations/hermes/chat_completions.py:51)
     supplies compatibility/lifecycle/probe views; the optional native adapter
     supplies catalog/history/execution/control/probe views without Protocol bases.
     SQLite persists local identity and unresolved ownership, never transcripts.

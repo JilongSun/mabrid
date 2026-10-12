@@ -26,8 +26,8 @@ class SqliteAgentSessionRepository:
     manage durable ownership for one Target.
     Remote-reference updates use compare-and-swap within the same deployment.
 
-    Contract: [AgentSessionRepository](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py).
-    Consumer: [AgentSessionService](../../../../../../packages/application/src/mabrid/application/agent_host/application/sessions.py).
+    Contract: [AgentSessionRepository](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py:71).
+    Consumer: [AgentSessionService](../../../../../../packages/application/src/mabrid/application/agent_host/application/sessions.py:59).
     """
 
     def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:

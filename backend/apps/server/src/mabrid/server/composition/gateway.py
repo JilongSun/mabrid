@@ -51,7 +51,7 @@ HTTP_URL_ADAPTER = TypeAdapter(AnyHttpUrl)
 class GatewayManagementComposition:
     """Bundle typed management reads and local readiness evidence for HTTP adapters.
 
-    Readers are structural port implementations built by [compose_gateway](gateway.py).
+    Readers are structural port implementations built by [compose_gateway](gateway.py:78).
     The async bound `is_ready` method supplies the readiness callback; no reader
     exposes SQLAlchemy, YAML, or lifecycle mutation to the API layer.
     """
@@ -81,7 +81,7 @@ async def compose_gateway(
 ) -> GatewayComposition:
     """Seed once, recover lifecycle history, and inject SQL adapters into application ports.
 
-    [GatewaySessionCoordinator](../../../../../../packages/application/src/mabrid/application/gateway/sessions/service.py)
+    [GatewaySessionCoordinator](../../../../../../packages/application/src/mabrid/application/gateway/sessions/service.py:51)
     receives runtime readers/stores; management receives distinct all-heads and
     paginated reader views. This function owns construction, not their use cases.
     """

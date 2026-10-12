@@ -21,8 +21,8 @@ class SqlAlchemyBridgeSessionRepository:
     """Persist Gateway lifecycle records, not live MCP connections or correlation maps.
 
     `add`/`update`/`get`/`list` structurally implement the application repository.
-    [compose_gateway](../../composition/gateway.py) injects it into the coordinator.
-    Contract: [BridgeSessionRepository](../../../../../../../packages/application/src/mabrid/application/gateway/sessions/ports.py).
+    [compose_gateway](../../composition/gateway.py:78) injects it into the coordinator.
+    Contract: [BridgeSessionRepository](../../../../../../../packages/application/src/mabrid/application/gateway/sessions/ports.py:12).
     """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:

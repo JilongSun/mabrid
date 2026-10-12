@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 
 class MabridServerRuntime:
-    """Own listener serving for [create_app](../api/app.py)'s composed HTTP application.
+    """Own listener serving for [create_app](../api/app.py:42)'s composed HTTP application.
 
     Receive typed Gateway, Host, presentation, and management dependencies;
     delegate their lifespan to the API rather than reproducing application logic.

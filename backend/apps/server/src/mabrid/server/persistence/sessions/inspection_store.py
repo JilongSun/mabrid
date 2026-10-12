@@ -53,7 +53,7 @@ class SqlAlchemyBridgeSessionStore:
     Structurally implement the application store's writes, reads, and event waiting.
     Serialize mutations locally and notify process-local waiters after commit;
     diagnostic projection vocabulary stays application-owned.
-    Contract: [BridgeSessionStore](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py).
+    Contract: [BridgeSessionStore](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:29).
     """
 
     def __init__(
@@ -298,9 +298,9 @@ class SqlAlchemyBridgeSessionStoreFactory:
     """Cache Session-scoped SQL stores and their process-local notification state.
 
     `create`/`get`/`remove` structurally implement the store factory injected by
-    [compose_gateway](../../composition/gateway.py). `remove` evicts the live
+    [compose_gateway](../../composition/gateway.py:78). `remove` evicts the live
     cache entry; it does not delete persisted event or snapshot history.
-    Contract: [BridgeSessionStoreFactory](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py).
+    Contract: [BridgeSessionStoreFactory](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:80).
     """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:

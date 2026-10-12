@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import (
 class SqliteDatabase:
     """Own the async engine, short-lived Session factory, migrations, and disposal.
 
-    [bootstrap_server](../composition/bootstrap.py) constructs this deployment
+    [bootstrap_server](../composition/bootstrap.py:39) constructs this deployment
     resource; application services receive adapters, never its SQLAlchemy objects.
     """
 

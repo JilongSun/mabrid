@@ -29,9 +29,9 @@ class SqlAlchemyTopologyReader:
     """Materialize immutable revisions for enabled runtime endpoint publication.
 
     Revision listing, slug resolution, and captured-revision lookup structurally
-    implement the application read port. [compose_gateway](../../composition/gateway.py)
+    implement the application read port. [compose_gateway](../../composition/gateway.py:78)
     injects this reader, not the all-heads management snapshot reader.
-    Contract: [TopologyReader](../../../../../../../packages/application/src/mabrid/application/gateway/topology/ports.py).
+    Contract: [TopologyReader](../../../../../../../packages/application/src/mabrid/application/gateway/topology/ports.py:12).
     """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
