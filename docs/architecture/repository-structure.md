@@ -157,3 +157,31 @@ changes are reflected in the frozen frontend contract without altering its field
   command-line override used by the owner-maintained debug workflow.
 - SQLite topology is authoritative after first-run seeding. The pre-v0.1 migration history is one
   resettable Mabrid baseline containing only implemented fields and tables.
+
+## Frontend Scaffold
+
+The [frontend](../../frontend/) is a standalone React and TypeScript application built with Vite.
+Tailwind CSS v4 uses its Vite plugin. [shadcn configuration](../../frontend/components.json) selects
+Radix-based components, a neutral palette, and CSS-variable theming. The initial page is only a
+scaffold, not a connected Gateway or Agent Host workflow.
+
+Use Node.js 22.12 or newer and the pnpm version declared in
+[package.json](../../frontend/package.json). From `frontend/`:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+pnpm typecheck
+pnpm lint
+pnpm build
+pnpm preview
+```
+
+`build` includes the TypeScript check. The Vite template's Oxlint configuration checks React and
+TypeScript code; lint warnings fail the command. Add shadcn components as needed with
+`pnpm exec shadcn add <component>`. The `@/` alias resolves to `src/` in both TypeScript and Vite.
+The initial theme is light and does not follow the operating system's dark-mode preference.
+
+The existing root `make install` / `just install` and `make dev` / `just dev` entry points continue
+to manage both backend and frontend processes. Frontend-only development needs no backend process
+until a workflow uses the frozen HTTP contracts.
