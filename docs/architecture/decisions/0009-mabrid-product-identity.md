@@ -1,15 +1,15 @@
 # ADR 0009: Mabrid Product Identity
 
-- Status: Accepted; code migration timing amended by ADR 0013; hosting sequence updated 2026-10-10
+- Status: Accepted; code migration timing amended by ADR 0013; implementation notes reviewed 2026-10-13
 - Date: 2026-08-21
 - Supersedes: the Cembrid brand decision in ADR 0007
 
 ADR 0013 completed the coordinated Python and deployment-code identity migration during the
 backend semantic refactor. ADR 0016 has now completed backend frontend-contract readiness. The
-owner has selected repository-hosting migration next, with the local checkout directory retained
-until the current editor session is finished. The original timing below is historical; the current
-sequence and implementation status are recorded at the end of this ADR. The product identity and
-deployment-shell decisions are unchanged.
+repository-hosting identity is independent of local checkout paths and does not require another
+Python namespace migration. The original timing below is historical; the current implementation
+status and migration boundaries are recorded below. The product identity and deployment-shell
+decisions are unchanged.
 
 ## Context
 
@@ -24,8 +24,8 @@ release gates.
 
 ## Decision
 
-The timing statements in this original decision were amended by ADR 0013 and the 2026-10-10
-hosting sequence below; they are not instructions to repeat the completed code migration.
+The timing statements in this original decision were amended by ADR 0013; they are not
+instructions to repeat the completed code migration.
 
 The future product brand is **Mabrid**.
 
@@ -52,20 +52,19 @@ or the public DNS namespace.
 
 ## Implementation Status
 
-As of 2026-10-10:
+Reviewed 2026-10-13:
 
 - **Internal identity complete:** Python namespaces, distributions and descriptions, executable,
-  Web title, configuration/database defaults, and backend development commands use Mabrid. The
-  debug entry point's configuration examples use the current file name; its intentional overrides
-  are unchanged. Identity regression checks do not depend on the checkout directory's name.
+  Web title, configuration/database defaults, and backend development commands use Mabrid.
+  Identity regression checks do not depend on the checkout directory's name.
 - **Frontend contract complete:** ADR 0016 establishes the frozen first-party backend baseline;
   it does not mark the frontend or v0.1 distribution complete.
-- **Owner action pending:** rename the existing GitHub repository to `mabrid`, then update its
-  About description and the existing checkout's remote URL. Preserve the existing history rather
-  than creating a replacement repository. No hosting or remote change is performed in this batch.
-- **Local checkout intentionally retained:** the root directory remains `mcpapps-bridge` for the
-  current editor/session context. The directory is not the product identity, package namespace,
-  executable, or runtime deployment binding. A later directory move is optional and separate.
+- **Hosting identity is separate:** repository names, remote URLs, and About metadata are hosting
+  concerns. Hosting migration preserves Git history and does not change code or runtime bindings;
+  its external completion is not certified by backend tests.
+- **Checkout-path independence:** a local directory name is not the product identity, package
+  namespace, executable, or runtime deployment binding. Moving a checkout is not required to adopt
+  Mabrid's repository-hosting identity.
 - **Legacy frontend untouched:** adopt Mabrid frontend identity when the owner explicitly starts
   the rewrite, not through a rename-only pass over disposable frontend code.
 
@@ -83,26 +82,21 @@ Recommended GitHub About description:
 
 "Extensible" describes the adapter-driven, typed composition boundaries and room for future
 integrations. It does not advertise a released plugin SDK, dynamic plugin loader, marketplace,
-finished frontend, or implemented Host follow-up actions. Particular expansion points are reviewed
-in a separate discussion after code review, not implemented as part of identity migration.
+finished frontend, or implemented Host follow-up actions. Future expansion requires separate
+project decisions and is not implemented as part of identity migration.
 
-The owner controls the remote About field. This text is a positioning recommendation, not a
-completed GitHub update or a new v0.1 feature commitment. A project README remains deferred until
-the project is complete.
+This text is a positioning recommendation, not evidence of published plugin support or a new
+v0.1 feature commitment.
 
-## Migration Sequence
+## Migration Boundaries
 
-1. Commit repository-local migration preparation and retain the commit as a review baseline.
-2. Rename the existing remote repository and update its About description.
-3. Update and verify the remote URL in the existing checkout; retain the local directory and editor
-   session, local configuration/secrets, SQLite state, and the stable runtime deployment binding.
-4. Review the code with the owner before starting frontend implementation. Required corrections
-   remain separate from identity changes and need focused validation.
-5. Discuss expansion points to clarify the owner's mental model and relevant technical knowledge.
-   Even an agreed direction or identified change is not authorization to implement it; a later
-   explicit request is required.
-6. Start the explicitly requested frontend rewrite against the frozen contract. Real integration
-   and OCI/static-serving release gates remain separate work.
+- Completed Python code identity does not require another namespace rewrite when hosting changes.
+- Repository hosting and checkout movement are independent operations. Preserve Git history,
+  update applicable repository references, and verify remote URLs after a hosting rename.
+- Preserve configuration, secrets, SQLite state, and stable runtime deployment bindings. A
+  repository rename is not a database reset or a change of external agent deployment.
+- Frontend identity follows its rewrite against the frozen first-party contract. Live integration
+  and OCI/static-serving release gates remain separate from branding or hosting migration.
 
 See [Frontend Readiness and Migration Handoff](../frontend-readiness.md) for verification commands,
 review priorities, and remaining release gates. Remote hosting, local directory movement, code

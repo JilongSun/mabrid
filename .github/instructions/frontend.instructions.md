@@ -22,18 +22,26 @@ Organize code so these concerns stay separate:
 - **Tool activity** — tool call lifecycle, timing, input/output summaries
 - **MCP App rendering** — integration with `@mcp-ui/client`, sandboxed iframe, resource loading
 - **Management** — upstreams, endpoints, bindings, publication revisions, and status
-- **Session transport** — Run/Event subscription, reconnection, and error handling
-- **UI action handling** — widget `postMessage` dispatch, action routing back to the host
+- **Session transport** — Session-bound POST-SSE admission, stream parsing, cancellation,
+	reconciliation, history loading, and safe error handling; not WebSocket transport or SSE replay
+- **UI action handling** — validated MCP Apps initialization/data exchange and supported host
+	methods; explicitly reject unsupported product-level follow-up actions
 
 ## State Management
 
 - Prefer local component state and React Context for shared session data.
 - Do not introduce global state libraries (Redux, Zustand) unless a specific task proves React Context is insufficient.
 - Keep session event stream and derived UI state in separate layers so the transcript does not need to understand MCP App rendering internals.
+- Agent runtimes own transcript/history and context continuity. Use local Agent Session IDs for
+	selection and send new input only; do not replay a locally assembled transcript to simulate a
+	remote session. Session switching is not cancellation.
+- Capabilities are separate from Run admission. Unknown support is not available support, an
+	accepted stop is not verified termination, and a disconnected stream must not be automatically
+	resubmitted. Keep busy/unsettled states visible and use the frozen recovery contracts.
 
 ## Component Rules
 
-- A component that renders chat transcript should not also manage WebSocket lifecycle.
+- A component that renders chat transcript should not also manage POST-SSE lifecycle.
 - A component that wraps `@mcp-ui/client` AppRenderer should not also own tool-activity polling.
 - Event handlers (`onMessage`, `onOpenLink`, `onUiAction`) must validate origins and payload shapes before acting.
 - Avoid OS-specific path, shell, or URL assumptions in the frontend toolchain and development scripts when portable alternatives exist.
@@ -41,5 +49,6 @@ Organize code so these concerns stay separate:
 ## Testing
 
 - Use Vitest for unit and component tests.
-- Use Playwright for integration tests that span the WebSocket session and the rendered MCP App widget.
+- Use Playwright for integration tests that span the POST-SSE Run lifecycle and rendered MCP App
+	widget, including disconnect, capability/error states, and sandbox boundaries.
 - Do not test framework behavior; test session flows, event rendering, and action dispatch.

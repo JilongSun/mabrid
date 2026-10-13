@@ -1,6 +1,6 @@
 # Frontend Readiness and Migration Handoff
 
-- Reviewed: 2026-10-10
+- Reviewed: 2026-10-13
 - Authority: [ADR 0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md)
 - Result: The first-party frontend contract and route-partition milestone is complete.
 - Boundary: Backend frontend readiness is established; v0.1 release readiness is not.
@@ -75,23 +75,18 @@ read, modified, or validated during this milestone.
 
 ## Migration and Review
 
-The next work can proceed in this order:
+Project implementation and validation boundaries are:
 
-1. Manually commit the completed contract batch and retain that commit as the review baseline.
-2. Perform the owner-controlled remote repository rename and update About and the checkout's
-   remote URL, preserving Git history and the existing `mabrid` code identity. The owner explicitly
-   retains the local `mcpapps-bridge` root directory for the active editor session; no directory
-   move or fresh clone is required. Do not combine hosting migration with another namespace rewrite
-   or runtime behavior changes. Preserve local configuration, secrets, SQLite state, interpreter
-   paths, and editor settings; do not publish them or reset persisted bindings/leases.
-3. Review the code after remote migration before the frontend rewrite. Compare against the
-   baseline and rerun contract drift, architecture, type, lint, and backend tests in the retained checkout.
-   Review findings and required fixes should remain separate from mechanical migration changes.
-4. Discuss expansion points solely to clarify the owner's thinking and fill technical knowledge
-   gaps. Even an agreed direction or a known change is not implementation authorization. SDK
-   replacement, Tauri packaging, further runtime integrations, remote conversation import, and Host
-   follow-up actions do not automatically enter v0.1 scope; implementation needs a separate request.
-5. Start the frontend rewrite as a separate, explicitly requested task against the frozen contract.
+1. Use the completed contract milestone as the backend review and frontend integration baseline.
+2. Keep repository-hosting migration separate from namespace or runtime changes. Preserve Git
+   history, configuration, secrets, SQLite state, and stable runtime deployment bindings. Hosting
+   changes do not require a checkout move and must not reset persisted bindings or leases.
+3. Validate backend review corrections separately from mechanical migration changes. Contract
+   drift, architecture, type, lint, and backend test gates remain applicable.
+4. SDK replacement, Tauri packaging, further runtime integrations, remote conversation import, and
+   Host follow-up actions remain outside the completed contract milestone. Exploratory proposals
+   are not accepted requirements or implementation authorization.
+5. Implement the frontend rewrite against the frozen contract as a separately scoped task.
    Product design and implementation can now focus on Sessions/history, live Run presentation,
    widgets/sandboxing, read-only Gateway management, inspection, and connection/capability status.
 6. Finish integration and distribution gates before tagging v0.1. Backend corrections discovered
@@ -101,11 +96,10 @@ The post-migration review should prioritize dependency direction and public faca
 Target/session identity and deployment binding; restart recovery and uncertain submission;
 cancellation ordering, reader/client cleanup, and durable lease release; protocol/resource fidelity;
 Host DTO privacy and safe errors; configuration/secret ownership; and production/image startup.
-Existing hardcoded debug workflow parameters are intentional owner tooling, not migration cleanup.
 
 ### Remote Migration Checklist
 
-Repository-local Mabrid identity is complete; the hosting step is still the owner's action. The
+Repository-local Mabrid identity is complete; external hosting changes require separate verification. The
 recommended About text and current product positioning are recorded in
 [ADR 0009](decisions/0009-mabrid-product-identity.md). This does not introduce a plugin implementation
 or require a README.
@@ -134,13 +128,13 @@ or require a README.
    or integration: GitHub Pages project-site URLs and workflow calls to an Action hosted in a renamed
    repository need explicit attention if present. Do not reuse the old repository name, which would
    invalidate GitHub's redirects. Do not invent distribution changes for unpublished artifacts.
-6. Keep the local directory and VS Code session as they are. A later move, after the session is
-   complete, should account for interpreter/virtual-environment paths, launch settings, and local
-   tools; it is not part of this migration. Keep `agentHost.runtime.sessions.bindingId` stable when
-   only repository hosting changes; changing it denotes another runtime deployment, not a rename.
+6. Checkout movement is optional and separate. If a checkout moves, verify interpreter/virtual-
+   environment paths, launch settings, and local tooling. Keep `agentHost.runtime.sessions.bindingId`
+   stable when only repository hosting changes; changing it denotes another runtime deployment,
+   not a rename.
 
-After hosting migration, run the existing contract check and backend test gates, then begin the
-owner's code review. No broad code refactor or expansion implementation is bundled into these steps.
+After hosting migration, run the existing contract check and backend test gates. No broad code
+refactor or expansion implementation is bundled into these steps.
 
 GitHub's redirect limits and remote-update recommendation are documented in
 [Renaming a Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository).
