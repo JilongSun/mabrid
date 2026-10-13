@@ -162,8 +162,10 @@ changes are reflected in the frozen frontend contract without altering its field
 
 The [frontend](../../frontend/) is a standalone React and TypeScript application built with Vite.
 Tailwind CSS v4 uses its Vite plugin. [shadcn configuration](../../frontend/components.json) selects
-Radix-based components, a neutral palette, and CSS-variable theming. The initial page is only a
-scaffold, not a connected Gateway or Agent Host workflow.
+Radix-based components, a neutral palette, and CSS-variable theming. The application shell defaults
+to Gateway Endpoints, with Upstreams and MCP Sessions as secondary views. Agent Host and connection
+status have separate workspace entries. These views show explicit integration placeholders, not
+empty API results or inferred deployment capabilities.
 
 Use Node.js 22.12 or newer and the pnpm version declared in
 [package.json](../../frontend/package.json). From `frontend/`:
@@ -173,6 +175,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 pnpm typecheck
 pnpm lint
+pnpm test
 pnpm build
 pnpm preview
 ```
@@ -181,6 +184,12 @@ pnpm preview
 TypeScript code; lint warnings fail the command. Add shadcn components as needed with
 `pnpm exec shadcn add <component>`. The `@/` alias resolves to `src/` in both TypeScript and Vite.
 The initial theme is light and does not follow the operating system's dark-mode preference.
+Vitest and Testing Library cover workspace switching, Gateway selection retention, collapsed
+navigation, mobile-menu focus restoration, and keyboard tab selection.
+
+The product sidebar is collapsible on desktop and uses a modal Sheet on narrow screens. Navigation
+currently uses local React state; it does not yet provide URL routing or persisted selection.
+Gateway tab state survives workspace switching, and navigation makes no backend requests.
 
 The existing root `make install` / `just install` and `make dev` / `just dev` entry points continue
 to manage both backend and frontend processes. Frontend-only development needs no backend process

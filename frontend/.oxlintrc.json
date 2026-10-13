@@ -7,7 +7,7 @@
       "warn",
       {
         "allowConstantExport": true,
-        "allowExportNames": ["buttonVariants"]
+        "allowExportNames": ["buttonVariants", "tabsListVariants"]
       }
     ]
   }
