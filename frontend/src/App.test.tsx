@@ -22,12 +22,15 @@ describe('workspace navigation', () => {
     expect(screen.getByRole('heading', { name: 'Gateway' })).toBeDefined()
     expect(screen.getByRole('tab', { name: 'Endpoints' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByText(/Endpoint data has not been loaded/)).toBeDefined()
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Endpoints', 'Upstreams', 'Topology',
+    ])
   })
 
   it('preserves the selected Gateway view when switching workspaces', async () => {
     const user = userEvent.setup()
     render(<App />)
-    await user.click(screen.getByRole('tab', { name: 'MCP Sessions' }))
+    await user.click(screen.getByRole('tab', { name: 'Topology' }))
     const navigation = within(screen.getByRole('navigation', { name: 'Product navigation' }))
     await user.click(navigation.getByRole('button', { name: 'Agent Host' }))
     expect(screen.getByRole('heading', { name: 'Agent Host' })).toBeDefined()
@@ -35,7 +38,27 @@ describe('workspace navigation', () => {
     await user.click(navigation.getByRole('button', { name: 'Connection & capabilities' }))
     expect(screen.getByText(/No service health is reported/)).toBeDefined()
     await user.click(navigation.getByRole('button', { name: 'Gateway' }))
-    expect(screen.getByRole('tab', { name: 'MCP Sessions' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: 'Topology' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('opens diagnostics as a secondary view and returns to the selected Gateway tab', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('tab', { name: 'Topology' }))
+    const trigger = screen.getByRole('button', { name: 'Diagnostics' })
+    await user.click(trigger)
+    const heading = screen.getByRole('heading', { name: 'MCP Session diagnostics' })
+    expect(document.activeElement).toBe(heading)
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.getByText(/A session can contain multiple operations/)).toBeDefined()
+    const navigation = within(screen.getByRole('navigation', { name: 'Product navigation' }))
+    await user.click(navigation.getByRole('button', { name: 'Agent Host' }))
+    await user.click(navigation.getByRole('button', { name: 'Gateway' }))
+    expect(screen.getByRole('heading', { name: 'MCP Session diagnostics' })).toBeDefined()
+    await user.click(screen.getByRole('button', { name: 'Back to Gateway' }))
+    expect(screen.getByRole('tab', { name: 'Topology' }).getAttribute('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(trigger)
+    expect(screen.queryByRole('heading', { name: 'MCP Session diagnostics' })).toBeNull()
   })
 
   it('keeps collapsed navigation named and functional', async () => {
