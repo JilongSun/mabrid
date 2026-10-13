@@ -2,14 +2,8 @@ default:
     @just --list
 
 install:
-    cd backend && uv sync
+    cd backend && uv sync --all-packages
     cd frontend && pnpm install
 
-backend:
-    cd backend && uv run --package mabrid-server python -m mabrid.server.main
-
-frontend:
-    cd frontend && pnpm dev
-
-frontend-build:
-    cd frontend && pnpm build
+dev:
+    cd backend && uv run --all-packages python ../scripts/dev.py
