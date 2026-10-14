@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 
@@ -7,7 +7,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/gateway/topology')
   vi.stubGlobal('scrollTo', vi.fn())
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(
-    String(input).endsWith('/topology') ? { endpoints: [], upstreams: [] } : { published_endpoint_slugs: [] },
+    String(input).includes('/sessions?') ? { items: [], next_cursor: null } : String(input).endsWith('/topology') ? { endpoints: [], upstreams: [] } : { published_endpoint_slugs: [] },
   ), { headers: { 'content-type': 'application/json' } })))
   vi.stubGlobal('matchMedia', vi.fn(() => ({
     matches: false,
@@ -49,12 +49,12 @@ describe('workspace navigation', () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('tab', { name: 'Endpoints' }))
-    const trigger = screen.getByRole('button', { name: 'Diagnostics' })
+    const trigger = screen.getByRole('link', { name: 'Diagnostics' })
     await user.click(trigger)
     const heading = screen.getByRole('heading', { name: 'MCP Session diagnostics' })
-    expect(document.activeElement).toBe(heading)
+    await waitFor(() => expect(document.activeElement).toBe(heading))
     expect(screen.queryByRole('tablist')).toBeNull()
-    expect(screen.getByText(/A session can contain multiple operations/)).toBeDefined()
+    expect(screen.getByRole('combobox', { name: 'Session status filter' })).toBeDefined()
     const navigation = within(screen.getByRole('navigation', { name: 'Product navigation' }))
     await user.click(navigation.getByRole('button', { name: 'Agent Host' }))
     await user.click(navigation.getByRole('button', { name: 'Gateway' }))
@@ -93,7 +93,7 @@ describe('workspace navigation', () => {
     render(<App />)
     screen.getByRole('tab', { name: 'Endpoints' }).focus()
     await user.keyboard('{ArrowRight}')
-    expect(screen.getByRole('tab', { name: 'Upstreams' }).getAttribute('aria-selected')).toBe('true')
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Upstreams' }).getAttribute('aria-selected')).toBe('true'))
     expect(screen.getByRole('heading', { name: 'Upstreams' })).toBeDefined()
   })
 
@@ -103,6 +103,16 @@ describe('workspace navigation', () => {
     render(<App />)
     expect(screen.getByRole('heading', { name: 'Agent Host' })).toBeDefined()
     await user.click(screen.getByRole('button', { name: 'Gateway' }))
+    expect(screen.getByRole('tab', { name: 'Topology' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('opens diagnostics directly and returns to the default Gateway', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState(null, '', '/gateway/sessions')
+    render(<App />)
+    expect(await screen.findByText('No MCP Sessions match these filters')).toBeDefined()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Back to Gateway' }))
     expect(screen.getByRole('tab', { name: 'Topology' }).getAttribute('aria-selected')).toBe('true')
   })
 })

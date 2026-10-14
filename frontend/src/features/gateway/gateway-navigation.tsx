@@ -19,30 +19,11 @@ export function gatewayObjectPath(kind: 'endpoint' | 'upstream', id: string) {
   return `/gateway/${kind === 'endpoint' ? 'endpoints' : 'upstreams'}/${encodeURIComponent(id)}`
 }
 
-export function useGatewayNavigation(heading: RefObject<HTMLHeadingElement | null>, ready: boolean) {
+export function useGatewayPagePosition(heading: RefObject<HTMLHeadingElement | null>, ready: boolean, found: boolean, detail: boolean) {
   const location = useLocation()
-  const navigate = useNavigate()
   const navigationType = useNavigationType()
-  const [params, setParams] = useSearchParams()
-  const match = matchRoutes(routes, location)?.at(-1)
-  const found = Boolean(match)
-  const view = match?.route.handle.view ?? 'topology'
-  const kind = match?.route.handle.kind
-  const selected = params.get('selected')
-  const objectId = params.get('object')
-  const selection: GatewaySelection | null = objectId && (selected === 'endpoint' || selected === 'upstream' || selected === 'binding')
-    ? { kind: selected, id: objectId } : null
-  const configuration = params.get('configuration')
-  const savedPaths = useRef<Record<GatewayView, string>>({
-    topology: '/gateway/topology', endpoints: '/gateway/endpoints', upstreams: '/gateway/upstreams',
-  })
   const positions = useRef(new Map<string, { y: number; focusId: string }>())
   const previousPath = useRef(location.pathname)
-
-  useEffect(() => {
-    if (location.pathname === '/' || location.pathname === '/gateway') navigate('/gateway/topology', { replace: true })
-    if (found && !kind && location.pathname === `/gateway/${view}`) savedPaths.current[view] = location.pathname + location.search
-  }, [found, kind, location.pathname, location.search, navigate, view])
 
   useLayoutEffect(() => {
     if (!found) return
@@ -61,19 +42,44 @@ export function useGatewayNavigation(heading: RefObject<HTMLHeadingElement | nul
 
   useLayoutEffect(() => {
     if (!ready || !found) return
-    const position = positions.current.get(location.key)
+    const restoreKey = typeof location.state?.restoreKey === 'string' ? location.state.restoreKey : null
+    const position = positions.current.get(restoreKey ?? location.key)
     const changedPath = previousPath.current !== location.pathname
     previousPath.current = location.pathname
-    if (navigationType === 'POP' && position) {
+    if ((navigationType === 'POP' || restoreKey) && position) {
       const target = document.getElementById(position.focusId)
       if (target) target.focus({ preventScroll: true })
-      else if (kind) heading.current?.focus({ preventScroll: true })
+      else if (detail) heading.current?.focus({ preventScroll: true })
       window.scrollTo(0, position.y)
-    } else if (location.state?.focusHeading || kind && navigationType === 'POP') {
+    } else if (location.state?.focusHeading || detail && navigationType === 'POP') {
       heading.current?.focus({ preventScroll: true })
       if (navigationType !== 'POP') window.scrollTo(0, 0)
     } else if (changedPath && navigationType !== 'POP') window.scrollTo(0, 0)
-  }, [found, heading, kind, location.key, location.pathname, location.state, navigationType, ready])
+  }, [detail, found, heading, location.key, location.pathname, location.state, navigationType, ready])
+}
+
+export function useGatewayNavigation(heading: RefObject<HTMLHeadingElement | null>, ready: boolean) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const match = matchRoutes(routes, location)?.at(-1)
+  const found = Boolean(match)
+  const view = match?.route.handle.view ?? 'topology'
+  const kind = match?.route.handle.kind
+  const selected = params.get('selected')
+  const objectId = params.get('object')
+  const selection: GatewaySelection | null = objectId && (selected === 'endpoint' || selected === 'upstream' || selected === 'binding')
+    ? { kind: selected, id: objectId } : null
+  const configuration = params.get('configuration')
+  const savedPaths = useRef<Record<GatewayView, string>>({
+    topology: '/gateway/topology', endpoints: '/gateway/endpoints', upstreams: '/gateway/upstreams',
+  })
+  useGatewayPagePosition(heading, ready, found, Boolean(kind))
+
+  useEffect(() => {
+    if (location.pathname === '/' || location.pathname === '/gateway') navigate('/gateway/topology', { replace: true })
+    if (found && !kind && location.pathname === `/gateway/${view}`) savedPaths.current[view] = location.pathname + location.search
+  }, [found, kind, location.pathname, location.search, navigate, view])
 
   const selectObject: NavigateGateway = (destination, target) => {
     const path = destination === 'topology'
@@ -81,7 +87,8 @@ export function useGatewayNavigation(heading: RefObject<HTMLHeadingElement | nul
       : gatewayObjectPath(target.kind === 'endpoint' ? 'endpoint' : 'upstream', target.id)
     navigate(path, { state: { returnTo: location.pathname + location.search, focusHeading: true } })
   }
-  const returnTo = typeof location.state?.returnTo === 'string' && matchRoutes(routes, location.state.returnTo)
+  const returnRoutes = [...routes, { path: '/gateway/sessions' }, { path: '/gateway/sessions/:id' }]
+  const returnTo = typeof location.state?.returnTo === 'string' && matchRoutes(returnRoutes, location.state.returnTo)
     ? location.state.returnTo : null
 
   return {

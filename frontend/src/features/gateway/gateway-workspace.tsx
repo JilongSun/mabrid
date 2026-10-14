@@ -12,7 +12,7 @@ export type { GatewayView, GatewaySelection, NavigateGateway } from './gateway-n
 
 const views = { topology: 'Topology', endpoints: 'Endpoints', upstreams: 'Upstreams' } as const
 /** Owns the shared configuration reads, refresh lifecycle, and cross-view selection. */
-export function GatewayWorkspace() {
+export function GatewayWorkspace({ onSnapshot }: { onSnapshot?: (snapshot: GatewaySnapshot) => void }) {
   const [revision, setRevision] = useState(0)
   const [state, setState] = useState<{ snapshot: GatewaySnapshot | null; pending: boolean; error: string | null }>({
     snapshot: null, pending: true, error: null,
@@ -25,7 +25,10 @@ export function GatewayWorkspace() {
     const controller = new AbortController()
     loadGatewaySnapshot(controller.signal).then(
       (snapshot) => {
-        if (!controller.signal.aborted) setState({ snapshot, pending: false, error: null })
+        if (!controller.signal.aborted) {
+          setState({ snapshot, pending: false, error: null })
+          onSnapshot?.(snapshot)
+        }
       },
       (error: unknown) => {
         if (!controller.signal.aborted) setState((previous) => ({
@@ -35,7 +38,7 @@ export function GatewayWorkspace() {
       },
     )
     return () => controller.abort()
-  }, [revision])
+  }, [onSnapshot, revision])
 
   const endpoint = kind === 'endpoint' ? state.snapshot?.topology.endpoints.find((object) => object.endpoint_id === navigation.objectId) : undefined
   const upstream = kind === 'upstream' ? state.snapshot?.topology.upstreams.find((object) => object.server_id === navigation.objectId) : undefined

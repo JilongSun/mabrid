@@ -71,7 +71,18 @@ export type GatewaySnapshot = {
     | { kind: 'error'; message: string }
 }
 
-async function readGateway<T>(
+/** Preserve the HTTP failure status for management views without parsing display messages. */
+export class GatewayHttpError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'GatewayHttpError'
+    this.status = status
+  }
+}
+
+export async function readGateway<T>(
   path: string,
   schema: z.ZodType<T>,
   signal: AbortSignal,
@@ -111,9 +122,9 @@ async function readGateway<T>(
   if (!response.ok) {
     const problem = problemSchema.safeParse(body)
     if (problem.success) {
-      throw new Error(`${problem.data.detail} (${problem.data.code}, HTTP ${response.status})`)
+      throw new GatewayHttpError(`${problem.data.detail} (${problem.data.code}, HTTP ${response.status})`, response.status)
     }
-    throw new Error(`The Gateway request failed (HTTP ${response.status}).`)
+    throw new GatewayHttpError(`The Gateway request failed (HTTP ${response.status}).`, response.status)
   }
   const parsed = schema.safeParse(body)
   if (!parsed.success) throw new Error('The Gateway response does not match the expected contract.')

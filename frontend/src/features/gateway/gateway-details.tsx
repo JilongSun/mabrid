@@ -1,4 +1,5 @@
-import { Network } from 'lucide-react'
+import { FileSearch, Network } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import type { Endpoint, GatewaySnapshot, Upstream } from './api'
 import { McpAddress } from './endpoints-view'
@@ -76,12 +77,16 @@ function ConfiguredKeys({ title, keys }: { title: string; keys: { name: string; 
 export function EndpointDetails({ endpoint, snapshot, onNavigate }: {
   endpoint: Endpoint; snapshot: GatewaySnapshot; onNavigate: NavigateGateway
 }) {
+  const location = useLocation()
   const publication = snapshot.publication.kind === 'error' ? 'Publication unknown'
     : snapshot.publication.slugs.includes(endpoint.slug) ? 'Published' : 'Not published'
   return <>
     <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
       <span>{endpoint.mode === 'aggregate' ? 'Aggregate' : 'Passthrough'}</span><span>{endpoint.enabled ? 'Enabled' : 'Disabled'}</span><span>{publication}</span>
       <Button id={`endpoint-detail-topology-${endpoint.endpoint_id}`} variant="ghost" size="sm" onClick={() => onNavigate('topology', { kind: 'endpoint', id: endpoint.endpoint_id })}><Network aria-hidden="true" />View in topology</Button>
+      <Button variant="ghost" size="sm" asChild><Link id={`endpoint-sessions-${endpoint.endpoint_id}`} to={`/gateway/sessions?${new URLSearchParams({ endpoint_id: endpoint.endpoint_id })}`} state={{
+        gatewayReturnTo: location.pathname + location.search, gatewayReturnKey: location.key, focusHeading: true,
+      }}><FileSearch aria-hidden="true" />View sessions</Link></Button>
     </div>
     <section className="mt-6 border-t py-5" aria-labelledby="endpoint-connection-title">
       <h3 id="endpoint-connection-title" className="mb-4 text-base font-semibold">MCP connection</h3>

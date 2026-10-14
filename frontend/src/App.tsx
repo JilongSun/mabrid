@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, FileSearch, Unplug } from 'lucide-react'
-import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom'
+import { FileSearch, Unplug } from 'lucide-react'
+import { BrowserRouter, Link, matchPath, useLocation, useNavigate } from 'react-router-dom'
 import { AppShell, type Workspace } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { GatewayWorkspace } from '@/features/gateway/gateway-workspace'
+import type { GatewaySnapshot } from '@/features/gateway/api'
+import { SessionsWorkspace } from '@/features/gateway/sessions-workspace'
 
 function NotConnected({ message }: { message: string }) {
   return (
@@ -19,6 +21,8 @@ function Application() {
   const location = useLocation()
   const navigate = useNavigate()
   const workspace: Workspace = location.pathname === '/agent-host' ? 'agent-host' : location.pathname === '/status' ? 'status' : 'gateway'
+  const diagnosticsOpen = Boolean(matchPath('/gateway/sessions', location.pathname) || matchPath('/gateway/sessions/:id', location.pathname))
+  const [gatewaySnapshot, setGatewaySnapshot] = useState<GatewaySnapshot | null>(null)
   const gatewayLocation = useRef(workspace === 'gateway' ? location : {
     ...location, pathname: '/gateway/topology', search: '', hash: '', state: null,
   })
@@ -29,71 +33,27 @@ function Application() {
     if (destination === 'gateway') navigate(gatewayLocation.current.pathname + gatewayLocation.current.search, { state: gatewayLocation.current.state })
     else navigate(destination === 'agent-host' ? '/agent-host' : '/status')
   }
-  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
-  const diagnosticsTrigger = useRef<HTMLButtonElement>(null)
-  const diagnosticsHeading = useRef<HTMLHeadingElement>(null)
-  const restoreDiagnosticsFocus = useRef(false)
-
-  useEffect(() => {
-    if (workspace !== 'gateway') return
-    if (diagnosticsOpen) {
-      diagnosticsHeading.current?.focus()
-    } else if (restoreDiagnosticsFocus.current) {
-      diagnosticsTrigger.current?.focus()
-      restoreDiagnosticsFocus.current = false
-    }
-  }, [diagnosticsOpen, workspace])
-
   return (
     <AppShell workspace={workspace} onSelect={selectWorkspace}>
       <section hidden={workspace !== 'gateway'} aria-labelledby="gateway-title">
         <header className="flex flex-wrap items-center justify-between gap-3 px-4 pt-6 pb-5 md:px-8">
           <h1 id="gateway-title" className="text-lg font-semibold tracking-tight">Gateway</h1>
           <Button
-            ref={diagnosticsTrigger}
-            type="button"
             variant="ghost"
             size="sm"
             hidden={diagnosticsOpen}
-            onClick={() => setDiagnosticsOpen(true)}
+            asChild
           >
-            <FileSearch aria-hidden="true" />
-            Diagnostics
+            <Link id="gateway-diagnostics" to="/gateway/sessions" state={{
+              gatewayReturnTo: location.pathname + location.search,
+              gatewayReturnKey: location.key, focusHeading: true,
+            }}><FileSearch aria-hidden="true" />Diagnostics</Link>
           </Button>
         </header>
         <div hidden={diagnosticsOpen}>
-          <GatewayWorkspace />
+          <GatewayWorkspace onSnapshot={setGatewaySnapshot} />
         </div>
-        {diagnosticsOpen && (
-          <section aria-labelledby="diagnostics-title" className="border-t p-4 pt-8 md:p-8">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="mb-6"
-              onClick={() => {
-                restoreDiagnosticsFocus.current = true
-                setDiagnosticsOpen(false)
-              }}
-            >
-              <ArrowLeft aria-hidden="true" />
-              Back to Gateway
-            </Button>
-            <h2
-              id="diagnostics-title"
-              ref={diagnosticsHeading}
-              tabIndex={-1}
-              className="text-2xl font-semibold tracking-tight outline-none"
-            >
-              MCP Session diagnostics
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Inspect MCP connection lifecycles and their tool calls, resource reads, and events.
-              A session can contain multiple operations; it is not a single tool call.
-            </p>
-            <NotConnected message="MCP session diagnostics have not been loaded. This secondary view is not connected to the backend yet." />
-          </section>
-        )}
+        <div hidden={!diagnosticsOpen}><SessionsWorkspace topology={gatewaySnapshot?.topology ?? null} /></div>
       </section>
 
       {workspace === 'agent-host' && (
