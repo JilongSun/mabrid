@@ -1,12 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Copy, RefreshCw } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Copy, Network } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { loadGatewaySnapshot, type Endpoint, type GatewaySnapshot } from './api'
-
-type LoadState =
-  | { kind: 'loading' }
-  | { kind: 'ready'; data: GatewaySnapshot }
-  | { kind: 'error'; message: string }
+import { type Endpoint, type GatewaySnapshot } from './api'
+import type { NavigateGateway } from './gateway-workspace'
 
 function McpAddress({ endpoint }: { endpoint: Endpoint }) {
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
@@ -57,101 +53,48 @@ function McpAddress({ endpoint }: { endpoint: Endpoint }) {
   )
 }
 
-export function EndpointsView() {
-  const [state, setState] = useState<LoadState>({ kind: 'loading' })
-  const [revision, setRevision] = useState(0)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    loadGatewaySnapshot(controller.signal).then(
-      (data) => {
-        if (!controller.signal.aborted) setState({ kind: 'ready', data })
-      },
-      (error: unknown) => {
-        if (!controller.signal.aborted) {
-          setState({
-            kind: 'error',
-            message: error instanceof Error ? error.message : 'Unable to load Gateway endpoints.',
-          })
-        }
-      },
-    )
-    return () => controller.abort()
-  }, [revision])
-
-  return (
-    <>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Endpoints</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            MCP connection addresses and the upstreams behind each endpoint.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={state.kind === 'loading'}
-          onClick={() => {
-            setState({ kind: 'loading' })
-            setRevision((value) => value + 1)
-          }}
-        >
-          <RefreshCw aria-hidden="true" className={state.kind === 'loading' ? 'animate-spin motion-reduce:animate-none' : ''} />
-          Refresh
-        </Button>
-      </div>
-      <p className="mt-4 text-xs leading-5 text-muted-foreground">
-        Read-only configuration. Published means exposed by the current Gateway process, not verified upstream health.
-      </p>
-
-      {state.kind === 'loading' && (
-        <p role="status" className="mt-6 rounded-lg border p-6 text-sm text-muted-foreground">
-          Loading endpoints…
-        </p>
-      )}
-      {state.kind === 'error' && (
-        <div role="alert" className="mt-6 rounded-lg border border-destructive/30 p-6">
-          <p className="font-medium">Unable to load endpoints</p>
-          <p className="mt-2 text-sm">{state.message}</p>
-        </div>
-      )}
-      {state.kind === 'ready' && (
-        <EndpointList snapshot={state.data} />
-      )}
-    </>
-  )
-}
-
-function EndpointList({ snapshot }: { snapshot: GatewaySnapshot }) {
+export function EndpointsView({ snapshot, query, configuration, selectedId, onNavigate }: {
+  snapshot: GatewaySnapshot
+  query: string
+  configuration: string
+  selectedId?: string
+  onNavigate: NavigateGateway
+}) {
   const { topology, publication } = snapshot
   const upstreams = new Map(topology.upstreams.map((upstream) => [upstream.server_id, upstream]))
+  const selectedHeading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    selectedHeading.current?.focus()
+    selectedHeading.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [selectedId])
+  const endpoints = topology.endpoints.filter((endpoint) => (
+    (configuration === 'all' || endpoint.enabled === (configuration === 'enabled')) &&
+    [endpoint.display_name, endpoint.slug, endpoint.advertised_url ?? '',
+      ...endpoint.bindings.map((binding) => upstreams.get(binding.upstream_server_id)?.display_name ?? '')]
+      .some((value) => value.toLowerCase().includes(query.trim().toLowerCase()))
+  ))
 
   return (
     <>
-      {publication.kind === 'error' && (
-        <div role="alert" className="mt-6 rounded-lg border border-destructive/30 p-4 text-sm">
-          <p className="font-medium">Publication status unavailable</p>
-          <p className="mt-1">{publication.message} Endpoint configuration remains visible.</p>
-        </div>
-      )}
-      {topology.endpoints.length === 0 ? (
-        <div className="mt-6 rounded-xl border border-dashed px-6 py-14 text-center">
-          <p className="font-medium">No endpoints configured</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            The Gateway returned an empty topology. This v0.1 interface is read-only.
-          </p>
+      {endpoints.length === 0 ? (
+        <div className="mt-6 border-y px-6 py-14 text-center">
+          <p className="font-medium">{topology.endpoints.length === 0 ? 'No endpoints configured' : 'No matching endpoints'}</p>
         </div>
       ) : (
-        <div className="mt-6 overflow-hidden rounded-xl border">
+        <div className="mt-6 border-y">
           <div aria-hidden="true" className="hidden grid-cols-[1fr_1fr_0.8fr_1.4fr] gap-6 border-b bg-muted/30 px-5 py-3 text-xs text-muted-foreground xl:grid">
             <span>Endpoint</span><span>Upstreams</span><span>Configuration / publication</span><span>MCP address</span>
           </div>
           <ul aria-label="Gateway endpoints" className="divide-y">
-            {topology.endpoints.map((endpoint) => (
-              <li key={endpoint.endpoint_id} className="grid gap-5 p-5 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_0.8fr_1.4fr] xl:gap-6">
+            {endpoints.map((endpoint) => (
+              <li key={endpoint.endpoint_id} className={`grid gap-5 p-5 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_0.8fr_1.4fr] xl:gap-6 ${selectedId === endpoint.endpoint_id ? 'bg-accent/50' : ''}`}>
                 <div className="min-w-0">
-                  <h3 className="break-words font-medium">{endpoint.display_name}</h3>
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 ref={selectedId === endpoint.endpoint_id ? selectedHeading : undefined} tabIndex={-1} className="min-w-0 break-words font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">{endpoint.display_name}</h3>
+                    <Button variant="ghost" size="icon-sm" aria-label={`Locate ${endpoint.display_name} in topology`} title="View in topology" onClick={() => onNavigate('topology', { kind: 'endpoint', id: endpoint.endpoint_id })}>
+                      <Network aria-hidden="true" />
+                    </Button>
+                  </div>
                   <p className="mt-1 break-all text-xs text-muted-foreground">{endpoint.slug}</p>
                   <p className="mt-2 text-xs">{endpoint.mode === 'aggregate' ? 'Aggregate' : 'Passthrough'}</p>
                 </div>
@@ -159,17 +102,20 @@ function EndpointList({ snapshot }: { snapshot: GatewaySnapshot }) {
                   <p className="mb-2 text-xs text-muted-foreground xl:sr-only">Upstreams</p>
                   {endpoint.bindings.length === 0 ? <p className="text-sm text-muted-foreground">No bindings</p> : (
                     <ul className="space-y-2">
-                      {endpoint.bindings.toSorted((a, b) => a.priority - b.priority).map((binding) => {
+                      {endpoint.bindings.toSorted((first, second) => first.priority - second.priority).slice(0, 3).map((binding) => {
                         const upstream = upstreams.get(binding.upstream_server_id)
                         return (
                           <li key={binding.binding_id} className="break-words text-sm">
-                            <span>{upstream?.display_name ?? `Unknown upstream (${binding.upstream_server_id})`}</span>
+                            {upstream ? (
+                              <button type="button" className="max-w-full break-words text-left underline-offset-4 hover:underline focus-visible:outline-ring" onClick={() => onNavigate('upstreams', { kind: 'upstream', id: upstream.server_id })}>{upstream.display_name}</button>
+                            ) : <span className="break-all">Unknown upstream ({binding.upstream_server_id})</span>}
                             {binding.namespace !== null && <span className="ml-2 text-xs text-muted-foreground">{binding.namespace}</span>}
                             {!binding.enabled && <span className="block text-xs text-muted-foreground">Binding disabled</span>}
                             {upstream && !upstream.enabled && <span className="block text-xs text-muted-foreground">Upstream disabled</span>}
                           </li>
                         )
                       })}
+                      {endpoint.bindings.length > 3 && <li><button type="button" className="text-xs underline underline-offset-4" onClick={() => onNavigate('topology', { kind: 'endpoint', id: endpoint.endpoint_id })}>{endpoint.bindings.length - 3} more bindings</button></li>}
                     </ul>
                   )}
                 </div>

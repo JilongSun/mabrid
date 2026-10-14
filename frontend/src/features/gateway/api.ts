@@ -1,5 +1,18 @@
 import { z } from 'zod'
 
+const configuredKeySchema = z.object({ name: z.string(), configured: z.literal(true) })
+const connectionSchema = z.discriminatedUnion('transport', [
+  z.object({
+    transport: z.literal('streamable-http'), url: z.string(),
+    headers: z.array(configuredKeySchema), timeout_seconds: z.number(),
+  }),
+  z.object({ transport: z.literal('sse'), url: z.string(), headers: z.array(configuredKeySchema) }),
+  z.object({
+    transport: z.literal('stdio'), command: z.string(), args: z.array(z.string()),
+    cwd: z.string().nullable(), env: z.array(configuredKeySchema),
+  }),
+])
+
 // Validate the presentation fields consumed here; other frozen response fields are not retained.
 export const topologySchema = z.object({
   endpoints: z.array(z.object({
@@ -23,6 +36,7 @@ export const topologySchema = z.object({
     slug: z.string(),
     display_name: z.string(),
     enabled: z.boolean(),
+    connection: connectionSchema,
   })),
 })
 
@@ -39,6 +53,7 @@ const problemSchema = z.object({
 })
 
 export type Endpoint = z.infer<typeof topologySchema>['endpoints'][number]
+export type Upstream = z.infer<typeof topologySchema>['upstreams'][number]
 export type GatewaySnapshot = {
   topology: z.infer<typeof topologySchema>
   publication:

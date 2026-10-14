@@ -2,27 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, FileSearch, Unplug } from 'lucide-react'
 import { AppShell, type Workspace } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { EndpointsView } from '@/features/gateway/endpoints-view'
-
-const gatewayViews = [
-  {
-    id: 'endpoints',
-    title: 'Endpoints',
-  },
-  {
-    id: 'upstreams',
-    title: 'Upstreams',
-    description: 'MCP servers connected to the Gateway and their endpoint bindings.',
-    message: 'Upstream data has not been loaded. This view is not connected to the backend yet.',
-  },
-  {
-    id: 'topology',
-    title: 'Topology',
-    description: 'Endpoint-to-upstream relationships through configured bindings.',
-    message: 'Topology data has not been loaded. The read-only relationship diagram is not connected to the backend yet.',
-  },
-] as const
+import { GatewayWorkspace } from '@/features/gateway/gateway-workspace'
 
 function NotConnected({ message }: { message: string }) {
   return (
@@ -69,28 +49,7 @@ function App() {
           </Button>
         </header>
         <div hidden={diagnosticsOpen}>
-          <Tabs defaultValue="endpoints" className="gap-0">
-            <div className="border-b px-4 md:px-8">
-              <TabsList aria-label="Gateway views" variant="line" className="mb-1 h-10 gap-4 p-0">
-                {gatewayViews.map((view) => (
-                  <TabsTrigger key={view.id} value={view.id} className="px-1">
-                    {view.title}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </div>
-            {gatewayViews.map((view) => (
-              <TabsContent key={view.id} value={view.id} className="p-4 pt-8 md:p-8">
-                {view.id === 'endpoints' ? <EndpointsView /> : (
-                  <>
-                    <h2 className="text-2xl font-semibold tracking-tight">{view.title}</h2>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{view.description}</p>
-                    <NotConnected message={view.message} />
-                  </>
-                )}
-              </TabsContent>
-            ))}
-          </Tabs>
+          <GatewayWorkspace />
         </div>
         {diagnosticsOpen && (
           <section aria-labelledby="diagnostics-title" className="border-t p-4 pt-8 md:p-8">

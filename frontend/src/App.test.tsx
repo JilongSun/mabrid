@@ -3,11 +3,10 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 
-vi.mock('@/features/gateway/endpoints-view', () => ({
-  EndpointsView: () => <h2>Endpoints</h2>,
-}))
-
 beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(
+    String(input).endsWith('/topology') ? { endpoints: [], upstreams: [] } : { published_endpoint_slugs: [] },
+  ), { headers: { 'content-type': 'application/json' } })))
   vi.stubGlobal('matchMedia', vi.fn(() => ({
     matches: false,
     addEventListener: vi.fn(),
