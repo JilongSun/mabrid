@@ -11,12 +11,12 @@ export type GatewayView = 'endpoints' | 'upstreams' | 'topology'
 export type GatewaySelection = { kind: 'endpoint' | 'upstream' | 'binding'; id: string }
 export type NavigateGateway = (view: GatewayView, selection: GatewaySelection) => void
 
-const views = { endpoints: 'Endpoints', upstreams: 'Upstreams', topology: 'Topology' } as const
+const views = { topology: 'Topology', endpoints: 'Endpoints', upstreams: 'Upstreams' } as const
 const initialFilters = { query: '', configuration: 'all' }
 
 /** Owns the shared configuration reads, refresh lifecycle, and cross-view selection. */
 export function GatewayWorkspace() {
-  const [view, setView] = useState<GatewayView>('endpoints')
+  const [view, setView] = useState<GatewayView>('topology')
   const [selection, setSelection] = useState<GatewaySelection | null>(null)
   const [filters, setFilters] = useState({ endpoints: initialFilters, upstreams: initialFilters })
   const [revision, setRevision] = useState(0)
@@ -99,7 +99,7 @@ export function GatewayWorkspace() {
         {state.snapshot && <>
           {view === 'endpoints' && <EndpointsView snapshot={state.snapshot} {...filters.endpoints} selectedId={selection?.kind === 'endpoint' ? selection.id : undefined} onNavigate={navigate} />}
           {view === 'upstreams' && <UpstreamsView snapshot={state.snapshot} {...filters.upstreams} selectedId={selection?.kind === 'upstream' ? selection.id : undefined} onNavigate={navigate} />}
-          {view === 'topology' && <TopologyView topology={state.snapshot.topology} selection={selection} onSelect={setSelection} onNavigate={navigate} />}
+          {view === 'topology' && <TopologyView topology={state.snapshot.topology} publication={state.snapshot.publication} selection={selection} onSelect={setSelection} onNavigate={navigate} />}
         </>}
       </TabsContent>
     </Tabs>

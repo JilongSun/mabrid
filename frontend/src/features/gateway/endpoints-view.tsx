@@ -95,7 +95,6 @@ export function EndpointsView({ snapshot, query, configuration, selectedId, onNa
                       <Network aria-hidden="true" />
                     </Button>
                   </div>
-                  <p className="mt-1 break-all text-xs text-muted-foreground">{endpoint.slug}</p>
                   <p className="mt-2 text-xs">{endpoint.mode === 'aggregate' ? 'Aggregate' : 'Passthrough'}</p>
                 </div>
                 <div className="min-w-0">

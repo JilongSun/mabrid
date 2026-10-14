@@ -38,6 +38,12 @@ const json = (data: unknown, status = 200) => new Response(JSON.stringify(data),
 
 const fetchMock = vi.fn<typeof fetch>()
 
+async function renderEndpoints(user = userEvent.setup()) {
+  const rendered = render(<GatewayWorkspace />)
+  await user.click(screen.getByRole('tab', { name: 'Endpoints' }))
+  return rendered
+}
+
 beforeEach(() => {
   fetchMock.mockReset()
   fetchMock.mockImplementation(async (input) => json(
@@ -132,10 +138,13 @@ describe('Endpoint data boundary', () => {
 
 describe('Endpoints view', () => {
   it('shows loading, then upstream bindings and independent configuration/publication facts', async () => {
+    const user = userEvent.setup()
     render(<GatewayWorkspace />)
-    expect(screen.getByRole('status').textContent).toContain('Loading endpoints')
+    expect(screen.getByRole('status').textContent).toContain('Loading topology')
+    await user.click(screen.getByRole('tab', { name: 'Endpoints' }))
     expect(await screen.findByRole('heading', { name: 'Tools' })).toBeDefined()
     expect(screen.getByText('Operations')).toBeDefined()
+    expect(screen.queryByText(endpoint.slug)).toBeNull()
     expect(screen.getByText('ops')).toBeDefined()
     expect(within(screen.getByRole('list', { name: 'Gateway endpoints' })).getByText('Enabled')).toBeDefined()
     expect(screen.getByText('Published')).toBeDefined()
@@ -151,7 +160,7 @@ describe('Endpoints view', () => {
       ...topology,
       endpoints: [{ ...endpoint, enabled: false, advertised_url: null }],
     } : { ...publication, published_endpoint_slugs: [] }))
-    render(<GatewayWorkspace />)
+    await renderEndpoints()
     expect(await screen.findByText('Advertised URL not configured')).toBeDefined()
     expect(screen.getByText('/mcp/tools')).toBeDefined()
     expect(within(screen.getByRole('list', { name: 'Gateway endpoints' })).getByText('Disabled')).toBeDefined()
@@ -165,6 +174,7 @@ describe('Endpoints view', () => {
     ))
     render(<GatewayWorkspace />)
     expect(screen.queryByText('No endpoints configured')).toBeNull()
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Endpoints' }))
     expect(await screen.findByText('No endpoints configured')).toBeDefined()
   })
 
@@ -174,7 +184,7 @@ describe('Endpoints view', () => {
         type: 'urn:mabrid:problem:internal-error', title: 'Internal server error',
         status: 500, detail: 'The management request could not be completed.', code: 'internal_error',
       }, 500))
-    render(<GatewayWorkspace />)
+    await renderEndpoints()
     expect(await screen.findByRole('alert')).toBeDefined()
     expect(screen.getByRole('heading', { name: 'Tools' })).toBeDefined()
     expect(screen.getByText('Publication unknown')).toBeDefined()
@@ -184,7 +194,7 @@ describe('Endpoints view', () => {
   it('refreshes after a failed request without presenting failure as an empty topology', async () => {
     const user = userEvent.setup()
     fetchMock.mockRejectedValueOnce(new TypeError('Network error'))
-    render(<GatewayWorkspace />)
+    await renderEndpoints(user)
     expect((await screen.findByRole('alert')).textContent).toContain('Cannot reach the Gateway')
     expect(screen.queryByText('No endpoints configured')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
@@ -195,7 +205,7 @@ describe('Endpoints view', () => {
   it('copies the exact returned URL and explicitly reports clipboard denial', async () => {
     const user = userEvent.setup()
     const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
-    render(<GatewayWorkspace />)
+    await renderEndpoints(user)
     const copy = await screen.findByRole('button', { name: 'Copy MCP URL for Tools' })
     await user.click(copy)
     expect(write).toHaveBeenCalledWith(endpoint.advertised_url)
@@ -218,11 +228,12 @@ describe('Endpoints view', () => {
 describe('Gateway relationships', () => {
   it('shares configuration reads across tabs and follows links in both directions with focus', async () => {
     const user = userEvent.setup()
-    render(<GatewayWorkspace />)
+    await renderEndpoints(user)
     await user.click(await screen.findByRole('button', { name: 'Operations' }))
     expect(screen.getByRole('tab', { name: 'Upstreams' }).getAttribute('aria-selected')).toBe('true')
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Operations' }))
     expect(screen.getByText('https://upstream.example/mcp')).toBeDefined()
+    expect(screen.queryByText(topology.upstreams[0].slug)).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Tools' }))
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Tools' }))
     await user.click(screen.getByRole('tab', { name: 'Topology' }))
@@ -240,7 +251,7 @@ describe('Gateway relationships', () => {
       }],
     } : publication))
     const user = userEvent.setup()
-    render(<GatewayWorkspace />)
+    await renderEndpoints(user)
     await screen.findByRole('heading', { name: 'Tools' })
     await user.type(screen.getByRole('searchbox', { name: 'Search endpoints' }), 'absent')
     expect(screen.getByText('No matching endpoints')).toBeDefined()
@@ -258,7 +269,7 @@ describe('Gateway relationships', () => {
 
   it('locates an endpoint in topology and follows the selected relationship back to its upstream', async () => {
     const user = userEvent.setup()
-    render(<GatewayWorkspace />)
+    await renderEndpoints(user)
     await user.click(await screen.findByRole('button', { name: 'Locate Tools in topology' }))
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Topology' }))
     const diagram = within(screen.getByRole('region', { name: 'Topology diagram' }))
@@ -278,8 +289,7 @@ describe('Gateway relationships', () => {
     } : publication))
     const user = userEvent.setup()
     render(<GatewayWorkspace />)
-    await screen.findByRole('heading', { name: 'Tools' })
-    await user.click(screen.getByRole('tab', { name: 'Topology' }))
+    await screen.findByRole('button', { name: 'Select endpoint Tools' })
     const diagram = within(screen.getByRole('region', { name: 'Topology diagram' }))
     const paths = diagram.getAllByRole('button', { name: /Binding from Tools to Operations/ })
     expect(paths).toHaveLength(2)
@@ -295,7 +305,7 @@ describe('Gateway relationships', () => {
 
   it('keeps the previous shared configuration on refresh failure', async () => {
     const user = userEvent.setup()
-    render(<GatewayWorkspace />)
+    await renderEndpoints(user)
     await screen.findByRole('heading', { name: 'Tools' })
     fetchMock.mockRejectedValue(new TypeError('Network error'))
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
@@ -312,8 +322,7 @@ describe('Gateway relationships', () => {
     } : publication))
     const user = userEvent.setup()
     render(<GatewayWorkspace />)
-    await screen.findByRole('heading', { name: 'Tools' })
-    await user.click(screen.getByRole('tab', { name: 'Topology' }))
+    await screen.findByRole('button', { name: 'Select endpoint Tools' })
     const diagram = within(screen.getByRole('region', { name: 'Topology diagram' }))
     await user.click(diagram.getByRole('button', { name: 'Select upstream Unknown upstream' }))
     expect(screen.getByText('Missing configuration')).toBeDefined()
@@ -321,6 +330,18 @@ describe('Gateway relationships', () => {
     expect(summary.queryByRole('button', { name: 'View upstream' })).toBeNull()
     await user.click(diagram.getByRole('button', { name: 'Select endpoint Isolated endpoint' }))
     expect(within(screen.getByRole('region', { name: 'Selected topology relationship' })).getByText('No bindings')).toBeDefined()
+  })
+
+  it('defaults to topology and keeps disabled configuration distinct from publication', async () => {
+    fetchMock.mockImplementation(async (input) => json(String(input).endsWith('/topology') ? {
+      ...topology, endpoints: [{ ...endpoint, enabled: false }],
+    } : publication))
+    render(<GatewayWorkspace />)
+    const node = await screen.findByRole('button', { name: 'Select endpoint Tools' })
+    expect(screen.getByRole('tab', { name: 'Topology' }).getAttribute('aria-selected')).toBe('true')
+    expect(within(node).getByText('Published')).toBeDefined()
+    expect(within(node).getByText('Aggregate / Disabled')).toBeDefined()
+    expect(screen.queryByText('Online')).toBeNull()
   })
 })
 import { readFileSync } from 'node:fs'

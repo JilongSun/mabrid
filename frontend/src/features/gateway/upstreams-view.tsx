@@ -40,7 +40,6 @@ export function UpstreamsView({ snapshot, query, configuration, selectedId, onNa
                 <h3 ref={selectedId === upstream.server_id ? selectedHeading : undefined} tabIndex={-1} className="min-w-0 break-words font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">{upstream.display_name}</h3>
                 <Button variant="ghost" size="icon-sm" title="View in topology" aria-label={`Locate ${upstream.display_name} in topology`} onClick={() => onNavigate('topology', { kind: 'upstream', id: upstream.server_id })}><Network aria-hidden="true" /></Button>
               </div>
-              <p className="mt-1 break-all text-xs text-muted-foreground">{upstream.slug}</p>
             </div>
             <div className="min-w-0">
               <p className="text-sm">{upstream.connection.transport === 'streamable-http' ? 'Streamable HTTP' : upstream.connection.transport === 'sse' ? 'SSE' : 'stdio'}</p>

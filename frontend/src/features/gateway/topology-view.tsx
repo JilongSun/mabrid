@@ -5,8 +5,9 @@ import type { GatewaySelection, NavigateGateway } from './gateway-workspace'
 
 type Topology = GatewaySnapshot['topology']
 
-export function TopologyView({ topology, selection, onSelect, onNavigate }: {
+export function TopologyView({ topology, publication, selection, onSelect, onNavigate }: {
   topology: Topology
+  publication: GatewaySnapshot['publication']
   selection: GatewaySelection | null
   onSelect: (selection: GatewaySelection | null) => void
   onNavigate: NavigateGateway
@@ -34,6 +35,9 @@ export function TopologyView({ topology, selection, onSelect, onNavigate }: {
   const height = Math.max(topology.endpoints.length, upstreams.length) * 112 + 16
   const toggle = (target: GatewaySelection) => onSelect(selection?.kind === target.kind && selection.id === target.id ? null : target)
   const bindingLabel = (endpointName: string, upstreamName: string, bindingId: string) => `Binding from ${endpointName} to ${upstreamName} (${bindingId})`
+  const publicationLabel = (slug: string) => publication.kind === 'error'
+    ? 'Publication unknown'
+    : publication.slugs.includes(slug) ? 'Published' : 'Not published'
 
   if (topology.endpoints.length === 0 && upstreams.length === 0) return <p className="mt-6 border-y py-14 text-center font-medium">No topology configured</p>
 
@@ -46,8 +50,8 @@ export function TopologyView({ topology, selection, onSelect, onNavigate }: {
           {edges.map(({ endpoint, binding }) => {
             const endpointIndex = topology.endpoints.indexOf(endpoint)
             const upstreamIndex = upstreams.findIndex((upstream) => upstream.id === binding.upstream_server_id)
-            const start = endpointIndex * 112 + 56
-            const end = upstreamIndex * 112 + 56
+            const start = endpointIndex * 112 + 60
+            const end = upstreamIndex * 112 + 60
             const active = related.some((edge) => edge.binding.binding_id === binding.binding_id)
             const label = bindingLabel(endpoint.display_name, upstreams[upstreamIndex].name, binding.binding_id)
             const parallel = edges.filter((edge) => edge.endpoint.endpoint_id === endpoint.endpoint_id && edge.binding.upstream_server_id === binding.upstream_server_id)
@@ -61,10 +65,11 @@ export function TopologyView({ topology, selection, onSelect, onNavigate }: {
             </g>
           })}
         </svg>
-        {topology.endpoints.map((endpoint, index) => <button key={endpoint.endpoint_id} type="button" aria-label={`Select endpoint ${endpoint.display_name}`} aria-pressed={selection?.kind === 'endpoint' && selection.id === endpoint.endpoint_id} onClick={() => toggle({ kind: 'endpoint', id: endpoint.endpoint_id })} style={{ top: index * 112 + 16, width: '38%', height: 80 }} className={`absolute left-0 flex flex-col justify-center rounded-md border bg-background px-3 text-left focus-visible:outline-ring ${hasSelection && !activeEndpoints.has(endpoint.endpoint_id) ? 'opacity-40' : ''} ${activeEndpoints.has(endpoint.endpoint_id) ? 'border-primary bg-accent' : ''}`}>
+        {topology.endpoints.map((endpoint, index) => <button key={endpoint.endpoint_id} type="button" aria-label={`Select endpoint ${endpoint.display_name}`} aria-pressed={selection?.kind === 'endpoint' && selection.id === endpoint.endpoint_id} onClick={() => toggle({ kind: 'endpoint', id: endpoint.endpoint_id })} style={{ top: index * 112 + 16, width: '38%', height: 88 }} className={`absolute left-0 flex flex-col justify-center rounded-md border bg-background px-3 text-left focus-visible:outline-ring ${hasSelection && !activeEndpoints.has(endpoint.endpoint_id) ? 'opacity-40' : ''} ${activeEndpoints.has(endpoint.endpoint_id) ? 'border-primary bg-accent' : ''}`}>
           <span className="line-clamp-2 w-full break-words text-sm font-medium">{endpoint.display_name}</span><span className="mt-1 text-xs text-muted-foreground">{endpoint.mode === 'aggregate' ? 'Aggregate' : 'Passthrough'} / {endpoint.enabled ? 'Enabled' : 'Disabled'}</span>
+          <span className="text-xs text-muted-foreground">{publicationLabel(endpoint.slug)}</span>
         </button>)}
-        {upstreams.map((upstream, index) => <button key={upstream.id} type="button" aria-label={`Select upstream ${upstream.name}`} aria-pressed={selection?.kind === 'upstream' && selection.id === upstream.id} onClick={() => toggle({ kind: 'upstream', id: upstream.id })} style={{ top: index * 112 + 16, width: '38%', height: 80 }} className={`absolute right-0 flex flex-col justify-center rounded-md border bg-background px-3 text-left focus-visible:outline-ring ${hasSelection && !activeUpstreams.has(upstream.id) ? 'opacity-40' : ''} ${activeUpstreams.has(upstream.id) ? 'border-primary bg-accent' : ''}`}>
+        {upstreams.map((upstream, index) => <button key={upstream.id} type="button" aria-label={`Select upstream ${upstream.name}`} aria-pressed={selection?.kind === 'upstream' && selection.id === upstream.id} onClick={() => toggle({ kind: 'upstream', id: upstream.id })} style={{ top: index * 112 + 16, width: '38%', height: 88 }} className={`absolute right-0 flex flex-col justify-center rounded-md border bg-background px-3 text-left focus-visible:outline-ring ${hasSelection && !activeUpstreams.has(upstream.id) ? 'opacity-40' : ''} ${activeUpstreams.has(upstream.id) ? 'border-primary bg-accent' : ''}`}>
           <span className="line-clamp-2 w-full break-words text-sm font-medium">{upstream.name}</span><span className="mt-1 text-xs text-muted-foreground">{upstream.missing ? 'Missing configuration' : upstream.enabled ? 'Enabled' : 'Disabled'}</span>
         </button>)}
       </div>
@@ -73,6 +78,7 @@ export function TopologyView({ topology, selection, onSelect, onNavigate }: {
       {topology.endpoints.map((endpoint) => <section key={endpoint.endpoint_id} className={`py-4 ${hasSelection && !activeEndpoints.has(endpoint.endpoint_id) ? 'opacity-40' : ''}`}>
         <button type="button" className="max-w-full break-words text-left font-medium underline-offset-4 hover:underline" aria-pressed={selection?.kind === 'endpoint' && selection.id === endpoint.endpoint_id} onClick={() => toggle({ kind: 'endpoint', id: endpoint.endpoint_id })}>{endpoint.display_name}</button>
         <p className="mt-1 text-xs text-muted-foreground">{endpoint.enabled ? 'Enabled' : 'Disabled'} / {endpoint.mode}</p>
+        <p className="text-xs text-muted-foreground">{publicationLabel(endpoint.slug)}</p>
         {endpoint.bindings.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">No bindings</p> : <ul className="mt-3 space-y-2">{endpoint.bindings.map((binding) => <li key={binding.binding_id}>
           <button type="button" className={`flex w-full items-start gap-2 rounded-md border p-3 text-left text-sm focus-visible:outline-ring ${related.some((edge) => edge.binding.binding_id === binding.binding_id) ? 'border-primary bg-accent' : ''}`} aria-pressed={selection?.kind === 'binding' && selection.id === binding.binding_id} onClick={() => toggle({ kind: 'binding', id: binding.binding_id })}>
             <ArrowRight aria-hidden="true" className="mt-0.5 size-4 shrink-0" /><span className="min-w-0 break-words">{upstreams.find((upstream) => upstream.id === binding.upstream_server_id)?.name}<span className="mt-1 block text-xs text-muted-foreground">{binding.namespace ?? 'No namespace'} / {binding.enabled ? 'Binding enabled' : 'Binding disabled'}</span></span>
