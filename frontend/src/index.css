@@ -129,4 +129,16 @@
     @apply font-sans;
     color-scheme: light;
     }
+  :where(
+    button, a[href], summary, select,
+    input[type="button"], input[type="submit"], input[type="reset"],
+    input[type="checkbox"], input[type="radio"],
+    [role="button"], [role="tab"], [role="menuitem"],
+    [role="checkbox"], [role="radio"], [role="switch"]
+  ):not(:disabled):not([aria-disabled="true"]) {
+    cursor: pointer;
+    }
+  :where(:disabled, [aria-disabled="true"]) {
+    cursor: default;
+    }
 }
