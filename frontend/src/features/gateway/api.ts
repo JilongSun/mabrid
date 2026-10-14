@@ -1,5 +1,9 @@
 import { z } from 'zod'
 
+const revisionSchema = z.object({
+  revision_id: z.uuid(), revision_number: z.int(), created_at: z.string(),
+})
+const metadataSchema = z.record(z.string(), z.unknown())
 const configuredKeySchema = z.object({ name: z.string(), configured: z.literal(true) })
 const connectionSchema = z.discriminatedUnion('transport', [
   z.object({
@@ -23,9 +27,13 @@ export const topologySchema = z.object({
     enabled: z.boolean(),
     endpoint_path: z.string(),
     advertised_url: z.string().nullable(),
+    current_revision: revisionSchema,
+    metadata: metadataSchema,
     bindings: z.array(z.object({
       binding_id: z.uuid(),
+      binding_revision_id: z.uuid(),
       upstream_server_id: z.uuid(),
+      upstream_revision_id: z.uuid(),
       namespace: z.string().nullable(),
       priority: z.int(),
       enabled: z.boolean(),
@@ -37,6 +45,8 @@ export const topologySchema = z.object({
     display_name: z.string(),
     enabled: z.boolean(),
     connection: connectionSchema,
+    current_revision: revisionSchema,
+    metadata: metadataSchema,
   })),
 })
 

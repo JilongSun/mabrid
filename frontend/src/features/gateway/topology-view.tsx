@@ -96,13 +96,13 @@ export function TopologyView({ topology, publication, selection, onSelect, onNav
         <Button size="icon-sm" variant="ghost" aria-label="Clear topology selection" title="Clear selection" onClick={() => onSelect(null)}><X aria-hidden="true" /></Button>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        {selectedEndpoint && <Button variant="outline" size="sm" onClick={() => onNavigate('endpoints', { kind: 'endpoint', id: selectedEndpoint.endpoint_id })}><List aria-hidden="true" />View endpoint</Button>}
-        {selectedUpstream && !selectedUpstream.missing && <Button variant="outline" size="sm" onClick={() => onNavigate('upstreams', { kind: 'upstream', id: selectedUpstream.id })}><List aria-hidden="true" />View upstream</Button>}
+        {selectedEndpoint && <Button id={`topology-endpoint-${selectedEndpoint.endpoint_id}`} variant="outline" size="sm" onClick={() => onNavigate('endpoints', { kind: 'endpoint', id: selectedEndpoint.endpoint_id })}><List aria-hidden="true" />View endpoint</Button>}
+        {selectedUpstream && !selectedUpstream.missing && <Button id={`topology-upstream-${selectedUpstream.id}`} variant="outline" size="sm" onClick={() => onNavigate('upstreams', { kind: 'upstream', id: selectedUpstream.id })}><List aria-hidden="true" />View upstream</Button>}
       </div>
       {related.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">No bindings</p> : <ul className="mt-3 divide-y">{related.map(({ endpoint, binding }) => <li key={binding.binding_id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 text-sm">
-        <button type="button" className="max-w-full break-words text-left underline underline-offset-4" onClick={() => onNavigate('endpoints', { kind: 'endpoint', id: endpoint.endpoint_id })}>{endpoint.display_name}</button>
+        <button id={`topology-binding-endpoint-${binding.binding_id}`} type="button" className="max-w-full break-words text-left underline underline-offset-4" onClick={() => onNavigate('endpoints', { kind: 'endpoint', id: endpoint.endpoint_id })}>{endpoint.display_name}</button>
         <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
-        {topology.upstreams.some((upstream) => upstream.server_id === binding.upstream_server_id) ? <button type="button" className="max-w-full break-words text-left underline underline-offset-4" onClick={() => onNavigate('upstreams', { kind: 'upstream', id: binding.upstream_server_id })}>{upstreams.find((upstream) => upstream.id === binding.upstream_server_id)?.name}</button> : <span className="break-all">Unknown upstream ({binding.upstream_server_id})</span>}
+        {topology.upstreams.some((upstream) => upstream.server_id === binding.upstream_server_id) ? <button id={`topology-binding-upstream-${binding.binding_id}`} type="button" className="max-w-full break-words text-left underline underline-offset-4" onClick={() => onNavigate('upstreams', { kind: 'upstream', id: binding.upstream_server_id })}>{upstreams.find((upstream) => upstream.id === binding.upstream_server_id)?.name}</button> : <span className="break-all">Unknown upstream ({binding.upstream_server_id})</span>}
         <span className="max-w-full break-words text-xs text-muted-foreground">Namespace: {binding.namespace ?? 'None'} / Priority: {binding.priority} / {binding.enabled ? 'Binding enabled' : 'Binding disabled'}</span>
       </li>)}</ul>}
     </section>}

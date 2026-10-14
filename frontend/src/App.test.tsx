@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event'
 import App from './App'
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/gateway/topology')
+  vi.stubGlobal('scrollTo', vi.fn())
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(
     String(input).endsWith('/topology') ? { endpoints: [], upstreams: [] } : { published_endpoint_slugs: [] },
   ), { headers: { 'content-type': 'application/json' } })))
@@ -93,5 +95,14 @@ describe('workspace navigation', () => {
     await user.keyboard('{ArrowRight}')
     expect(screen.getByRole('tab', { name: 'Upstreams' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('heading', { name: 'Upstreams' })).toBeDefined()
+  })
+
+  it('returns to the default Gateway when a different workspace URL was opened directly', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState(null, '', '/agent-host')
+    render(<App />)
+    expect(screen.getByRole('heading', { name: 'Agent Host' })).toBeDefined()
+    await user.click(screen.getByRole('button', { name: 'Gateway' }))
+    expect(screen.getByRole('tab', { name: 'Topology' }).getAttribute('aria-selected')).toBe('true')
   })
 })

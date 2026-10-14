@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, FileSearch, Unplug } from 'lucide-react'
+import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom'
 import { AppShell, type Workspace } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { GatewayWorkspace } from '@/features/gateway/gateway-workspace'
@@ -14,8 +15,20 @@ function NotConnected({ message }: { message: string }) {
   )
 }
 
-function App() {
-  const [workspace, setWorkspace] = useState<Workspace>('gateway')
+function Application() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const workspace: Workspace = location.pathname === '/agent-host' ? 'agent-host' : location.pathname === '/status' ? 'status' : 'gateway'
+  const gatewayLocation = useRef(workspace === 'gateway' ? location : {
+    ...location, pathname: '/gateway/topology', search: '', hash: '', state: null,
+  })
+  useEffect(() => {
+    if (workspace === 'gateway') gatewayLocation.current = location
+  }, [location, workspace])
+  const selectWorkspace = (destination: Workspace) => {
+    if (destination === 'gateway') navigate(gatewayLocation.current.pathname + gatewayLocation.current.search, { state: gatewayLocation.current.state })
+    else navigate(destination === 'agent-host' ? '/agent-host' : '/status')
+  }
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const diagnosticsTrigger = useRef<HTMLButtonElement>(null)
   const diagnosticsHeading = useRef<HTMLHeadingElement>(null)
@@ -32,7 +45,7 @@ function App() {
   }, [diagnosticsOpen, workspace])
 
   return (
-    <AppShell workspace={workspace} onSelect={setWorkspace}>
+    <AppShell workspace={workspace} onSelect={selectWorkspace}>
       <section hidden={workspace !== 'gateway'} aria-labelledby="gateway-title">
         <header className="flex flex-wrap items-center justify-between gap-3 px-4 pt-6 pb-5 md:px-8">
           <h1 id="gateway-title" className="text-lg font-semibold tracking-tight">Gateway</h1>
@@ -104,6 +117,10 @@ function App() {
       )}
     </AppShell>
   )
+}
+
+function App() {
+  return <BrowserRouter><Application /></BrowserRouter>
 }
 
 export default App

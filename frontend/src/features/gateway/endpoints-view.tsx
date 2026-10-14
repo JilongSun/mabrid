@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Copy, Network } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { type Endpoint, type GatewaySnapshot } from './api'
-import type { NavigateGateway } from './gateway-workspace'
+import type { NavigateGateway } from './gateway-navigation'
+import { GatewayLink } from './gateway-link'
 
-function McpAddress({ endpoint }: { endpoint: Endpoint }) {
+export function McpAddress({ endpoint }: { endpoint: Endpoint }) {
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
 
   async function copy() {
@@ -53,20 +54,14 @@ function McpAddress({ endpoint }: { endpoint: Endpoint }) {
   )
 }
 
-export function EndpointsView({ snapshot, query, configuration, selectedId, onNavigate }: {
+export function EndpointsView({ snapshot, query, configuration, onNavigate }: {
   snapshot: GatewaySnapshot
   query: string
   configuration: string
-  selectedId?: string
   onNavigate: NavigateGateway
 }) {
   const { topology, publication } = snapshot
   const upstreams = new Map(topology.upstreams.map((upstream) => [upstream.server_id, upstream]))
-  const selectedHeading = useRef<HTMLHeadingElement>(null)
-  useEffect(() => {
-    selectedHeading.current?.focus()
-    selectedHeading.current?.scrollIntoView?.({ block: 'nearest' })
-  }, [selectedId])
   const endpoints = topology.endpoints.filter((endpoint) => (
     (configuration === 'all' || endpoint.enabled === (configuration === 'enabled')) &&
     [endpoint.display_name, endpoint.slug, endpoint.advertised_url ?? '',
@@ -87,11 +82,11 @@ export function EndpointsView({ snapshot, query, configuration, selectedId, onNa
           </div>
           <ul aria-label="Gateway endpoints" className="divide-y">
             {endpoints.map((endpoint) => (
-              <li key={endpoint.endpoint_id} className={`grid gap-5 p-5 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_0.8fr_1.4fr] xl:gap-6 ${selectedId === endpoint.endpoint_id ? 'bg-accent/50' : ''}`}>
+              <li key={endpoint.endpoint_id} className="grid gap-5 p-5 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_0.8fr_1.4fr] xl:gap-6">
                 <div className="min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 ref={selectedId === endpoint.endpoint_id ? selectedHeading : undefined} tabIndex={-1} className="min-w-0 break-words font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">{endpoint.display_name}</h3>
-                    <Button variant="ghost" size="icon-sm" aria-label={`Locate ${endpoint.display_name} in topology`} title="View in topology" onClick={() => onNavigate('topology', { kind: 'endpoint', id: endpoint.endpoint_id })}>
+                    <h3 className="min-w-0 break-words font-medium"><GatewayLink kind="endpoint" objectId={endpoint.endpoint_id} id={`endpoint-${endpoint.endpoint_id}`}>{endpoint.display_name}</GatewayLink></h3>
+                    <Button id={`endpoint-topology-${endpoint.endpoint_id}`} variant="ghost" size="icon-sm" aria-label={`Locate ${endpoint.display_name} in topology`} title="View in topology" onClick={() => onNavigate('topology', { kind: 'endpoint', id: endpoint.endpoint_id })}>
                       <Network aria-hidden="true" />
                     </Button>
                   </div>
@@ -106,7 +101,7 @@ export function EndpointsView({ snapshot, query, configuration, selectedId, onNa
                         return (
                           <li key={binding.binding_id} className="break-words text-sm">
                             {upstream ? (
-                              <button type="button" className="max-w-full break-words text-left underline-offset-4 hover:underline focus-visible:outline-ring" onClick={() => onNavigate('upstreams', { kind: 'upstream', id: upstream.server_id })}>{upstream.display_name}</button>
+                              <GatewayLink kind="upstream" objectId={upstream.server_id} id={`endpoint-binding-${binding.binding_id}`}>{upstream.display_name}</GatewayLink>
                             ) : <span className="break-all">Unknown upstream ({binding.upstream_server_id})</span>}
                             {binding.namespace !== null && <span className="ml-2 text-xs text-muted-foreground">{binding.namespace}</span>}
                             {!binding.enabled && <span className="block text-xs text-muted-foreground">Binding disabled</span>}
@@ -114,7 +109,7 @@ export function EndpointsView({ snapshot, query, configuration, selectedId, onNa
                           </li>
                         )
                       })}
-                      {endpoint.bindings.length > 3 && <li><button type="button" className="text-xs underline underline-offset-4" onClick={() => onNavigate('topology', { kind: 'endpoint', id: endpoint.endpoint_id })}>{endpoint.bindings.length - 3} more bindings</button></li>}
+                      {endpoint.bindings.length > 3 && <li><button id={`endpoint-more-${endpoint.endpoint_id}`} type="button" className="text-xs underline underline-offset-4" onClick={() => onNavigate('topology', { kind: 'endpoint', id: endpoint.endpoint_id })}>{endpoint.bindings.length - 3} more bindings</button></li>}
                     </ul>
                   )}
                 </div>

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { loadGatewaySnapshot, topologySchema } from './api'
 import { GatewayWorkspace } from './gateway-workspace'
@@ -38,13 +39,28 @@ const json = (data: unknown, status = 200) => new Response(JSON.stringify(data),
 
 const fetchMock = vi.fn<typeof fetch>()
 
+function HistoryControls() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  return <>
+    <button type="button" onClick={() => navigate(-1)}>History back</button>
+    <button type="button" onClick={() => navigate(1)}>History forward</button>
+    <span data-testid="current-path">{location.pathname + location.search}</span>
+  </>
+}
+
+function renderGateway(initialEntry = '/gateway/topology') {
+  return render(<MemoryRouter initialEntries={[initialEntry]}><HistoryControls /><GatewayWorkspace /></MemoryRouter>)
+}
+
 async function renderEndpoints(user = userEvent.setup()) {
-  const rendered = render(<GatewayWorkspace />)
+  const rendered = renderGateway()
   await user.click(screen.getByRole('tab', { name: 'Endpoints' }))
   return rendered
 }
 
 beforeEach(() => {
+  vi.stubGlobal('scrollTo', vi.fn())
   fetchMock.mockReset()
   fetchMock.mockImplementation(async (input) => json(
     String(input).endsWith('/topology') ? topology : publication,
@@ -139,7 +155,7 @@ describe('Endpoint data boundary', () => {
 describe('Endpoints view', () => {
   it('shows loading, then upstream bindings and independent configuration/publication facts', async () => {
     const user = userEvent.setup()
-    render(<GatewayWorkspace />)
+    renderGateway()
     expect(screen.getByRole('status').textContent).toContain('Loading topology')
     await user.click(screen.getByRole('tab', { name: 'Endpoints' }))
     expect(await screen.findByRole('heading', { name: 'Tools' })).toBeDefined()
@@ -172,7 +188,7 @@ describe('Endpoints view', () => {
     fetchMock.mockImplementation(async (input) => json(
       String(input).endsWith('/topology') ? { ...topology, endpoints: [] } : publication,
     ))
-    render(<GatewayWorkspace />)
+    renderGateway()
     expect(screen.queryByText('No endpoints configured')).toBeNull()
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Endpoints' }))
     expect(await screen.findByText('No endpoints configured')).toBeDefined()
@@ -217,7 +233,7 @@ describe('Endpoints view', () => {
 
   it('aborts outstanding reads on unmount without displaying cancellation as a failure', async () => {
     fetchMock.mockImplementation(() => new Promise<Response>(() => {}))
-    const { unmount } = render(<GatewayWorkspace />)
+    const { unmount } = renderGateway()
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
     const signals = fetchMock.mock.calls.map(([, options]) => options?.signal)
     unmount()
@@ -229,12 +245,12 @@ describe('Gateway relationships', () => {
   it('shares configuration reads across tabs and follows links in both directions with focus', async () => {
     const user = userEvent.setup()
     await renderEndpoints(user)
-    await user.click(await screen.findByRole('button', { name: 'Operations' }))
+    await user.click(await screen.findByRole('link', { name: 'Operations' }))
     expect(screen.getByRole('tab', { name: 'Upstreams' }).getAttribute('aria-selected')).toBe('true')
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Operations' }))
     expect(screen.getByText('https://upstream.example/mcp')).toBeDefined()
-    expect(screen.queryByText(topology.upstreams[0].slug)).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Tools' }))
+    expect(screen.getByText('Technical information').closest('details')?.hasAttribute('open')).toBe(false)
+    await user.click(screen.getByRole('link', { name: 'Tools' }))
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Tools' }))
     await user.click(screen.getByRole('tab', { name: 'Topology' }))
     expect(within(screen.getByRole('region', { name: 'Topology diagram' })).getAllByRole('button', { name: 'Select upstream Operations' })).toHaveLength(1)
@@ -248,6 +264,7 @@ describe('Gateway relationships', () => {
       ...topology, upstreams: [...topology.upstreams, {
         server_id: id(10), slug: 'local', display_name: 'Local server', enabled: false,
         connection: { transport: 'stdio', command: 'uvx', args: [], cwd: null, env: [] },
+        current_revision: revision, metadata: {},
       }],
     } : publication))
     const user = userEvent.setup()
@@ -278,6 +295,9 @@ describe('Gateway relationships', () => {
     expect(summary.getByText(/Namespace: ops \/ Priority: 10/)).toBeDefined()
     await user.click(summary.getByRole('button', { name: 'Operations' }))
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Operations' }))
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    const restored = within(screen.getByRole('region', { name: 'Selected topology relationship' }))
+    expect(document.activeElement).toBe(restored.getByRole('button', { name: 'Operations' }))
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
@@ -288,7 +308,7 @@ describe('Gateway relationships', () => {
       }] }],
     } : publication))
     const user = userEvent.setup()
-    render(<GatewayWorkspace />)
+    renderGateway()
     await screen.findByRole('button', { name: 'Select endpoint Tools' })
     const diagram = within(screen.getByRole('region', { name: 'Topology diagram' }))
     const paths = diagram.getAllByRole('button', { name: /Binding from Tools to Operations/ })
@@ -321,7 +341,7 @@ describe('Gateway relationships', () => {
       ...topology, upstreams: [], endpoints: [endpoint, { ...endpoint, endpoint_id: id(11), display_name: 'Isolated endpoint', bindings: [] }],
     } : publication))
     const user = userEvent.setup()
-    render(<GatewayWorkspace />)
+    renderGateway()
     await screen.findByRole('button', { name: 'Select endpoint Tools' })
     const diagram = within(screen.getByRole('region', { name: 'Topology diagram' }))
     await user.click(diagram.getByRole('button', { name: 'Select upstream Unknown upstream' }))
@@ -336,12 +356,141 @@ describe('Gateway relationships', () => {
     fetchMock.mockImplementation(async (input) => json(String(input).endsWith('/topology') ? {
       ...topology, endpoints: [{ ...endpoint, enabled: false }],
     } : publication))
-    render(<GatewayWorkspace />)
+    renderGateway()
     const node = await screen.findByRole('button', { name: 'Select endpoint Tools' })
     expect(screen.getByRole('tab', { name: 'Topology' }).getAttribute('aria-selected')).toBe('true')
     expect(within(node).getByText('Published')).toBeDefined()
     expect(within(node).getByText('Aggregate / Disabled')).toBeDefined()
     expect(screen.queryByText('Online')).toBeNull()
+  })
+})
+describe('Gateway detail routes', () => {
+  it('opens endpoint details directly with every binding and folded technical revisions', async () => {
+    fetchMock.mockImplementation(async (input) => json(String(input).endsWith('/topology') ? {
+      ...topology, endpoints: [{ ...endpoint, metadata: { category: 'operations' }, bindings: Array.from({ length: 5 }, (_, index) => ({
+        ...endpoint.bindings[0], binding_id: id(30 + index), namespace: `namespace-${index}`, priority: 5 - index,
+      })) }],
+    } : publication))
+    const user = userEvent.setup()
+    renderGateway(`/gateway/endpoints/${endpoint.endpoint_id}`)
+    await screen.findByRole('heading', { name: 'Tools', level: 2 })
+    expect(screen.getByText('Published')).toBeDefined()
+    const table = within(screen.getByRole('table', { name: 'Endpoint bindings' }))
+    expect(table.getAllByRole('row')).toHaveLength(6)
+    expect(table.getAllByRole('link', { name: 'Operations' })).toHaveLength(5)
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    const technical = screen.getByText('Technical information').closest('details')!
+    expect(technical.open).toBe(false)
+    await user.click(screen.getByText('Technical information'))
+    expect(technical.open).toBe(true)
+    expect(within(technical).getByText(revision.revision_id)).toBeDefined()
+    expect(within(technical).getByText(/"category": "operations"/)).toBeDefined()
+    await user.click(screen.getByRole('button', { name: 'Back to endpoints' }))
+    expect(screen.getByRole('list', { name: 'Gateway endpoints' })).toBeDefined()
+  })
+
+  it('opens HTTP upstream details without retaining configured secret values', async () => {
+    fetchMock.mockImplementation(async (input) => json(String(input).endsWith('/topology') ? {
+      ...topology, upstreams: [{ ...topology.upstreams[0], connection: {
+        ...topology.upstreams[0].connection,
+        headers: [{ name: 'Authorization', configured: true, value: 'secret-not-for-ui' }],
+      } }],
+    } : publication))
+    renderGateway(`/gateway/upstreams/${id(2)}`)
+    await screen.findByRole('heading', { name: 'Operations', level: 2 })
+    expect(screen.getByText('30 seconds')).toBeDefined()
+    expect(screen.getByText('Authorization')).toBeDefined()
+    expect(screen.getByText('Configured')).toBeDefined()
+    expect(screen.queryByText('secret-not-for-ui')).toBeNull()
+    expect(screen.getByRole('table', { name: 'Upstream endpoint bindings' })).toBeDefined()
+  })
+
+  it('shows stdio configuration and an unreferenced upstream without exposing environment values', async () => {
+    fetchMock.mockImplementation(async (input) => json(String(input).endsWith('/topology') ? {
+      ...topology, upstreams: [{ ...topology.upstreams[0], server_id: id(10), display_name: 'Local server', connection: {
+        transport: 'stdio', command: 'uvx', args: ['example-server', '--mode', 'local'], cwd: '/workspace/tools',
+        env: [{ name: 'API_KEY', configured: true, value: 'private-environment-value' }],
+      } }],
+    } : publication))
+    renderGateway(`/gateway/upstreams/${id(10)}`)
+    await screen.findByRole('heading', { name: 'Local server', level: 2 })
+    expect(screen.getByText('uvx')).toBeDefined()
+    expect(screen.getByText('/workspace/tools')).toBeDefined()
+    expect(screen.getByText(/"example-server"/)).toBeDefined()
+    expect(screen.getByText('API_KEY')).toBeDefined()
+    expect(screen.queryByText('private-environment-value')).toBeNull()
+    expect(screen.getByText('Not referenced by an endpoint')).toBeDefined()
+  })
+
+  it('restores URL filters, scroll and the originating link when returning from details', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'scrollY', 'get').mockReturnValue(360)
+    renderGateway('/gateway/endpoints?q=Tools&configuration=enabled')
+    const link = await screen.findByRole('link', { name: 'Tools' })
+    window.dispatchEvent(new Event('scroll'))
+    await user.click(link)
+    await screen.findByRole('heading', { name: 'Tools', level: 2 })
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('Tools')
+    expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('enabled')
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Tools' }))
+    expect(window.scrollTo).toHaveBeenLastCalledWith(0, 360)
+    expect(screen.getByTestId('current-path').textContent).toBe('/gateway/endpoints?q=Tools&configuration=enabled')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('preserves the topology selection through detail navigation and browser back/forward', async () => {
+    const user = userEvent.setup()
+    renderGateway()
+    const node = await screen.findByRole('button', { name: 'Select endpoint Tools' })
+    await user.click(node)
+    expect(screen.getByTestId('current-path').textContent).toContain('selected=endpoint')
+    await user.click(screen.getByRole('button', { name: 'View endpoint' }))
+    await screen.findByRole('heading', { name: 'Tools', level: 2 })
+    await user.click(screen.getByRole('button', { name: 'History back' }))
+    expect(screen.getByRole('button', { name: 'Select endpoint Tools' }).getAttribute('aria-pressed')).toBe('true')
+    await user.click(screen.getByRole('button', { name: 'History forward' }))
+    expect(screen.getByRole('heading', { name: 'Tools', level: 2 })).toBeDefined()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not steal focus from the refresh command on a detail page', async () => {
+    const user = userEvent.setup()
+    await renderEndpoints(user)
+    await user.click(await screen.findByRole('link', { name: 'Tools' }))
+    const refresh = screen.getByRole('button', { name: 'Refresh' })
+    await user.click(refresh)
+    await waitFor(() => expect((refresh as HTMLButtonElement).disabled).toBe(false))
+    expect(document.activeElement).toBe(refresh)
+  })
+
+  it('distinguishes missing objects and unknown routes from connection errors', async () => {
+    const missing = renderGateway(`/gateway/endpoints/${id(99)}`)
+    await screen.findByRole('heading', { name: 'Endpoint not found' })
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByText(/not present in the current Gateway configuration/)).toBeDefined()
+    missing.unmount()
+    renderGateway('/gateway/not-a-view')
+    expect(screen.getByRole('heading', { name: 'Gateway page not found' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Back to topology' })).toBeDefined()
+  })
+
+  it('reports a binding revision mismatch without claiming the current upstream is the referenced revision', async () => {
+    fetchMock.mockImplementation(async (input) => json(String(input).endsWith('/topology') ? {
+      ...topology, endpoints: [{ ...endpoint, bindings: [{ ...endpoint.bindings[0], upstream_revision_id: id(90) }] }],
+    } : publication))
+    renderGateway(`/gateway/endpoints/${endpoint.endpoint_id}`)
+    await screen.findByRole('heading', { name: 'Tools', level: 2 })
+    expect(screen.getByText('References a different upstream revision')).toBeDefined()
+  })
+
+  it('reports direct detail connection failure without pretending to still load or missing configuration', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Network error'))
+    renderGateway(`/gateway/endpoints/${endpoint.endpoint_id}`)
+    await screen.findByRole('alert')
+    expect(screen.getByRole('heading', { name: 'Endpoint details' })).toBeDefined()
+    expect(screen.queryByRole('heading', { name: 'Loading details' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Endpoint not found' })).toBeNull()
   })
 })
 import { readFileSync } from 'node:fs'
