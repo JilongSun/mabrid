@@ -3,13 +3,12 @@ import { ArrowLeft, FileSearch, Unplug } from 'lucide-react'
 import { AppShell, type Workspace } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { EndpointsView } from '@/features/gateway/endpoints-view'
 
 const gatewayViews = [
   {
     id: 'endpoints',
     title: 'Endpoints',
-    description: 'MCP connection addresses and the upstreams behind each endpoint.',
-    message: 'Endpoint data has not been loaded. This view is not connected to the backend yet.',
   },
   {
     id: 'upstreams',
@@ -82,9 +81,13 @@ function App() {
             </div>
             {gatewayViews.map((view) => (
               <TabsContent key={view.id} value={view.id} className="p-4 pt-8 md:p-8">
-                <h2 className="text-2xl font-semibold tracking-tight">{view.title}</h2>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{view.description}</p>
-                <NotConnected message={view.message} />
+                {view.id === 'endpoints' ? <EndpointsView /> : (
+                  <>
+                    <h2 className="text-2xl font-semibold tracking-tight">{view.title}</h2>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{view.description}</p>
+                    <NotConnected message={view.message} />
+                  </>
+                )}
               </TabsContent>
             ))}
           </Tabs>

@@ -3,6 +3,10 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 
+vi.mock('@/features/gateway/endpoints-view', () => ({
+  EndpointsView: () => <h2>Endpoints</h2>,
+}))
+
 beforeEach(() => {
   vi.stubGlobal('matchMedia', vi.fn(() => ({
     matches: false,
@@ -17,11 +21,10 @@ afterEach(() => {
 })
 
 describe('workspace navigation', () => {
-  it('starts on Gateway Endpoints without reporting an empty or healthy backend', () => {
+  it('starts on Gateway Endpoints with only core configuration tabs', () => {
     render(<App />)
     expect(screen.getByRole('heading', { name: 'Gateway' })).toBeDefined()
     expect(screen.getByRole('tab', { name: 'Endpoints' }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByText(/Endpoint data has not been loaded/)).toBeDefined()
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'Endpoints', 'Upstreams', 'Topology',
     ])

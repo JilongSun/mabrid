@@ -167,8 +167,9 @@ to Gateway Endpoints, with Endpoints, Upstreams, and Topology as its primary tab
 diagnostics is a secondary view reached through the Gateway's Diagnostics entry, not a primary tab.
 The planned Topology presentation is a read-only, fixed-column endpoint-to-upstream relationship
 diagram, not an editable canvas or a live traffic view. Agent Host and connection status have
-separate workspace entries. These views show explicit integration placeholders, not empty API
-results or inferred deployment capabilities.
+separate workspace entries. Endpoints reads the frozen Gateway topology and publication APIs.
+Other views still show explicit integration placeholders, not empty API results or inferred
+deployment capabilities.
 
 Use Node.js 22.12 or newer and the pnpm version declared in
 [package.json](../../frontend/package.json). From `frontend/`:
@@ -193,7 +194,20 @@ navigation with focus and Gateway tab restoration.
 
 The product sidebar is collapsible on desktop and uses a modal Sheet on narrow screens. Navigation
 currently uses local React state; it does not yet provide URL routing or persisted selection.
-Gateway tab state survives workspace switching, and navigation makes no backend requests.
+Gateway tab state survives workspace switching. Each view owns its data loading rather than the
+global product navigation.
+The Endpoints view loads on mount and manual refresh, with bounded, cancellable reads and runtime
+validation of consumed presentation fields. It shows disabled configuration separately from
+process publication; neither means verified upstream health. A failed publication read leaves the
+topology visible with an explicit unknown state. Missing advertised URLs show only the returned
+endpoint path; the browser does not synthesize a connection URL. Clipboard failures remain visible.
+
+Browser API requests use relative `/api/` URLs. Vite proxies them to `http://127.0.0.1:8765` during
+development. Copy [the environment example](../../frontend/.env.example) to `frontend/.env.local`
+and set `VITE_API_PROXY_TARGET` when the backend uses another address, then restart Vite. This is
+development-only proxy configuration, not an advertised MCP URL or a production backend selector.
+Production retains the same-origin deployment contract. No backend startup or schema changes are
+part of this frontend integration.
 
 The existing root `make install` / `just install` and `make dev` / `just dev` entry points continue
 to manage both backend and frontend processes. Frontend-only development needs no backend process
