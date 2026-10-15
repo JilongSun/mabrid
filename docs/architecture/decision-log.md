@@ -7,6 +7,8 @@ original context or decision.
 Read amended decisions together with their amendment notices. Sections labeled Historical
 Implementation Snapshot describe their stated date, not current behavior or release obligations.
 ADR 0016 is the current authority for session-oriented first-party readiness and Host action scope.
+ADR 0017 records follow-up Session compatibility review and model reuse requirements without
+changing the v0.1 baseline or its release gates.
 
 Implementation states:
 
@@ -33,6 +35,7 @@ Implementation states:
 | [0014](decisions/0014-read-only-v0-1-management-plane.md) | Accepted; future configuration ownership clarified 2026-10-10 | Implemented (v0.1 read-only scope) | Read-only management is complete; frontend-managed topology and Agent Host/runtime settings, first-run setup, non-destructive database updates, and YAML transition remain post-v0.1 requirements |
 | [0015](decisions/0015-agent-host-runs-and-mcp-apps-endpoint-composition.md) | Accepted; amended by 0016 | Partial | Run attribution, fresh resources, widget composition, timely delivery, and frozen HTTP contracts exist; deployed/rendered workflow and release validation remain pending; product Host actions are deferred |
 | [0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md) | Accepted | Implemented | All eight backend batches and six frontend prerequisites are complete with frozen contracts, controlled evidence, and migration/post-migration review handoff; frontend and release work remain separate |
+| [0017](decisions/0017-protocol-aware-sessions-and-context-owned-model-reuse.md) | Accepted | Pending | Future SDK v2 compatibility must reassess Gateway Session semantics; consolidate model ownership and reuse equivalent definitions without requiring one universal model or expanding v0.1 scope |
 
 ## Current v0.1 Position
 
