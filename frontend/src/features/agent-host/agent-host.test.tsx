@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { historySchema, hostSessionPageSchema, hostSessionSchema, loadHostHistory, loadHostSession, loadHostSessions } from './api'
+import { createHostSession, historySchema, hostSessionPageSchema, hostSessionSchema, loadHostHistory, loadHostSession, loadHostSessions } from './api'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -26,6 +26,28 @@ beforeEach(() => { fetchMock.mockReset(); fetchMock.mockImplementation(async (in
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('Host Session data boundary', () => {
+  it('creates with only an optional title and requires a public 201 Session response', async () => {
+    fetchMock.mockResolvedValueOnce(json(session, 201))
+    expect(await createHostSession('  Investigation  ', new AbortController().signal)).toMatchObject({ session_id: id(1) })
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST', body: JSON.stringify({ title: 'Investigation' }) })
+    fetchMock.mockResolvedValueOnce(json(session, 201))
+    await createHostSession(' ', new AbortController().signal)
+    expect(fetchMock.mock.calls[1][1]?.body).toBe('{}')
+    fetchMock.mockResolvedValueOnce(json(session))
+    await expect(createHostSession('', new AbortController().signal)).rejects.toThrow('not been retried')
+    fetchMock.mockResolvedValueOnce(new Response('private invalid response body', { status: 201, headers: { 'content-type': 'application/json' } }))
+    await expect(createHostSession('', new AbortController().signal)).rejects.toThrow('The Host creation response is invalid.')
+  })
+
+  it('does not retry creation after an uncertain submission or a typed rejection', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('private network details'))
+    await expect(createHostSession('', new AbortController().signal)).rejects.toThrow('outcome is unknown')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    fetchMock.mockResolvedValueOnce(json({ code: 'unsupported_operation', message: 'This Host operation is not enabled or supported.' }, 503))
+    await expect(createHostSession('', new AbortController().signal)).rejects.toMatchObject({ code: 'unsupported_operation', status: 503 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('sends explicit bounded history parameters and preserves chronological runtime order', async () => {
     fetchMock.mockResolvedValueOnce(json(history))
     const page = await loadHostHistory(id(1), query, new AbortController().signal)
@@ -62,6 +84,101 @@ describe('Host Session data boundary', () => {
 })
 
 describe('Agent Host Session browsing', () => {
+  it('creates a Session once, selects its stable ID, and keeps creation rejection visible', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockImplementation(async (input, options) => options?.method === 'POST' ? json({ ...session, binding_state: 'available', title: 'Fresh Session' }, 201) : responseFor(input))
+    render(<MemoryRouter initialEntries={['/agent-host']}><AgentHostWorkspace active /></MemoryRouter>)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New Session' }).hasAttribute('disabled')).toBe(false))
+    await user.type(screen.getByLabelText('Session title (optional)'), 'Fresh Session')
+    await user.click(screen.getByRole('button', { name: 'New Session' }))
+    expect(await screen.findByRole('link', { name: 'Created Session: Fresh Session' })).toBeDefined()
+    expect(await screen.findByLabelText('New input')).toBeDefined()
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1)
+    fetchMock.mockImplementation(async (input, options) => options?.method === 'POST' ? json({ code: 'runtime_unavailable', message: 'The Agent runtime is unavailable.' }, 503) : responseFor(input))
+    await user.click(screen.getByRole('button', { name: 'New Session' }))
+    expect(await screen.findByText('runtime_unavailable / HTTP 503')).toBeDefined()
+  })
+
+  it('streams only new input, prevents duplicate submission, and preserves the live Run when switching Sessions', async () => {
+    const user = userEvent.setup()
+    const other = { ...session, session_id: id(2), title: 'Second conversation', binding_state: 'available' }
+    let controller: ReadableStreamDefaultController<Uint8Array> | undefined
+    const signals: AbortSignal[] = []
+    const emit = (sequence: number, event: unknown) => { const value = { session_id: id(1), run_id: id(3), event_id: id(100 + sequence), sequence, created_at: '2026-10-15T00:00:00Z', event }; controller!.enqueue(new TextEncoder().encode(`id: ${value.event_id}\nevent: ${(event as { kind: string }).kind}\ndata: ${JSON.stringify(value)}\n\n`)) }
+    fetchMock.mockImplementation(async (input, options) => {
+      if (options?.method === 'POST') { if (options.signal) signals.push(options.signal); return new Response(new ReadableStream<Uint8Array>({ start(value) { controller = value } }), { headers: { 'content-type': 'text/event-stream' } }) }
+      if (String(input).includes('/sessions?')) return json({ sessions: [session, other], limit: 20, offset: 0, has_more: false })
+      if (String(input).includes(`/sessions/${id(2)}/history?`)) return json({ ...history, session_id: id(2), messages: [] })
+      if (String(input).endsWith(id(2))) return json(other)
+      if (String(input).endsWith(id(1))) return json({ ...session, binding_state: 'available' })
+      return responseFor(input)
+    })
+    const view = render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
+    await screen.findByText('Binding state')
+    await user.type(screen.getByLabelText('New input'), 'Only new input')
+    await user.click(screen.getByRole('button', { name: 'Send input' }))
+    await waitFor(() => expect(controller).toBeDefined())
+    expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(true)
+    await act(async () => { emit(1, { kind: 'run.started', target_id: 'primary' }); emit(2, { kind: 'assistant.text.delta', delta: '<img src=x onerror=unsafe()>' }) })
+    expect(await screen.findByLabelText('Current assistant output')).toHaveProperty('textContent', '<img src=x onerror=unsafe()>')
+    await user.click(screen.getByRole('link', { name: 'Second conversation' }))
+    expect(await screen.findByText('Run streaming /')).toBeDefined()
+    expect(signals[0].aborted).toBe(false)
+    await user.click(screen.getByRole('link', { name: 'Inspection' }))
+    expect(await screen.findByLabelText('Current assistant output')).toBeDefined()
+    view.rerender(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active={false} /></MemoryRouter>)
+    expect(signals[0].aborted).toBe(false)
+    await act(async () => { emit(3, { kind: 'run.completed', output_text: 'Final answer', usage: { input_tokens: 2, output_tokens: 3 } }) })
+    view.rerender(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
+    expect(await screen.findByText('Run completed')).toBeDefined()
+    expect(screen.getByLabelText('Current assistant output').textContent).toBe('Final answer')
+    await user.type(screen.getByLabelText('New input'), 'Next turn')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(false))
+    expect(document.querySelectorAll('#host-history-title img')).toHaveLength(0)
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1)
+    expect(fetchMock.mock.calls.find(([, options]) => options?.method === 'POST')?.[1]?.body).toBe(JSON.stringify({ input_text: 'Only new input' }))
+  })
+
+  it('requires a new metadata read after a terminal on the current page, independently of the server clock', async () => {
+    const user = userEvent.setup()
+    const events = [{ kind: 'run.started', target_id: 'primary' }, { kind: 'run.completed', output_text: 'Finished', usage: {} }].map((event, index) => { const value = { session_id: id(1), run_id: id(3), event_id: id(100 + index), sequence: index + 1, created_at: '2099-10-15T00:00:00Z', event }; return `id: ${value.event_id}\nevent: ${event.kind}\ndata: ${JSON.stringify(value)}\n\n` }).join('')
+    fetchMock.mockImplementation(async (input, options) => options?.method === 'POST' ? new Response(events, { headers: { 'content-type': 'text/event-stream' } }) : String(input).endsWith(id(1)) ? json({ ...session, binding_state: 'available' }) : responseFor(input))
+    render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
+    await screen.findByText('Binding state')
+    await user.type(screen.getByLabelText('New input'), 'First turn')
+    await user.click(screen.getByRole('button', { name: 'Send input' }))
+    await screen.findByText('Run completed')
+    await user.type(screen.getByLabelText('New input'), 'Second turn')
+    expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByText('Session metadata refresh required')).toBeDefined()
+    await user.click(screen.getByRole('button', { name: 'Refresh Session' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(false))
+  })
+
+  it('does not submit new input when remote streaming support is unknown', async () => {
+    fetchMock.mockImplementation(async (input) => String(input).endsWith('/capabilities') ? json({ ...capabilities, agent_host: { enabled: true, features: { ...capabilities.agent_host.features, session_streaming: { ...feature, availability: 'unknown', remote_support: null, reason: 'remote_unknown' } } } }) : String(input).endsWith(id(1)) ? json({ ...session, binding_state: 'available' }) : responseFor(input))
+    render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
+    expect(await screen.findByText('Session streaming: Unknown / Remote unknown')).toBeDefined()
+    expect(screen.getByLabelText('New input').hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(true)
+    expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  })
+
+  it('keeps partial output and blocks new input after an unconfirmed stream end without replay', async () => {
+    const user = userEvent.setup()
+    const events = [{ kind: 'run.started', target_id: 'primary' }, { kind: 'assistant.text.delta', delta: 'Partial answer' }].map((event, index) => { const value = { session_id: id(1), run_id: id(3), event_id: id(100 + index), sequence: index + 1, created_at: '2026-10-15T00:00:00Z', event }; return `id: ${value.event_id}\nevent: ${event.kind}\ndata: ${JSON.stringify(value)}\n\n` }).join('')
+    fetchMock.mockImplementation(async (input, options) => options?.method === 'POST' ? new Response(events, { headers: { 'content-type': 'text/event-stream' } }) : String(input).endsWith(id(1)) ? json({ ...session, binding_state: 'available' }) : responseFor(input))
+    render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
+    await screen.findByText('Binding state')
+    await user.type(screen.getByLabelText('New input'), 'Inspect now')
+    await user.click(screen.getByRole('button', { name: 'Send input' }))
+    expect(await screen.findByText('Run unknown')).toBeDefined()
+    expect(screen.getByLabelText('Current assistant output').textContent).toBe('Partial answer')
+    await user.type(screen.getByLabelText('New input'), 'Do not replay')
+    expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(true)
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1)
+  })
+
   it('renders runtime text, tool calls and unsupported content without active HTML', async () => {
     fetchMock.mockImplementation(async (input) => json(String(input).endsWith('/capabilities') ? capabilities : String(input).includes('/history?') ? history : String(input).includes('/sessions?') ? { sessions: [session], limit: 20, offset: 0, has_more: false } : session))
     render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)

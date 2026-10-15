@@ -20,7 +20,7 @@ export const historySchema = z.object({
     ])),
   })),
 })
-const hostErrorSchema = z.object({
+export const hostErrorSchema = z.object({
   code: z.enum(['invalid_request', 'run_not_found', 'internal_error', 'session_not_found', 'remote_session_not_found', 'runtime_binding_changed', 'runtime_unavailable', 'runtime_contract_error', 'target_busy', 'unsupported_operation', 'run_state_unknown']),
   message: z.string(),
 })
@@ -43,6 +43,40 @@ function hostError(body: unknown, status: number) {
 export type HostSession = z.infer<typeof hostSessionSchema>
 export type HistoryPage = z.infer<typeof historySchema>
 export type HistoryQuery = z.infer<typeof historyQuerySchema>
+
+export async function postHost(path: string, body: unknown, signal: AbortSignal, accept = 'application/json') {
+  let response: Response
+  const admission = new AbortController()
+  const timer = setTimeout(() => admission.abort(), 15_000)
+  try {
+    response = await fetch(path, {
+      method: 'POST', body: JSON.stringify(body), signal: AbortSignal.any([signal, admission.signal]),
+      headers: { Accept: accept, 'Content-Type': 'application/json' }, cache: 'no-store',
+    })
+  } catch {
+    throw new Error('The Host request outcome is unknown. It has not been retried.')
+  } finally {
+    clearTimeout(timer)
+  }
+  if (!response.ok) {
+    const mediaType = response.headers.get('content-type')?.split(';')[0].trim()
+    if (mediaType !== 'application/json' && mediaType !== 'application/problem+json') throw new HttpError(`The Agent Host request failed (HTTP ${response.status}).`, response.status)
+    let errorBody: unknown
+    try { errorBody = await response.json() } catch { throw new HttpError(`The Agent Host request failed (HTTP ${response.status}).`, response.status) }
+    throw hostError(errorBody, response.status)
+  }
+  return response
+}
+
+export async function createHostSession(title: string, signal: AbortSignal) {
+  const response = await postHost('/api/v1/host/sessions', title.trim() ? { title: title.trim() } : {}, signal)
+  if (response.status !== 201 || response.headers.get('content-type')?.split(';')[0].trim() !== 'application/json') throw new Error('The Host creation response is invalid. The request has not been retried.')
+  let body: unknown
+  try { body = await response.json() } catch { throw new Error('The Host creation response is invalid. The request has not been retried.') }
+  const parsed = hostSessionSchema.safeParse(body)
+  if (!parsed.success) throw new Error('The Host creation response does not match the Session contract. The request has not been retried.')
+  return parsed.data
+}
 
 export async function loadHostSessions(offset: number, signal: AbortSignal) {
   const page = await readJson(`/api/v1/host/sessions?${new URLSearchParams({ limit: '20', offset: String(offset) })}`, hostSessionPageSchema, signal, 'Agent Host', hostError)

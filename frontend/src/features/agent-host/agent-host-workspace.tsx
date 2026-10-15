@@ -1,12 +1,14 @@
-import { useRef } from 'react'
-import { ArrowLeft, ArrowRight, RefreshCw } from 'lucide-react'
-import { Link, matchPath, useLocation, useSearchParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, Plus, RefreshCw } from 'lucide-react'
+import { Link, matchPath, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { useGatewayPagePosition } from '@/features/gateway/gateway-navigation'
 import { loadCapabilities, type Capabilities } from '@/features/status/api'
-import { HostHttpError, loadHostHistory, loadHostSession, loadHostSessions, type HistoryPage } from './api'
+import { createHostSession, HostHttpError, loadHostHistory, loadHostSession, loadHostSessions, type HistoryPage, type HostSession } from './api'
 import { useHostRead } from './use-host-read'
+import { useHostRun } from './use-host-run'
+import { RunPanel } from './run-panel'
 
 const capabilityRead = (_key: string, signal: AbortSignal) => loadCapabilities(signal)
 const sessionPageRead = (key: string, signal: AbortSignal) => loadHostSessions(Number(key), signal)
@@ -46,9 +48,10 @@ function HistoryMessages({ page }: { page: HistoryPage }) {
   </ol>
 }
 
-/** Browses local Session identity and runtime-owned history without issuing Run commands. */
+/** Compose Session browsing and commands without owning the Run stream transport. */
 export function AgentHostWorkspace({ active }: { active: boolean }) {
   const location = useLocation()
+  const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const selectedId = matchPath('/agent-host/sessions/:id', location.pathname)?.params.id
   const validId = !selectedId || z.uuid().safeParse(selectedId).success
@@ -58,7 +61,7 @@ export function AgentHostWorkspace({ active }: { active: boolean }) {
   const validHistoryQuery = historyOffset !== null && (order === 'latest' || order === 'oldest')
   const capabilities = useHostRead(active ? 'capabilities' : null, capabilityRead)
   const features = capabilities.data?.agent_host.features
-  const available = (feature: 'session_list' | 'session_reopen' | 'session_history') => Boolean(capabilities.data?.agent_host.enabled && features?.[feature].implemented && features[feature].enabled && features[feature].availability === 'available')
+  const available = (feature: 'session_list' | 'session_reopen' | 'session_history' | 'session_create' | 'session_streaming') => Boolean(capabilities.data?.agent_host.enabled && features?.[feature].implemented && features[feature].enabled && features[feature].availability === 'available')
   const sessions = useHostRead(active && available('session_list') && offset !== null ? String(offset) : null, sessionPageRead)
   const metadata = useHostRead(active && validId && selectedId && available('session_reopen') ? selectedId : null, loadHostSession)
   const historyKey = selectedId && validHistoryQuery ? new URLSearchParams({ session: selectedId, offset: String(historyOffset), order }).toString() : null
@@ -67,6 +70,35 @@ export function AgentHostWorkspace({ active }: { active: boolean }) {
   useGatewayPagePosition(heading, Boolean(capabilities.data) || !capabilities.pending, active, Boolean(selectedId))
   const current = metadata.data ?? sessions.data?.sessions.find((session) => session.session_id === selectedId)
   const targetRun = metadata.data ? metadata.data.target_run : sessions.data?.sessions.find((session) => session.target_run)?.target_run
+  const execution = useHostRun()
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [title, setTitle] = useState('')
+  const [creation, setCreation] = useState<{ pending: boolean; error: Error | null; session: HostSession | null }>({ pending: false, error: null, session: null })
+  const creating = useRef<AbortController | null>(null)
+  const navigation = useRef({ active, path: location.pathname })
+  const alive = useRef(true)
+  useEffect(() => { navigation.current = { active, path: location.pathname } }, [active, location.pathname])
+  useEffect(() => { alive.current = true; return () => { alive.current = false; creating.current?.abort() } }, [])
+  const create = async () => {
+    if (creating.current || !available('session_create')) return
+    const controller = new AbortController()
+    creating.current = controller
+    const path = location.pathname
+    setCreation({ pending: true, error: null, session: null })
+    try {
+      const session = await createHostSession(title, controller.signal)
+      if (!alive.current) return
+      setCreation({ pending: false, error: null, session })
+      setTitle('')
+      sessions.refresh()
+      if (navigation.current.active && navigation.current.path === path) navigate(`/agent-host/sessions/${session.session_id}`, { state: { focusHeading: true } })
+    } catch (error) {
+      if (alive.current) setCreation({ pending: false, error: error instanceof Error ? error : new Error('Session creation is unconfirmed.'), session: null })
+    } finally { creating.current = null }
+  }
+  const run = selectedId ? execution.runs[selectedId] : undefined
+  const metadataIsFresh = !run || run.phase === 'rejected' || run.finishedAt !== null && metadata.startedAt > run.finishedAt
+  const canSend = available('session_streaming') && !execution.pending && !targetRun && metadata.data?.binding_state === 'available' && !metadata.pending && !metadata.error && metadataIsFresh
   const changePage = (name: string, value: string) => setParams((previous) => {
     const next = new URLSearchParams(previous)
     if (value === '0') next.delete(name)
@@ -79,9 +111,14 @@ export function AgentHostWorkspace({ active }: { active: boolean }) {
     <ReadFeedback state={capabilities} label="Host capabilities" />
     {capabilities.data && !capabilities.data.agent_host.enabled && <p className="mt-5 text-sm">Agent Host disabled</p>}
     {targetRun && <section aria-label="Target Run" role="status" className="mt-5 border-y py-4 text-sm"><p className="font-medium">Target Run {targetRun.state}</p><p className="mt-2 break-all font-mono text-xs">Run: {targetRun.run_id}</p><Link id="host-target-run-session" className="mt-2 inline-block break-all underline-offset-4 hover:underline" to={`/agent-host/sessions/${targetRun.session_id}`}>Session: {targetRun.session_id}</Link></section>}
+    {execution.pending && execution.pending.sessionId !== selectedId && <p role="status" className="mt-5 text-sm">Run {execution.pending.phase} / <Link className="break-all underline" to={`/agent-host/sessions/${execution.pending.sessionId}`}>Session: {execution.pending.sessionId}</Link></p>}
     <div className="mt-6 grid min-w-0 gap-8 xl:grid-cols-[18rem_minmax(0,1fr)]">
       <section aria-labelledby="host-sessions-title" className="min-w-0 border-t pt-5">
         <header className="flex items-center justify-between gap-3"><h2 id="host-sessions-title" className="text-base font-semibold">Sessions</h2><Button id="host-sessions-refresh" variant="ghost" size="icon" title="Refresh Sessions" aria-label="Refresh Sessions" disabled={!available('session_list') || sessions.pending || offset === null} onClick={sessions.refresh}><RefreshCw aria-hidden="true" /></Button></header>
+        <form className="mt-5 border-b pb-5" onSubmit={(event) => { event.preventDefault(); void create() }}><label htmlFor="host-session-title" className="text-xs text-muted-foreground">Session title (optional)</label><input id="host-session-title" value={title} onChange={(event) => setTitle(event.target.value)} disabled={!available('session_create') || creation.pending} className="mt-2 h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm disabled:opacity-60" /><Button type="submit" variant="outline" size="sm" className="mt-3" disabled={!available('session_create') || creation.pending}><Plus aria-hidden="true" />{creation.pending ? 'Creating Session...' : 'New Session'}</Button></form>
+        {features && !available('session_create') && <FeatureState feature={features.session_create} label="Session creation" />}
+        {creation.error && <div role="alert" className="mt-4 break-words text-sm text-destructive"><p>{creation.error.message}</p>{creation.error instanceof HostHttpError && <p className="mt-2 font-mono text-xs">{creation.error.code} / HTTP {creation.error.status}</p>}</div>}
+        {creation.session && <p className="mt-3 break-words text-xs"><Link className="underline" to={`/agent-host/sessions/${creation.session.session_id}`}>Created Session: {creation.session.title || creation.session.session_id}</Link></p>}
         {offset === null && <p role="alert" className="mt-4 text-sm">Invalid Session page offset</p>}
         {features && !available('session_list') && <FeatureState feature={features.session_list} label="Session list" />}
         <ReadFeedback state={sessions} label="Sessions" />
@@ -101,6 +138,8 @@ export function AgentHostWorkspace({ active }: { active: boolean }) {
           <ReadFeedback state={history} label="Session history" />
           {history.data && <><HistoryMessages page={history.data} /><p className="mt-4 text-xs text-muted-foreground">History offset: {history.data.query.offset} / More history: {history.data.has_more == null ? 'Unknown' : history.data.has_more ? 'Yes' : 'No'}</p></>}
           <div className="mt-4 flex flex-wrap gap-3">{historyOffset !== null && historyOffset > 0 && <Button size="sm" variant="outline" disabled={history.pending} onClick={() => changePage('history_offset', String(Math.max(0, historyOffset - 100)))}><ArrowLeft aria-hidden="true" />{order === 'latest' ? 'Newer messages' : 'Older messages'}</Button>}{history.data && history.data.has_more !== false && history.data.messages.length > 0 && <Button size="sm" variant="outline" disabled={history.pending} onClick={() => changePage('history_offset', String((historyOffset ?? 0) + 100))}>{order === 'latest' ? 'Older messages' : 'Newer messages'}<ArrowRight aria-hidden="true" /></Button>}</div>
+          {run && !metadataIsFresh && !execution.pending && <p role="status" className="mt-5 text-sm text-muted-foreground">Session metadata refresh required</p>}
+          <RunPanel run={run} draft={drafts[selectedId] ?? ''} onDraft={(value) => setDrafts((previous) => ({ ...previous, [selectedId]: value }))} available={available('session_streaming')} reason={features ? `${words(features.session_streaming.availability)} / ${words(features.session_streaming.reason)}` : undefined} disabled={!canSend} send={() => { if (canSend) { const input = drafts[selectedId] ?? ''; void execution.start(selectedId, input); setDrafts((previous) => ({ ...previous, [selectedId]: '' })) } }} />
         </>}
       </section>
     </div>
