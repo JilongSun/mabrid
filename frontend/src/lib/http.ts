@@ -15,7 +15,7 @@ export class HttpError extends Error {
   }
 }
 
-export async function readJson<T>(path: string, schema: z.ZodType<T>, signal: AbortSignal, service: string): Promise<T> {
+export async function readJson<T>(path: string, schema: z.ZodType<T>, signal: AbortSignal, service: string, errorFromBody?: (body: unknown, status: number) => Error): Promise<T> {
   const timeout = AbortSignal.timeout(10_000)
   let response: Response
   try {
@@ -43,6 +43,7 @@ export async function readJson<T>(path: string, schema: z.ZodType<T>, signal: Ab
     throw error
   }
   if (!response.ok) {
+    if (errorFromBody) throw errorFromBody(body, response.status)
     const problem = problemSchema.safeParse(body)
     throw new HttpError(problem.success
       ? `${problem.data.detail} (${problem.data.code}, HTTP ${response.status})`

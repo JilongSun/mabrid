@@ -134,4 +134,17 @@ describe('workspace navigation', () => {
     expect(await screen.findByRole('heading', { name: 'Connection & capabilities' })).toBeDefined()
     await waitFor(() => expect(document.activeElement).toBe(origin))
   })
+
+  it('preserves the Agent Session URL and history window across workspace switches', async () => {
+    const user = userEvent.setup()
+    const path = '/agent-host/sessions/00000000-0000-4000-8000-000000000001?offset=20&history_offset=100&history_order=oldest'
+    window.history.replaceState(null, '', path)
+    render(<App />)
+    expect(screen.getByRole('heading', { name: 'Agent Host' })).toBeDefined()
+    const navigation = within(screen.getByRole('navigation', { name: 'Product navigation' }))
+    await user.click(navigation.getByRole('button', { name: 'Connection & capabilities' }))
+    await user.click(navigation.getByRole('button', { name: 'Agent Host' }))
+    expect(window.location.pathname + window.location.search).toBe(path)
+    expect(screen.getByRole('combobox', { name: 'History order' })).toBeDefined()
+  })
 })

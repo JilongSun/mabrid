@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { FileSearch, Unplug } from 'lucide-react'
+import { FileSearch } from 'lucide-react'
 import { BrowserRouter, Link, matchPath, useLocation, useNavigate } from 'react-router-dom'
 import { AppShell, type Workspace } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
@@ -7,32 +7,25 @@ import { GatewayWorkspace } from '@/features/gateway/gateway-workspace'
 import type { GatewaySnapshot } from '@/features/gateway/api'
 import { SessionsWorkspace } from '@/features/gateway/sessions-workspace'
 import { StatusWorkspace } from '@/features/status/status-workspace'
-
-function NotConnected({ message }: { message: string }) {
-  return (
-    <div className="mt-6 flex flex-col items-center rounded-xl border border-dashed bg-muted/20 px-6 py-14 text-center">
-      <Unplug aria-hidden="true" className="mb-4 size-6 text-muted-foreground" />
-      <p className="font-medium">Not connected yet</p>
-      <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">{message}</p>
-    </div>
-  )
-}
+import { AgentHostWorkspace } from '@/features/agent-host/agent-host-workspace'
 
 function Application() {
   const location = useLocation()
   const navigate = useNavigate()
-  const workspace: Workspace = location.pathname === '/agent-host' ? 'agent-host' : location.pathname === '/status' ? 'status' : 'gateway'
+  const workspace: Workspace = matchPath('/agent-host', location.pathname) || matchPath('/agent-host/sessions/:id', location.pathname) ? 'agent-host' : location.pathname === '/status' ? 'status' : 'gateway'
   const diagnosticsOpen = Boolean(matchPath('/gateway/sessions', location.pathname) || matchPath('/gateway/sessions/:id', location.pathname))
   const [gatewaySnapshot, setGatewaySnapshot] = useState<GatewaySnapshot | null>(null)
   const gatewayLocation = useRef(workspace === 'gateway' ? location : {
     ...location, pathname: '/gateway/topology', search: '', hash: '', state: null,
   })
+  const hostLocation = useRef(workspace === 'agent-host' ? location : { ...location, pathname: '/agent-host', search: '', hash: '', state: null })
   useEffect(() => {
     if (workspace === 'gateway') gatewayLocation.current = location
+    if (workspace === 'agent-host') hostLocation.current = location
   }, [location, workspace])
   const selectWorkspace = (destination: Workspace) => {
     if (destination === 'gateway') navigate(gatewayLocation.current.pathname + gatewayLocation.current.search, { state: gatewayLocation.current.state })
-    else navigate(destination === 'agent-host' ? '/agent-host' : '/status', { state: { focusHeading: true } })
+    else navigate(destination === 'agent-host' ? hostLocation.current.pathname + hostLocation.current.search : '/status', { state: { focusHeading: true } })
   }
   return (
     <AppShell workspace={workspace} onSelect={selectWorkspace}>
@@ -57,15 +50,7 @@ function Application() {
         <div hidden={!diagnosticsOpen}><SessionsWorkspace topology={gatewaySnapshot?.topology ?? null} /></div>
       </section>
 
-      {workspace === 'agent-host' && (
-        <section aria-labelledby="host-title" className="p-4 pt-8 md:p-8">
-          <h1 id="host-title" className="text-2xl font-semibold tracking-tight">Agent Host</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            An optional workspace for conversations, tool activity, and MCP Apps.
-          </p>
-          <NotConnected message="Deployment capabilities have not been loaded. Agent Host availability has not been checked." />
-        </section>
-      )}
+      <div hidden={workspace !== 'agent-host'}><AgentHostWorkspace active={workspace === 'agent-host'} /></div>
 
       <div hidden={workspace !== 'status'}><StatusWorkspace active={workspace === 'status'} endpoints={gatewaySnapshot?.topology.endpoints} /></div>
     </AppShell>
