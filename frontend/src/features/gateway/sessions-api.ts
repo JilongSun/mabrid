@@ -41,9 +41,37 @@ export const sessionSnapshotSchema = z.object({
   })),
 })
 
+const eventBaseSchema = z.object({ event_id: z.string(), session_id: z.string(), created_at: z.string() })
+const eventCallSchema = sessionSnapshotSchema.shape.active_tool_calls.element.extend({
+  arguments: recordSchema.optional(), completed_at: z.string().nullable().optional(),
+  result: z.object({
+    content: z.array(recordSchema).optional(), structured_content: recordSchema.nullable().optional(),
+    is_error: z.boolean().optional(), metadata: recordSchema.optional(),
+  }).nullable().optional(),
+})
+export const sessionEventSchema = z.object({
+  sequence: z.int().positive(),
+  event: z.discriminatedUnion('kind', [
+    eventBaseSchema.extend({ kind: z.literal('session.started'), upstream: initializationSchema.nullable().optional() }),
+    eventBaseSchema.extend({ kind: z.literal('tool.discovered'), tool: sessionSnapshotSchema.shape.discovered_tools.element }),
+    eventBaseSchema.extend({ kind: z.literal('tool.call.started'), call: eventCallSchema }),
+    eventBaseSchema.extend({ kind: z.literal('tool.call.completed'), call: eventCallSchema }),
+    eventBaseSchema.extend({
+      kind: z.literal('resource.read'), read: sessionSnapshotSchema.shape.resource_reads.element.extend({ metadata: recordSchema.optional() }),
+    }),
+    eventBaseSchema.extend({ kind: z.literal('error.raised'), message: z.string(), details: recordSchema }),
+    eventBaseSchema.extend({ kind: z.literal('upstream.availability.changed'), availability: sessionSnapshotSchema.shape.upstream_availability.element }),
+  ]),
+})
+export const sessionEventPageSchema = z.object({
+  items: z.array(sessionEventSchema), next_after: z.int().nonnegative().nullable(),
+})
+
 export type McpSession = z.infer<typeof sessionSchema>
 export type SessionPage = z.infer<typeof sessionPageSchema>
 export type SessionSnapshot = z.infer<typeof sessionSnapshotSchema>
+export type SessionEvent = z.infer<typeof sessionEventSchema>
+export type SessionEventPage = z.infer<typeof sessionEventPageSchema>
 export type SessionFilters = { endpointId: string; status: string; cursor: string }
 
 export function sessionPagePath(filters: SessionFilters) {
@@ -64,4 +92,20 @@ export function loadSession(sessionId: string, signal: AbortSignal) {
 
 export function loadSessionSnapshot(sessionId: string, signal: AbortSignal) {
   return readGateway(`sessions/${encodeURIComponent(sessionId)}/snapshot`, sessionSnapshotSchema, signal)
+}
+
+export async function loadSessionEvents(sessionId: string, after: number, signal: AbortSignal) {
+  const params = new URLSearchParams({ after: String(after), limit: '100' })
+  const page = await readGateway(`sessions/${encodeURIComponent(sessionId)}/events?${params}`, sessionEventPageSchema, signal)
+  let previous = after
+  for (const item of page.items) {
+    if (item.event.session_id !== sessionId || item.sequence <= previous) {
+      throw new Error('The Gateway returned events for another Session or an invalid sequence order.')
+    }
+    previous = item.sequence
+  }
+  if (page.next_after !== null && (page.items.length === 0 || page.next_after !== previous)) {
+    throw new Error('The Gateway returned an invalid event pagination boundary.')
+  }
+  return page
 }

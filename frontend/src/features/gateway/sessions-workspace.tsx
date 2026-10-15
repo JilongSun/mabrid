@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { GatewayHttpError, type GatewaySnapshot } from './api'
 import { GatewayLink } from './gateway-link'
 import { useGatewayPagePosition } from './gateway-navigation'
-import { loadSession, loadSessionPage, loadSessionSnapshot, sessionPagePath, sessionStatusSchema, type McpSession, type SessionSnapshot } from './sessions-api'
+import { loadSession, loadSessionPage, loadSessionSnapshot, sessionPagePath, sessionStatusSchema, type McpSession, type SessionEvent, type SessionSnapshot } from './sessions-api'
+import { useSessionEvents } from './use-session-events'
 
 type ReadState<Data> = { data: Data | null; pending: boolean; error: string | null; notFound: boolean; loadedAt: string | null }
 
@@ -45,12 +46,12 @@ function useDiagnosticRead<Data>(key: string | null, load: (key: string, signal:
 
 function ReadFeedback<Data>({ state, label }: { state: ReadState<Data>; label: string }) {
   return <>
-    {state.pending && <p role="status" className="mt-4 text-sm text-muted-foreground">{state.data ? `Refreshing ${label}...` : `Loading ${label}...`}</p>}
+    {state.pending && !state.data && <p role="status" className="mt-4 text-sm text-muted-foreground">Loading {label}...</p>}
     {state.error && <div role="alert" className="mt-4 border-l-2 border-destructive py-2 pl-4 text-sm">
       <p className="font-medium">{state.data ? `Refresh failed - showing previous ${label}` : state.notFound ? `${label === 'Session' ? 'Session not found' : 'Snapshot not found'}` : `Unable to load ${label}`}</p>
       <p className="mt-1 break-words">{state.error}</p>
     </div>}
-    {state.data && state.loadedAt && <p className="mt-3 text-xs text-muted-foreground">Read at <time dateTime={state.loadedAt}>{state.loadedAt}</time></p>}
+    {state.data && state.loadedAt && <p className="mt-3 text-xs text-muted-foreground">Read at <time dateTime={state.loadedAt}>{state.loadedAt}</time>{state.pending && <span role="status" className="ml-3">Refreshing {label}...</span>}</p>}
   </>
 }
 
@@ -131,8 +132,59 @@ function SnapshotInformation({ snapshot, topology }: { snapshot: SessionSnapshot
   </>
 }
 
+function eventSummary(event: SessionEvent['event'], topology: GatewaySnapshot['topology'] | null): string {
+  switch (event.kind) {
+    case 'session.started': return event.upstream ? `Session started: ${event.upstream.server_name}` : 'Session started'
+    case 'tool.discovered': return `Tool discovered: ${event.tool.name}`
+    case 'tool.call.started': return `Tool call started: ${event.call.tool_name} (${event.call.status})`
+    case 'tool.call.completed': return `Tool call finished: ${event.call.tool_name} (${event.call.status}${event.call.result?.is_error ? ', tool error' : ''})`
+    case 'resource.read': return `Resource read: ${event.read.requested_uri}`
+    case 'error.raised': return `Error: ${event.message}`
+    case 'upstream.availability.changed': {
+      const upstream = topology?.upstreams.find((object) => object.server_id === event.availability.upstream_server_id)
+      return `Upstream availability: ${upstream?.display_name ?? event.availability.upstream_server_id} (${event.availability.status})`
+    }
+  }
+}
+
+function SessionEventTimeline({ events, topology, expanded, onToggle }: {
+  events: ReturnType<typeof useSessionEvents>
+  topology: GatewaySnapshot['topology'] | null
+  expanded: Record<string, boolean>
+  onToggle: (key: string, open: boolean) => void
+}) {
+  return <section className="mt-5 border-t py-5" aria-labelledby="session-events-title">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h3 id="session-events-title" className="text-base font-semibold">Event timeline ({events.items.length})</h3>
+      <Button id="session-events-refresh" variant="outline" size="sm" disabled={events.pending} onClick={events.refresh}><RefreshCw aria-hidden="true" />Refresh events</Button>
+    </div>
+    {events.pending && !events.loaded && <p role="status" className="mt-4 text-sm text-muted-foreground">Loading events...</p>}
+    {events.error && <div role="alert" className="mt-4 border-l-2 border-destructive py-2 pl-4 text-sm">
+      <p className="font-medium">{events.loaded ? 'Unable to read subsequent events - showing previous events' : events.notFound ? 'Session events not found' : 'Unable to load events'}</p>
+      <p className="mt-1 break-words">{events.error}</p>
+    </div>}
+    {events.loadedAt && <p className="mt-3 text-xs text-muted-foreground">Read at <time dateTime={events.loadedAt}>{events.loadedAt}</time>{events.pending && <span role="status" className="ml-3">Reading subsequent events...</span>}</p>}
+    {events.loaded && events.items.length === 0 && !events.error && <p className="mt-4 text-sm text-muted-foreground">No events recorded</p>}
+    {events.items.length > 0 && <ol aria-label="Session events" className="mt-4 divide-y border-y">{events.items.map((item) => <li key={item.sequence}>
+      <details open={expanded[`${item.event.session_id}:${item.sequence}`] ?? false} onToggle={(event) => onToggle(`${item.event.session_id}:${item.sequence}`, event.currentTarget.open)}>
+        <summary id={`session-event-${item.event.session_id}-${item.sequence}`} className="break-words py-3 text-sm">
+          <span className="mr-3 font-mono text-xs text-muted-foreground">#{item.sequence}</span>
+          <span>{eventSummary(item.event, topology)}</span>
+          <time dateTime={item.event.created_at} className="ml-3 inline-block break-all text-xs text-muted-foreground">{item.event.created_at}</time>
+        </summary>
+        <div className="min-w-0 pb-4 pl-4">
+          <p className="mb-3 break-all font-mono text-xs text-muted-foreground">{item.event.kind}</p>
+          <pre className="whitespace-pre-wrap break-all font-mono text-xs leading-5">{JSON.stringify(item.event, null, 2)}</pre>
+        </div>
+      </details>
+    </li>)}</ol>}
+    {events.nextAfter !== null && <Button id="session-events-more" variant="outline" className="mt-4" disabled={events.pending} onClick={events.refresh}>Load more events<ArrowRight aria-hidden="true" /></Button>}
+  </section>
+}
+
 /** Owns URL-scoped diagnostic reads while preserving cached pages and Gateway return context. */
 export function SessionsWorkspace({ topology }: { topology: GatewaySnapshot['topology'] | null }) {
+  const [expandedEvents, setExpandedEvents] = useState<Record<string, boolean>>({})
   const location = useLocation()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
@@ -149,6 +201,7 @@ export function SessionsWorkspace({ topology }: { topology: GatewaySnapshot['top
   const page = useDiagnosticRead(list && validFilters ? path : null, loadSessionPage)
   const session = useDiagnosticRead(validId ? sessionId! : null, loadSession)
   const snapshot = useDiagnosticRead(validId ? sessionId! : null, loadSessionSnapshot)
+  const events = useSessionEvents(validId ? sessionId! : null)
   const heading = useRef<HTMLHeadingElement>(null)
   useGatewayPagePosition(heading, list ? Boolean(page.data) || !page.pending : Boolean(session.data) || !session.pending, active, Boolean(detail))
   const state = location.state
@@ -172,9 +225,9 @@ export function SessionsWorkspace({ topology }: { topology: GatewaySnapshot['top
     }}><ArrowLeft aria-hidden="true" />{detail ? 'Back to sessions' : 'Back to Gateway'}</Button>
     <div className="flex flex-wrap items-center justify-between gap-4">
       <h2 id="diagnostics-title" ref={heading} tabIndex={-1} className="min-w-0 break-words text-2xl font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring">{detail ? 'MCP Session' : 'MCP Session diagnostics'}</h2>
-      <Button variant="outline" disabled={list ? page.pending : session.pending || snapshot.pending} onClick={() => {
+      <Button variant="outline" disabled={list ? page.pending : session.pending || snapshot.pending || events.pending} onClick={() => {
         if (list) page.refresh()
-        else { session.refresh(); snapshot.refresh() }
+        else { session.refresh(); snapshot.refresh(); events.refresh() }
       }}><RefreshCw aria-hidden="true" />Refresh</Button>
     </div>
     {list ? <>
@@ -211,6 +264,7 @@ export function SessionsWorkspace({ topology }: { topology: GatewaySnapshot['top
       {!validId && <p role="alert" className="mt-5 text-sm">Invalid Session ID</p>}
       <ReadFeedback state={session} label="Session" />
       {session.data && <SessionInformation session={session.data} topology={topology} />}
+      {validId && <SessionEventTimeline events={events} topology={topology} expanded={expandedEvents} onToggle={(key, open) => setExpandedEvents((previous) => previous[key] === open ? previous : { ...previous, [key]: open })} />}
       {validId && <section className="mt-5 border-t pt-5" aria-labelledby="session-snapshot-title">
         <h3 id="session-snapshot-title" className="text-base font-semibold">Diagnostic snapshot</h3>
         <ReadFeedback state={snapshot} label="Snapshot" />
