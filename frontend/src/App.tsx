@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { GatewayWorkspace } from '@/features/gateway/gateway-workspace'
 import type { GatewaySnapshot } from '@/features/gateway/api'
 import { SessionsWorkspace } from '@/features/gateway/sessions-workspace'
+import { StatusWorkspace } from '@/features/status/status-workspace'
 
 function NotConnected({ message }: { message: string }) {
   return (
@@ -31,7 +32,7 @@ function Application() {
   }, [location, workspace])
   const selectWorkspace = (destination: Workspace) => {
     if (destination === 'gateway') navigate(gatewayLocation.current.pathname + gatewayLocation.current.search, { state: gatewayLocation.current.state })
-    else navigate(destination === 'agent-host' ? '/agent-host' : '/status')
+    else navigate(destination === 'agent-host' ? '/agent-host' : '/status', { state: { focusHeading: true } })
   }
   return (
     <AppShell workspace={workspace} onSelect={selectWorkspace}>
@@ -66,15 +67,7 @@ function Application() {
         </section>
       )}
 
-      {workspace === 'status' && (
-        <section aria-labelledby="status-title" className="p-4 pt-8 md:p-8">
-          <h1 id="status-title" className="text-2xl font-semibold tracking-tight">Connection & capabilities</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Local Gateway readiness and remote Agent Host availability are separate facts.
-          </p>
-          <NotConnected message="Connection and capability checks are not connected to the backend yet. No service health is reported." />
-        </section>
-      )}
+      <div hidden={workspace !== 'status'}><StatusWorkspace active={workspace === 'status'} endpoints={gatewaySnapshot?.topology.endpoints} /></div>
     </AppShell>
   )
 }

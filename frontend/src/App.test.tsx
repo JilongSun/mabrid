@@ -40,7 +40,8 @@ describe('workspace navigation', () => {
     expect(screen.getByRole('heading', { name: 'Agent Host' })).toBeDefined()
     expect(screen.queryByRole('tab', { name: 'Endpoints' })).toBeNull()
     await user.click(navigation.getByRole('button', { name: 'Connection & capabilities' }))
-    expect(screen.getByText(/No service health is reported/)).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'Connection & capabilities' })).toBeDefined()
+    expect(screen.getByRole('region', { name: 'Local readiness' })).toBeDefined()
     await user.click(navigation.getByRole('button', { name: 'Gateway' }))
     expect(screen.getByRole('tab', { name: 'Upstreams' }).getAttribute('aria-selected')).toBe('true')
   })
@@ -114,5 +115,23 @@ describe('workspace navigation', () => {
     expect(screen.queryByRole('tablist')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Back to Gateway' }))
     expect(screen.getByRole('tab', { name: 'Topology' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('returns from the assigned Endpoint to its origin in the capability workspace', async () => {
+    const user = userEvent.setup()
+    const endpointId = '00000000-0000-4000-8000-000000000001'
+    const original = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input, options) => String(input).endsWith('/agent-host/target')
+      ? Promise.resolve(new Response(JSON.stringify({ target_id: 'primary', runtime_profile: { integration_kind: 'hermes', interface: 'native', capabilities: [] }, assignment: { endpoint_id: endpointId, endpoint_slug: 'operations', endpoint_path: '/mcp/operations', transport: 'streamable-http', advertised_url: 'https://gateway.example/mcp/operations' } }), { headers: { 'content-type': 'application/json' } }))
+      : original(input, options))
+    window.history.replaceState(null, '', '/status')
+    render(<App />)
+    const origin = await screen.findByRole('link', { name: endpointId })
+    await user.click(origin)
+    expect(window.location.pathname).toBe(`/gateway/endpoints/${endpointId}`)
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    await waitFor(() => expect(window.location.pathname).toBe('/status'))
+    expect(await screen.findByRole('heading', { name: 'Connection & capabilities' })).toBeDefined()
+    await waitFor(() => expect(document.activeElement).toBe(origin))
   })
 })

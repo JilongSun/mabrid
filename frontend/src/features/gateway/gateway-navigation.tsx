@@ -87,7 +87,7 @@ export function useGatewayNavigation(heading: RefObject<HTMLHeadingElement | nul
       : gatewayObjectPath(target.kind === 'endpoint' ? 'endpoint' : 'upstream', target.id)
     navigate(path, { state: { returnTo: location.pathname + location.search, focusHeading: true } })
   }
-  const returnRoutes = [...routes, { path: '/gateway/sessions' }, { path: '/gateway/sessions/:id' }]
+  const returnRoutes = [...routes, { path: '/gateway/sessions' }, { path: '/gateway/sessions/:id' }, { path: '/status' }]
   const returnTo = typeof location.state?.returnTo === 'string' && matchRoutes(returnRoutes, location.state.returnTo)
     ? location.state.returnTo : null
 

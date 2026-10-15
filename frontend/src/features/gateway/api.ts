@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { HttpError, readJson } from '@/lib/http'
 
 const revisionSchema = z.object({
   revision_id: z.uuid(), revision_number: z.int(), created_at: z.string(),
@@ -54,14 +55,6 @@ const publicationSchema = z.object({
   published_endpoint_slugs: z.array(z.string()),
 })
 
-const problemSchema = z.object({
-  type: z.string(),
-  title: z.string(),
-  status: z.int(),
-  detail: z.string(),
-  code: z.string(),
-})
-
 export type Endpoint = z.infer<typeof topologySchema>['endpoints'][number]
 export type Upstream = z.infer<typeof topologySchema>['upstreams'][number]
 export type GatewaySnapshot = {
@@ -71,14 +64,11 @@ export type GatewaySnapshot = {
     | { kind: 'error'; message: string }
 }
 
-/** Preserve the HTTP failure status for management views without parsing display messages. */
-export class GatewayHttpError extends Error {
-  readonly status: number
-
+/** Preserve the Gateway error identity used by existing management consumers. */
+export class GatewayHttpError extends HttpError {
   constructor(message: string, status: number) {
-    super(message)
+    super(message, status)
     this.name = 'GatewayHttpError'
-    this.status = status
   }
 }
 
@@ -87,48 +77,12 @@ export async function readGateway<T>(
   schema: z.ZodType<T>,
   signal: AbortSignal,
 ): Promise<T> {
-  const timeout = AbortSignal.timeout(10_000)
-  let response: Response
   try {
-    response = await fetch(`/api/v1/gateway/${path}`, {
-      signal: AbortSignal.any([signal, timeout]),
-      headers: { Accept: 'application/json, application/problem+json' },
-      cache: 'no-store',
-    })
+    return await readJson(`/api/v1/gateway/${path}`, schema, signal, 'Gateway')
   } catch (error) {
-    if (signal.aborted) throw error
-    if (timeout.aborted) throw new Error('The Gateway request timed out. Try refreshing.')
-    if (error instanceof TypeError) {
-      throw new Error('Cannot reach the Gateway. Check the backend connection and try again.')
-    }
+    if (error instanceof HttpError) throw new GatewayHttpError(error.message, error.status)
     throw error
   }
-
-  const mediaType = response.headers.get('content-type')?.split(';')[0].trim()
-  if (mediaType !== 'application/json' && mediaType !== 'application/problem+json') {
-    throw new Error(`The Gateway returned a non-JSON response (HTTP ${response.status}). Check the API connection.`)
-  }
-
-  let body: unknown
-  try {
-    body = await response.json()
-  } catch (error) {
-    if (signal.aborted) throw error
-    if (timeout.aborted) throw new Error('The Gateway request timed out. Try refreshing.')
-    if (error instanceof SyntaxError) throw new Error('The Gateway returned invalid JSON.')
-    throw error
-  }
-
-  if (!response.ok) {
-    const problem = problemSchema.safeParse(body)
-    if (problem.success) {
-      throw new GatewayHttpError(`${problem.data.detail} (${problem.data.code}, HTTP ${response.status})`, response.status)
-    }
-    throw new GatewayHttpError(`The Gateway request failed (HTTP ${response.status}).`, response.status)
-  }
-  const parsed = schema.safeParse(body)
-  if (!parsed.success) throw new Error('The Gateway response does not match the expected contract.')
-  return parsed.data
 }
 
 export async function loadGatewaySnapshot(signal: AbortSignal): Promise<GatewaySnapshot> {

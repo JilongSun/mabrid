@@ -20,6 +20,10 @@ export default defineConfig(({ mode }) => ({
         target: loadEnv(mode, process.cwd(), 'VITE_').VITE_API_PROXY_TARGET || 'http://127.0.0.1:8765',
         changeOrigin: true,
       },
+      '^/(health|ready)$': {
+        target: loadEnv(mode, process.cwd(), 'VITE_').VITE_API_PROXY_TARGET || 'http://127.0.0.1:8765',
+        changeOrigin: true,
+      },
     },
   },
 }))
