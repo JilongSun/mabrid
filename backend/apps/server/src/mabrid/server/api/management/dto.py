@@ -9,6 +9,8 @@ from uuid import UUID
 from mabrid.application.agent_host import AgentTarget
 from mabrid.application.gateway.inspection import (
     BridgeSessionSnapshot,
+    ResourceReadEvent,
+    ResourceReadRecord,
     SequencedSessionEvent,
 )
 from mabrid.application.gateway.sessions import BridgeSessionRecord
@@ -285,6 +287,24 @@ class ResourceReadRecordResponse(ManagementResponse):
     metadata: dict[str, Any] = Field(default_factory=dict)
     loaded_at: datetime
 
+    @classmethod
+    def from_model(cls, value: ResourceReadRecord) -> ResourceReadRecordResponse:
+        return cls(
+            requested_uri=value.requested_uri,
+            contents=[
+                ResourceContentResponse(
+                    uri=content.uri,
+                    mime_type=content.mime_type,
+                    text=content.text,
+                    blob=content.blob,
+                    metadata=content.metadata,
+                )
+                for content in value.contents
+            ],
+            metadata=value.metadata,
+            loaded_at=value.loaded_at,
+        )
+
 
 class UpstreamAvailabilityResponse(ManagementResponse):
     """Present binding-revision availability with initialization or failure evidence."""
@@ -316,7 +336,33 @@ class SessionSnapshotResponse(ManagementResponse):
 
     @classmethod
     def from_model(cls, value: BridgeSessionSnapshot) -> SessionSnapshotResponse:
-        return cls.model_validate(value.model_dump())
+        return cls(
+            session_id=value.session_id,
+            status=value.status,
+            upstream=(
+                UpstreamInitializationResponse.model_validate(value.upstream.model_dump())
+                if value.upstream is not None
+                else None
+            ),
+            upstream_availability=[
+                UpstreamAvailabilityResponse.model_validate(item.model_dump())
+                for item in value.upstream_availability
+            ],
+            discovered_tools=[
+                ToolDescriptorResponse.model_validate(item.model_dump())
+                for item in value.discovered_tools
+            ],
+            active_tool_calls=[
+                ToolCallRecordResponse.model_validate(item.model_dump())
+                for item in value.active_tool_calls
+            ],
+            resource_reads=[
+                ResourceReadRecordResponse.from_model(item) for item in value.resource_reads
+            ],
+            last_error=value.last_error,
+            event_count=value.event_count,
+            updated_at=value.updated_at,
+        )
 
 
 class BaseSessionEventResponse(ManagementResponse):
@@ -398,9 +444,21 @@ class SequencedSessionEventResponse(ManagementResponse):
 
     @classmethod
     def from_model(cls, value: SequencedSessionEvent) -> SequencedSessionEventResponse:
+        event = value.event
+        if isinstance(event, ResourceReadEvent):
+            return cls(
+                sequence=value.sequence,
+                event=ResourceReadEventResponse(
+                    event_id=event.event_id,
+                    session_id=event.session_id,
+                    created_at=event.created_at,
+                    kind=event.kind,
+                    read=ResourceReadRecordResponse.from_model(event.read),
+                ),
+            )
         return cls(
             sequence=value.sequence,
-            event=SESSION_EVENT_RESPONSE_ADAPTER.validate_python(value.event.model_dump()),
+            event=SESSION_EVENT_RESPONSE_ADAPTER.validate_python(event.model_dump()),
         )
 
 

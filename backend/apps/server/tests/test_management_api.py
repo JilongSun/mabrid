@@ -17,6 +17,9 @@ from mabrid.application.agent_host import (
 from mabrid.application.gateway.inspection import (
     BridgeSessionSnapshot,
     ErrorRaisedEvent,
+    ResourceContent,
+    ResourceReadEvent,
+    ResourceReadRecord,
     SequencedSessionEvent,
     SessionEventPage,
     SessionEventPageRequest,
@@ -125,11 +128,15 @@ class FixtureSessionHistoryReader:
 
 
 class FixtureInspectionReader:
+    def __init__(self, resource_read: ResourceReadRecord | None = None) -> None:
+        self.resource_read = resource_read
+
     async def get_snapshot(self, session_id: UUID) -> BridgeSessionSnapshot | None:
         if session_id != SESSION_ID:
             return None
         return BridgeSessionSnapshot(
             session_id=str(session_id),
+            resource_reads=[self.resource_read] if self.resource_read is not None else [],
             last_error="fixture failure",
             event_count=1,
             updated_at=NOW,
@@ -138,13 +145,20 @@ class FixtureInspectionReader:
     async def list_events(self, request: SessionEventPageRequest) -> SessionEventPage | None:
         if request.session_id != SESSION_ID:
             return None
-        event = ErrorRaisedEvent(
+        event: ErrorRaisedEvent | ResourceReadEvent = ErrorRaisedEvent(
             event_id="fixture-event",
             session_id=str(SESSION_ID),
             message="fixture failure",
             details={"kind": "fixture"},
             created_at=NOW,
         )
+        if self.resource_read is not None:
+            event = ResourceReadEvent(
+                event_id="fixture-resource-event",
+                session_id=str(SESSION_ID),
+                read=self.resource_read,
+                created_at=NOW,
+            )
         return SessionEventPage(
             items=(SequencedSessionEvent(sequence=request.after + 1, event=event),),
             next_after=request.after + 1 if request.limit == 1 else None,
@@ -170,11 +184,14 @@ def _session_record() -> BridgeSessionRecord:
 def _gateway_management(
     history: FixtureSessionHistoryReader | None = None,
     topology: TopologySnapshotReader | None = None,
+    inspection: FixtureInspectionReader | None = None,
 ) -> GatewayManagementComposition:
     return GatewayManagementComposition(
         topology_reader=topology or cast(TopologySnapshotReader, FixtureTopologyReader()),
         session_history_reader=cast(SessionHistoryReader, history or FixtureSessionHistoryReader()),
-        session_inspection_reader=cast(SessionInspectionReader, FixtureInspectionReader()),
+        session_inspection_reader=cast(
+            SessionInspectionReader, inspection or FixtureInspectionReader()
+        ),
         readiness_probe=cast(SqliteReadinessProbe, ReadyProbe()),
         advertised_base_url="http://mabrid.test:8765",
         published_endpoint_slugs=("fixture-endpoint",),
@@ -291,6 +308,59 @@ async def test_session_record_snapshot_and_event_contracts() -> None:
         },
     }
     assert events.json()["next_after"] == 4
+
+
+@pytest.mark.parametrize("operation_key", [None, "internal-operation-fixture"])
+async def test_resource_read_snapshot_and_events_hide_internal_correlation(
+    operation_key: str | None,
+) -> None:
+    resource_read = ResourceReadRecord(
+        operation_key=operation_key,
+        requested_uri="ui://fixture/widget",
+        contents=[
+            ResourceContent(
+                uri="ui://fixture/widget",
+                mime_type="text/html",
+                text="<p>fixture</p>",
+                metadata={"operation_key": "resource-metadata-fixture"},
+            ),
+            ResourceContent(
+                uri="ui://fixture/image",
+                mime_type="image/png",
+                blob="AA==",
+            ),
+        ],
+        metadata={"operation_key": "read-metadata-fixture"},
+        loaded_at=NOW,
+    )
+    management = _gateway_management(inspection=FixtureInspectionReader(resource_read))
+    async with _client(management) as client:
+        snapshot = await client.get(f"/api/v1/gateway/sessions/{SESSION_ID}/snapshot")
+        events = await client.get(
+            f"/api/v1/gateway/sessions/{SESSION_ID}/events",
+            params={"after": 3, "limit": 1},
+        )
+
+    assert snapshot.status_code == 200
+    assert events.status_code == 200
+    expected = resource_read.model_dump(mode="json", exclude={"operation_key"})
+    public_read = snapshot.json()["resource_reads"][0]
+    assert public_read == expected
+    assert "operation_key" not in public_read
+    assert events.json()["items"] == [
+        {
+            "sequence": 4,
+            "event": {
+                "event_id": "fixture-resource-event",
+                "session_id": str(SESSION_ID),
+                "created_at": "2026-09-18T08:00:00Z",
+                "kind": "resource.read",
+                "read": expected,
+            },
+        }
+    ]
+    assert events.json()["next_after"] == 4
+    assert resource_read.operation_key == operation_key
 
 
 def _encoded_cursor(payload: dict[str, object]) -> str:
