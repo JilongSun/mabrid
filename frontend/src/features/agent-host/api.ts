@@ -44,6 +44,24 @@ export type HostSession = z.infer<typeof hostSessionSchema>
 export type HistoryPage = z.infer<typeof historySchema>
 export type HistoryQuery = z.infer<typeof historyQuerySchema>
 
+export const stopResponseSchema = z.object({ session_id: z.uuid(), run_id: z.uuid(), accepted: z.boolean(), settlement: z.literal('unconfirmed') })
+export const reconcileResponseSchema = z.object({ session_id: z.uuid(), run_id: z.uuid(), settled: z.boolean() })
+export type RunIdentity = { session_id: string; run_id: string }
+
+async function controlHostRun<T extends RunIdentity>(identity: RunIdentity, action: 'cancel' | 'reconcile', status: number, schema: z.ZodType<T>, signal: AbortSignal) {
+  if (!z.uuid().safeParse(identity.session_id).success || !z.uuid().safeParse(identity.run_id).success) throw new Error('A valid local Session and Run are required.')
+  const response = await postHost(`/api/v1/host/sessions/${encodeURIComponent(identity.session_id)}/runs/${encodeURIComponent(identity.run_id)}/${action}`, undefined, AbortSignal.any([signal, AbortSignal.timeout(15_000)]))
+  if (response.status !== status || response.headers.get('content-type')?.split(';')[0].trim() !== 'application/json') throw new Error('The Host control response is invalid. Settlement is unconfirmed.')
+  let body: unknown
+  try { body = await response.json() } catch { throw new Error('The Host control response is invalid. Settlement is unconfirmed.') }
+  const parsed = schema.safeParse(body)
+  if (!parsed.success || parsed.data.session_id !== identity.session_id || parsed.data.run_id !== identity.run_id) throw new Error('The Host control response has invalid identity or settlement. Settlement is unconfirmed.')
+  return parsed.data
+}
+
+export const cancelHostRun = (identity: RunIdentity, signal: AbortSignal) => controlHostRun(identity, 'cancel', 202, stopResponseSchema, signal)
+export const reconcileHostRun = (identity: RunIdentity, signal: AbortSignal) => controlHostRun(identity, 'reconcile', 200, reconcileResponseSchema, signal)
+
 export async function postHost(path: string, body: unknown, signal: AbortSignal, accept = 'application/json') {
   let response: Response
   const admission = new AbortController()

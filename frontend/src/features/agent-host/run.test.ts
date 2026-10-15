@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { z } from 'zod'
 import { runEventSchema, streamHostRun, type RunEvent } from './run-transport'
+import { cancelHostRun, reconcileHostRun, reconcileResponseSchema, stopResponseSchema } from './api'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { runControlKey, useHostRun } from './use-host-run'
 
 const sessionId = '00000000-0000-4000-8000-000000000001'
 const runId = '00000000-0000-4000-8000-000000000002'
@@ -14,7 +17,150 @@ function response(text: string, chunkSize = 7) {
   const bytes = new TextEncoder().encode(text)
   return new Response(new ReadableStream<Uint8Array>({ start(controller) { for (let offset = 0; offset < bytes.length; offset += chunkSize) controller.enqueue(bytes.slice(offset, offset + chunkSize)); controller.close() } }), { headers: { 'content-type': 'text/event-stream; charset=utf-8' } })
 }
-afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers() })
+
+describe('Run control state', () => {
+  const identity = { session_id: sessionId, run_id: runId }
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+
+  it('keeps a stopped Run open and blocked until a verified terminal event', async () => {
+    let emit: (text: string) => void = () => {}
+    const signalList: AbortSignal[] = []
+    const stream = new ReadableStream<Uint8Array>({ start(controller) { emit = (text) => controller.enqueue(new TextEncoder().encode(text)); emit(frame(started)) } })
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (path, options) => {
+      if (String(path).endsWith('/cancel')) return json({ ...identity, accepted: true, settlement: 'unconfirmed' }, 202)
+      if (options?.signal) signalList.push(options.signal)
+      return new Response(stream, { headers: { 'content-type': 'text/event-stream' } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useHostRun())
+    act(() => { void result.current.start(sessionId, 'new input') })
+    await waitFor(() => expect(result.current.runs[sessionId]?.phase).toBe('streaming'))
+    await act(async () => { await result.current.cancel(identity) })
+    expect(result.current.controls[runControlKey(identity)].accepted).toBe(true)
+    expect(result.current.pending?.phase).toBe('streaming')
+    expect(signalList[0].aborted).toBe(false)
+    await act(async () => { expect(await result.current.reconcile(identity)).toBe(false); expect(await result.current.start(sessionId, 'must not overlap')).toBe(false) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await act(async () => { emit(frame(envelope(2, { kind: 'run.cancelled' }))) })
+    await waitFor(() => expect(result.current.runs[sessionId].phase).toBe('cancelled'))
+    expect(result.current.pending).toBeUndefined()
+  })
+
+  it('does not let a late stop receipt replace normal completion', async () => {
+    let finish: (value: Response) => void = () => {}
+    let emit: (text: string) => void = () => {}
+    const stream = new ReadableStream<Uint8Array>({ start(controller) { emit = (text) => controller.enqueue(new TextEncoder().encode(text)); emit(frame(started)) } })
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockImplementation(async (path) => String(path).endsWith('/cancel') ? new Promise<Response>((resolve) => { finish = resolve }) : new Response(stream, { headers: { 'content-type': 'text/event-stream' } })))
+    const { result } = renderHook(() => useHostRun())
+    act(() => { void result.current.start(sessionId, 'new input') })
+    await waitFor(() => expect(result.current.runs[sessionId]?.phase).toBe('streaming'))
+    act(() => { void result.current.cancel(identity) })
+    await act(async () => { emit(frame({ ...completed, sequence: 2 })) })
+    await waitFor(() => expect(result.current.runs[sessionId].phase).toBe('completed'))
+    await act(async () => { finish(json({ ...identity, accepted: true, settlement: 'unconfirmed' }, 202)) })
+    await waitFor(() => expect(result.current.controlPending).toBe(false))
+    expect(result.current.runs[sessionId].phase).toBe('completed')
+    expect(result.current.runs[sessionId].text).toBe('Hello 世界')
+  })
+
+  it('retains unknown state after false or failed reconciliation and only unlocks after matching settled evidence', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(response(frame(started) + frame(envelope(2, { kind: 'assistant.text.delta', delta: 'Partial output' }))))
+      .mockResolvedValueOnce(json({ ...identity, settled: false }))
+      .mockResolvedValueOnce(json({ code: 'run_not_found', message: 'Run was not found for this Agent Session.' }, 404))
+      .mockResolvedValueOnce(json({ ...identity, run_id: sessionId, settled: true }))
+      .mockResolvedValueOnce(json({ ...identity, settled: true }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useHostRun())
+    await act(async () => { await result.current.start(sessionId, 'new input') })
+    expect(result.current.pending?.phase).toBe('unknown')
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await act(async () => { await result.current.reconcile(identity) })
+      expect(result.current.pending?.phase).toBe('unknown')
+      await act(async () => { expect(await result.current.start(sessionId, 'not replayed')).toBe(false) })
+    }
+    await act(async () => { await result.current.reconcile(identity) })
+    expect(result.current.pending).toBeUndefined()
+    expect(result.current.runs[sessionId]).toMatchObject({ phase: 'settled', text: 'Partial output', runId })
+    expect(result.current.runs[sessionId].events.some((event) => event.event.kind === 'run.completed')).toBe(false)
+    expect(result.current.settledAt).toBeGreaterThan(0)
+    expect(fetchMock).toHaveBeenCalledTimes(5)
+  })
+
+  it('does not unlock a known unknown Run when another identity is reconciled', async () => {
+    const other = { session_id: runId, run_id: sessionId }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(frame(started))).mockResolvedValueOnce(json({ ...other, settled: true })))
+    const { result } = renderHook(() => useHostRun())
+    await act(async () => { await result.current.start(sessionId, 'input'); await result.current.reconcile(other) })
+    expect(result.current.pending?.runId).toBe(runId)
+    expect(result.current.pending?.phase).toBe('unknown')
+  })
+
+  it('serializes control commands and retains a previous stop receipt when reconciliation fails', async () => {
+    let finish: (value: Response) => void = () => {}
+    const fetchMock = vi.fn<typeof fetch>().mockImplementationOnce(async () => new Promise<Response>((resolve) => { finish = resolve }))
+      .mockResolvedValueOnce(json({ code: 'runtime_unavailable', message: 'The Agent runtime is unavailable.' }, 503))
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useHostRun())
+    act(() => { void result.current.cancel(identity) })
+    await waitFor(() => expect(result.current.controlPending).toBe(true))
+    await act(async () => {
+      expect(await result.current.cancel(identity)).toBe(false)
+      expect(await result.current.reconcile(identity)).toBe(false)
+      expect(await result.current.start(sessionId, 'must not submit')).toBe(false)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await act(async () => { finish(json({ ...identity, accepted: false, settlement: 'unconfirmed' }, 202)) })
+    await waitFor(() => expect(result.current.controlPending).toBe(false))
+    expect(result.current.controls[runControlKey(identity)].accepted).toBe(false)
+    await act(async () => { await result.current.reconcile(identity) })
+    expect(result.current.controls[runControlKey(identity)]).toMatchObject({ accepted: false, settled: null, error: { code: 'runtime_unavailable' } })
+    expect(result.current.settledAt).toBe(0)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('Session Run control transport', () => {
+  const identity = { session_id: sessionId, run_id: runId }
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+
+  it('accepts the frozen stop and reconciliation receipts', () => {
+    const examples = z.array(z.object({ schema: z.string(), value: z.unknown() })).parse(JSON.parse(readFileSync(resolve('../docs/contracts/v0.1/examples.json'), 'utf8')))
+    for (const [name, schema] of [['HostStopResponse', stopResponseSchema], ['HostReconcileResponse', reconcileResponseSchema]] as const) {
+      const selected = examples.filter((example) => example.schema === name)
+      expect(selected).toHaveLength(1)
+      expect(schema.safeParse(selected[0].value).success).toBe(true)
+    }
+  })
+
+  it('sends bodyless commands bound to local identity and preserves unconfirmed or unsettled receipts', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(json({ ...identity, accepted: true, settlement: 'unconfirmed' }, 202)).mockResolvedValueOnce(json({ ...identity, settled: false }))
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await cancelHostRun(identity, new AbortController().signal)).toMatchObject({ accepted: true, settlement: 'unconfirmed' })
+    expect(await reconcileHostRun(identity, new AbortController().signal)).toMatchObject({ settled: false })
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([`/api/v1/host/sessions/${sessionId}/runs/${runId}/cancel`, `/api/v1/host/sessions/${sessionId}/runs/${runId}/reconcile`])
+    expect(fetchMock.mock.calls.every(([, options]) => options?.method === 'POST' && options.body === undefined)).toBe(true)
+  })
+
+  it('rejects a foreign identity, incorrect status and fabricated settlement', async () => {
+    for (const body of [{ ...identity, session_id: runId, settled: true }, { ...identity, run_id: sessionId, settled: true }, { ...identity, settled: 'true' }]) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(body)))
+      await expect(reconcileHostRun(identity, new AbortController().signal)).rejects.toThrow('unconfirmed')
+    }
+    for (const [body, status] of [[{ ...identity, accepted: true, settlement: 'confirmed' }, 202], [{ ...identity, accepted: true, settlement: 'unconfirmed' }, 200]] as const) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(body, status)))
+      await expect(cancelHostRun(identity, new AbortController().signal)).rejects.toThrow('unconfirmed')
+    }
+  })
+
+  it('preserves safe errors without retrying or treating run_not_found as settlement', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(json({ code: 'run_not_found', message: 'Run was not found for this Agent Session.' }, 404)).mockRejectedValueOnce(new TypeError('private failure'))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(reconcileHostRun(identity, new AbortController().signal)).rejects.toMatchObject({ code: 'run_not_found', status: 404 })
+    await expect(cancelHostRun(identity, new AbortController().signal)).rejects.toThrow('outcome is unknown')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
 
 describe('Session POST-SSE transport', () => {
   it('submits new input only and decodes split UTF-8, CRLF and comments through a verified terminal', async () => {

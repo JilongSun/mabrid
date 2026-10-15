@@ -7,8 +7,9 @@ import { useGatewayPagePosition } from '@/features/gateway/gateway-navigation'
 import { loadCapabilities, type Capabilities } from '@/features/status/api'
 import { createHostSession, HostHttpError, loadHostHistory, loadHostSession, loadHostSessions, type HistoryPage, type HostSession } from './api'
 import { useHostRead } from './use-host-read'
-import { useHostRun } from './use-host-run'
+import { runControlKey, useHostRun } from './use-host-run'
 import { RunPanel } from './run-panel'
+import { RunControls } from './run-controls'
 
 const capabilityRead = (_key: string, signal: AbortSignal) => loadCapabilities(signal)
 const sessionPageRead = (key: string, signal: AbortSignal) => loadHostSessions(Number(key), signal)
@@ -61,7 +62,7 @@ export function AgentHostWorkspace({ active }: { active: boolean }) {
   const validHistoryQuery = historyOffset !== null && (order === 'latest' || order === 'oldest')
   const capabilities = useHostRead(active ? 'capabilities' : null, capabilityRead)
   const features = capabilities.data?.agent_host.features
-  const available = (feature: 'session_list' | 'session_reopen' | 'session_history' | 'session_create' | 'session_streaming') => Boolean(capabilities.data?.agent_host.enabled && features?.[feature].implemented && features[feature].enabled && features[feature].availability === 'available')
+  const available = (feature: 'session_list' | 'session_reopen' | 'session_history' | 'session_create' | 'session_streaming' | 'run_cancel' | 'run_reconcile') => Boolean(capabilities.data?.agent_host.enabled && features?.[feature].implemented && features[feature].enabled && features[feature].availability === 'available')
   const sessions = useHostRead(active && available('session_list') && offset !== null ? String(offset) : null, sessionPageRead)
   const metadata = useHostRead(active && validId && selectedId && available('session_reopen') ? selectedId : null, loadHostSession)
   const historyKey = selectedId && validHistoryQuery ? new URLSearchParams({ session: selectedId, offset: String(historyOffset), order }).toString() : null
@@ -97,8 +98,13 @@ export function AgentHostWorkspace({ active }: { active: boolean }) {
     } finally { creating.current = null }
   }
   const run = selectedId ? execution.runs[selectedId] : undefined
-  const metadataIsFresh = !run || run.phase === 'rejected' || run.finishedAt !== null && metadata.startedAt > run.finishedAt
-  const canSend = available('session_streaming') && !execution.pending && !targetRun && metadata.data?.binding_state === 'available' && !metadata.pending && !metadata.error && metadataIsFresh
+  const metadataIsFresh = (!run || run.phase === 'rejected' || run.finishedAt !== null && metadata.startedAt > run.finishedAt) && metadata.startedAt > execution.settledAt
+  const canSend = available('session_streaming') && !execution.pending && !execution.controlPending && !targetRun && metadata.data?.binding_state === 'available' && !metadata.pending && !metadata.error && metadataIsFresh
+  const ownedLease = targetRun?.session_id === selectedId ? targetRun : null
+  const controlIdentity = ownedLease && ownedLease.run_id !== run?.runId ? ownedLease : run?.runId ? { session_id: run.sessionId, run_id: run.runId } : ownedLease
+  const controlState = controlIdentity ? execution.controls[runControlKey(controlIdentity)] : undefined
+  const verifiedTerminal = run?.runId === controlIdentity?.run_id && run && ['completed', 'cancelled', 'failed', 'settled'].includes(run.phase)
+  const localStreamOpen = execution.pending?.phase === 'submitting' || execution.pending?.phase === 'streaming'
   const changePage = (name: string, value: string) => setParams((previous) => {
     const next = new URLSearchParams(previous)
     if (value === '0') next.delete(name)
@@ -138,7 +144,8 @@ export function AgentHostWorkspace({ active }: { active: boolean }) {
           <ReadFeedback state={history} label="Session history" />
           {history.data && <><HistoryMessages page={history.data} /><p className="mt-4 text-xs text-muted-foreground">History offset: {history.data.query.offset} / More history: {history.data.has_more == null ? 'Unknown' : history.data.has_more ? 'Yes' : 'No'}</p></>}
           <div className="mt-4 flex flex-wrap gap-3">{historyOffset !== null && historyOffset > 0 && <Button size="sm" variant="outline" disabled={history.pending} onClick={() => changePage('history_offset', String(Math.max(0, historyOffset - 100)))}><ArrowLeft aria-hidden="true" />{order === 'latest' ? 'Newer messages' : 'Older messages'}</Button>}{history.data && history.data.has_more !== false && history.data.messages.length > 0 && <Button size="sm" variant="outline" disabled={history.pending} onClick={() => changePage('history_offset', String((historyOffset ?? 0) + 100))}>{order === 'latest' ? 'Older messages' : 'Newer messages'}<ArrowRight aria-hidden="true" /></Button>}</div>
-          {run && !metadataIsFresh && !execution.pending && <p role="status" className="mt-5 text-sm text-muted-foreground">Session metadata refresh required</p>}
+          {controlIdentity && <><RunControls identity={controlIdentity} state={controlState} canStop={available('run_cancel') && !verifiedTerminal} canReconcile={available('run_reconcile') && !localStreamOpen && !verifiedTerminal} busy={execution.controlPending} stop={() => { void execution.cancel(controlIdentity) }} reconcile={() => { void execution.reconcile(controlIdentity) }} />{features && !available('run_cancel') && <FeatureState feature={features.run_cancel} label="Run cancellation" />}{features && !available('run_reconcile') && <FeatureState feature={features.run_reconcile} label="Run reconciliation" />}</>}
+          {(run || execution.settledAt > 0) && !metadataIsFresh && !execution.pending && <p role="status" className="mt-5 text-sm text-muted-foreground">Session metadata refresh required</p>}
           <RunPanel run={run} draft={drafts[selectedId] ?? ''} onDraft={(value) => setDrafts((previous) => ({ ...previous, [selectedId]: value }))} available={available('session_streaming')} reason={features ? `${words(features.session_streaming.availability)} / ${words(features.session_streaming.reason)}` : undefined} disabled={!canSend} send={() => { if (canSend) { const input = drafts[selectedId] ?? ''; void execution.start(selectedId, input); setDrafts((previous) => ({ ...previous, [selectedId]: '' })) } }} />
         </>}
       </section>

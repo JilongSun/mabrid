@@ -84,6 +84,117 @@ describe('Host Session data boundary', () => {
 })
 
 describe('Agent Host Session browsing', () => {
+  it('shows stop acceptance without cancelling the stream or enabling another Run', async () => {
+    const user = userEvent.setup()
+    let controller: ReadableStreamDefaultController<Uint8Array> | undefined
+    const signals: AbortSignal[] = []
+    const emit = (sequence: number, event: unknown) => { const value = { session_id: id(1), run_id: id(3), event_id: id(100 + sequence), sequence, created_at: '2026-10-15T00:00:00Z', event }; controller!.enqueue(new TextEncoder().encode(`id: ${value.event_id}\nevent: ${(event as { kind: string }).kind}\ndata: ${JSON.stringify(value)}\n\n`)) }
+    fetchMock.mockImplementation(async (input, options) => {
+      if (String(input).endsWith('/cancel')) return json({ session_id: id(1), run_id: id(3), accepted: true, settlement: 'unconfirmed' }, 202)
+      if (options?.method === 'POST') { if (options.signal) signals.push(options.signal); return new Response(new ReadableStream<Uint8Array>({ start(value) { controller = value } }), { headers: { 'content-type': 'text/event-stream' } }) }
+      return String(input).endsWith(id(1)) ? json({ ...session, binding_state: 'available' }) : responseFor(input)
+    })
+    render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
+    await screen.findByText('Binding state')
+    await user.type(screen.getByLabelText('New input'), 'New input')
+    await user.click(screen.getByRole('button', { name: 'Send input' }))
+    await waitFor(() => expect(controller).toBeDefined())
+    await act(async () => { emit(1, { kind: 'run.started', target_id: 'primary' }) })
+    await user.click(await screen.findByRole('button', { name: 'Stop Run' }))
+    expect(await screen.findByText('Stop accepted / settlement unconfirmed')).toBeDefined()
+    expect(screen.getByText('Run streaming')).toBeDefined()
+    expect(signals[0].aborted).toBe(false)
+    expect(screen.getByRole('button', { name: 'Reconcile Run' }).hasAttribute('disabled')).toBe(true)
+    await act(async () => { emit(2, { kind: 'run.cancelled' }) })
+    expect(await screen.findByText('Run cancelled')).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Stop Run' }).hasAttribute('disabled')).toBe(true)
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(2)
+  })
+
+  it('keeps unknown output locked through false reconciliation and requires fresh metadata after settlement', async () => {
+    const user = userEvent.setup()
+    let settled = false
+    let allowSettlement = false
+    let activeRunId = id(3)
+    const lease = { session_id: id(1), run_id: id(3), state: 'unsettled' }
+    const value = { session_id: id(1), run_id: id(3), event_id: id(100), sequence: 1, created_at: '2026-10-15T00:00:00Z', event: { kind: 'run.started', target_id: 'primary' } }
+    fetchMock.mockImplementation(async (input, options) => {
+      if (String(input).endsWith('/reconcile')) { settled = allowSettlement; return json({ session_id: id(1), run_id: activeRunId, settled }) }
+      if (options?.method === 'POST') {
+        activeRunId = id(4)
+        settled = false
+        return new Response(`id: ${value.event_id}\nevent: run.started\ndata: ${JSON.stringify({ ...value, run_id: activeRunId })}\n\n`, { headers: { 'content-type': 'text/event-stream' } })
+      }
+      return String(input).endsWith(id(1)) ? json({ ...session, binding_state: 'available', target_run: settled ? null : { ...lease, run_id: activeRunId } }) : responseFor(input)
+    })
+    render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
+    await screen.findByText('Binding state')
+    await user.type(screen.getByLabelText('New input'), 'Next turn')
+    await user.click(screen.getByRole('button', { name: 'Reconcile Run' }))
+    expect(await screen.findByText('Settlement unconfirmed / new input blocked')).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(true)
+    allowSettlement = true
+    await user.click(screen.getByRole('button', { name: 'Reconcile Run' }))
+    expect(await screen.findByText('Settlement verified / original outcome not inferred')).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Refresh Session' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(false))
+    await user.click(screen.getByRole('button', { name: 'Send input' }))
+    expect(await screen.findByText('Run unknown')).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Reconcile Run' }))
+    expect(await screen.findByText('Run settled')).toBeDefined()
+    expect(screen.getByText('Settlement verified. Original Run outcome remains unknown.')).toBeDefined()
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/runs'))).toHaveLength(1)
+  })
+
+  it('does not expose control for another Session until its owner is selected and gates capabilities independently', async () => {
+    const user = userEvent.setup()
+    const lease = { session_id: id(2), run_id: id(3), state: 'unsettled' }
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input).endsWith('/capabilities')) return json({ ...capabilities, agent_host: { enabled: true, features: { ...capabilities.agent_host.features, run_cancel: { ...feature, availability: 'unknown', remote_support: null, reason: 'remote_unknown' } } } })
+      if (String(input).includes(`/sessions/${id(2)}/history?`)) return json({ ...history, session_id: id(2), messages: [] })
+      if (String(input).endsWith(id(1)) || String(input).endsWith(id(2))) return json({ ...session, session_id: String(input).endsWith(id(2)) ? id(2) : id(1), binding_state: 'available', target_run: lease })
+      return responseFor(input)
+    })
+    render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
+    await screen.findByText('Target Run unsettled')
+    expect(screen.queryByRole('button', { name: 'Stop Run' })).toBeNull()
+    await user.click(screen.getByRole('link', { name: `Session: ${id(2)}` }))
+    expect(await screen.findByText('Run cancellation: Unknown / Remote unknown')).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Stop Run' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Reconcile Run' }).hasAttribute('disabled')).toBe(false)
+    expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  })
+
+  it('recovers uncertain admission only through discovered lease identity, never a guessed Run or input replay', async () => {
+    const user = userEvent.setup()
+    let submitted = false
+    let settled = false
+    fetchMock.mockImplementation(async (input, options) => {
+      if (String(input).endsWith('/reconcile')) { settled = true; return json({ session_id: id(1), run_id: id(3), settled: true }) }
+      if (options?.method === 'POST') { submitted = true; throw new TypeError('private network failure') }
+      if (String(input).endsWith(id(1))) return json({ ...session, binding_state: 'available', target_run: submitted && !settled ? { session_id: id(1), run_id: id(3), state: 'unsettled' } : null })
+      return responseFor(input)
+    })
+    render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
+    await screen.findByText('Binding state')
+    await user.type(screen.getByLabelText('New input'), 'Only once')
+    await user.click(screen.getByRole('button', { name: 'Send input' }))
+    expect(await screen.findByText('Run unknown')).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Reconcile Run' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Refresh Session' }))
+    await user.click(await screen.findByRole('button', { name: 'Reconcile Run' }))
+    expect(await screen.findByText('Run settled')).toBeDefined()
+    await user.type(screen.getByLabelText('New input'), 'A different new turn')
+    expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Refresh Session' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(false))
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/runs'))).toHaveLength(1)
+    expect(fetchMock.mock.calls.find(([input]) => String(input).endsWith('/reconcile'))?.[0]).toBe(`/api/v1/host/sessions/${id(1)}/runs/${id(3)}/reconcile`)
+    expect(screen.queryByText('private network failure')).toBeNull()
+  })
+
   it('creates a Session once, selects its stable ID, and keeps creation rejection visible', async () => {
     const user = userEvent.setup()
     fetchMock.mockImplementation(async (input, options) => options?.method === 'POST' ? json({ ...session, binding_state: 'available', title: 'Fresh Session' }, 201) : responseFor(input))
