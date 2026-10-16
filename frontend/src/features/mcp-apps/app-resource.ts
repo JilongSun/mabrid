@@ -19,7 +19,8 @@ export function prepareAppResource(widget: HostWidget) {
   const ui = metadata.ui
   const rawCsp = ui && typeof ui === 'object' && !Array.isArray(ui) && 'csp' in ui ? ui.csp : undefined
   const { csp } = appSecurityPolicy(rawCsp)
-  const result = CallToolResultSchema.safeParse({ content: widget.tool_result.content, structuredContent: widget.tool_result.structured_content ?? undefined, isError: widget.tool_result.is_error, _meta: widget.tool_result.metadata })
+  const toolContent = widget.tool_result.content.map(({ annotations, meta, ...block }) => ({ ...block, ...(annotations == null ? {} : { annotations }), ...(meta == null ? {} : { _meta: meta }) }))
+  const result = CallToolResultSchema.safeParse({ content: toolContent, structuredContent: widget.tool_result.structured_content ?? undefined, isError: widget.tool_result.is_error, _meta: widget.tool_result.metadata })
   if (!result.success) throw new Error('The App tool result does not match the MCP contract.')
   return { html, csp, toolResult: result.data }
 }

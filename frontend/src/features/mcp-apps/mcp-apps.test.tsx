@@ -11,7 +11,7 @@ import { RunPanel } from '@/features/agent-host/run-panel'
 
 const renderer = vi.hoisted(() => ({ props: null as AppRendererProps | null, broken: false }))
 vi.mock('@mcp-ui/client', () => ({ AppRenderer: (props: AppRendererProps) => { renderer.props = props; if (renderer.broken) throw new Error('Private renderer failure'); return <iframe title="Controlled App proxy" /> } }))
-afterEach(() => { cleanup(); renderer.props = null; renderer.broken = false; vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); renderer.props = null; renderer.broken = false; vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks() })
 
 const widget: HostWidget = {
   widget_id: '00000000-0000-4000-8000-000000000004', tool_invocation_id: '00000000-0000-4000-8000-000000000003', tool_name: 'inspect',
@@ -22,7 +22,18 @@ const widget: HostWidget = {
 
 describe('Fresh MCP App resource boundary', () => {
   it('maps public tool results and preserves resource contents without fetching', () => {
-    expect(prepareAppResource(widget)).toEqual({ html: widget.resource_contents[0].text, csp: { connectDomains: [], resourceDomains: [] }, toolResult: { content: [{ type: 'text', text: 'Result' }], structuredContent: { value: 42 }, isError: false, _meta: { preserved: true } } })
+    expect(prepareAppResource(widget)).toEqual({ html: widget.resource_contents[0].text, csp: { connectDomains: [], resourceDomains: [], baseUriDomains: [] }, toolResult: { content: [{ type: 'text', text: 'Result' }], structuredContent: { value: 42 }, isError: false, _meta: { preserved: true } } })
+  })
+
+  it('omits null public content annotations and metadata before SDK validation', () => {
+    const prepared = prepareAppResource({ ...widget, tool_result: { ...widget.tool_result, content: [{ type: 'text', text: 'Result', annotations: null, meta: null }] } })
+    expect(prepared.toolResult.content).toEqual([{ type: 'text', text: 'Result' }])
+  })
+
+  it('preserves non-null content annotations and maps public metadata to the MCP name', () => {
+    const annotations = { audience: ['user'], priority: 0.5 }
+    const prepared = prepareAppResource({ ...widget, tool_result: { ...widget.tool_result, content: [{ type: 'text', text: 'Result', annotations, meta: { source: 'mock' } }] } })
+    expect(prepared.toolResult.content).toEqual([{ type: 'text', text: 'Result', annotations, _meta: { source: 'mock' } }])
   })
 
   it('decodes blob resources as UTF-8 rather than Latin-1', () => {
@@ -37,6 +48,27 @@ describe('Fresh MCP App resource boundary', () => {
     expect(appSecurityPolicy({ connectDomains: ['https://api.example'], resourceDomains: ['https://cdn.example'] })).toMatchObject({ csp: { connectDomains: ['https://api.example'], resourceDomains: ['https://cdn.example'] } })
   })
 
+  it('preserves only explicitly declared base origins', () => {
+    const prepared = prepareAppResource({ ...widget, resource_contents: [{ ...widget.resource_contents[0], metadata: { ui: { csp: { baseUriDomains: ['https://cdn.example'] } } } }] })
+    expect(prepared.csp.baseUriDomains).toEqual(['https://cdn.example'])
+    expect(appSecurityPolicy(prepared.csp).policy).toContain('base-uri https://cdn.example')
+    expect(appSecurityPolicy({ resourceDomains: ['https://cdn.example'] }).policy).toContain("base-uri 'none'")
+  })
+
+  it.each(['http://localhost:8760', 'http://127.0.0.1:8760', 'http://[::1]:8760'])('allows declared loopback HTTP only in development: %s', (origin) => {
+    vi.stubEnv('DEV', true)
+    const declarations = { resourceDomains: [origin], connectDomains: [origin], baseUriDomains: [origin] }
+    expect(appSecurityPolicy(declarations).csp).toEqual(declarations)
+    expect(appSecurityPolicy(declarations).policy).toContain(`base-uri ${origin}`)
+    vi.stubEnv('DEV', false)
+    for (const field of ['resourceDomains', 'connectDomains', 'baseUriDomains']) expect(() => appSecurityPolicy({ [field]: [origin] })).toThrow('security policy is unsupported')
+    expect(appSecurityPolicy({ resourceDomains: ['https://cdn.example'] }).csp.resourceDomains).toEqual(['https://cdn.example'])
+  })
+
+  it.each(['http://example.com', 'http://localhost.example.com', 'http://192.168.1.2', 'https://cdn.example/assets', 'https://user:password@cdn.example', 'https://cdn.example?query=1', 'https://cdn.example#fragment', '*', 'data:'])('rejects unsafe source declarations across all directives: %s', (source) => {
+    for (const field of ['resourceDomains', 'connectDomains', 'baseUriDomains']) expect(() => appSecurityPolicy({ [field]: [source] })).toThrow('security policy is unsupported')
+  })
+
   it.each([
     { application_resource_uri: 'https://remote.example/widget' },
     { resource_contents: [] },
@@ -45,8 +77,9 @@ describe('Fresh MCP App resource boundary', () => {
     { resource_contents: [{ ...widget.resource_contents[0], mime_type: 'text/html' }] },
     { resource_contents: [{ ...widget.resource_contents[0], text: null, blob: 'invalid!' }] },
     { tool_result: { ...widget.tool_result, content: [{ type: 'image', data: 'missing-mime' }] } },
+    { tool_result: { ...widget.tool_result, content: [{ type: 'text', text: 'Result', annotations: 'invalid' }] } },
     { resource_metadata: { ui: { csp: { connectDomains: ['https://safe.example; default-src *'] } } } },
-    { resource_metadata: { ui: { csp: { resourceDomains: ['http://localhost:8765'] } } } },
+    { resource_metadata: { ui: { csp: { resourceDomains: ['http://remote.example:8765'] } } } },
   ])('rejects unsupported or malformed payload %j without exposing its contents', (change) => {
     expect(() => prepareAppResource({ ...widget, ...change })).toThrow(/^The App /)
   })
