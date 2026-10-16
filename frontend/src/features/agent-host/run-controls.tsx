@@ -8,10 +8,9 @@ export function RunControls({ identity, state, canStop, canReconcile, busy, stop
   identity: RunIdentity; state?: RunControl; canStop: boolean; canReconcile: boolean; busy: boolean
   stop: () => void; reconcile: () => void
 }) {
-  return <section aria-label="Run controls" className="mt-5 min-w-0 border-y py-4">
-    <h3 className="text-sm font-semibold">Run control</h3>
-    <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{identity.run_id}</p>
-    <div className="mt-4 flex flex-wrap gap-3"><Button id={`host-run-stop-${identity.run_id}`} variant="outline" size="sm" disabled={busy || !canStop || state?.accepted === true || state?.settled === true} onClick={stop}><CircleStop aria-hidden="true" />Stop Run</Button><Button id={`host-run-reconcile-${identity.run_id}`} variant="outline" size="sm" disabled={busy || !canReconcile || state?.settled === true} onClick={reconcile}><ShieldCheck aria-hidden="true" />Reconcile Run</Button></div>
+  return <section aria-label="Run controls" className="mt-4 min-w-0 pb-2">
+    <h3 className="sr-only">Run control</h3>
+    <div className="flex flex-wrap items-center gap-3"><Button id={`host-run-stop-${identity.run_id}`} variant="outline" size="sm" disabled={busy || !canStop || state?.accepted === true || state?.settled === true} onClick={stop}><CircleStop aria-hidden="true" />Stop Run</Button><Button id={`host-run-reconcile-${identity.run_id}`} variant="outline" size="sm" disabled={busy || !canReconcile || state?.settled === true} onClick={reconcile}><ShieldCheck aria-hidden="true" />Reconcile Run</Button><details className="text-xs text-muted-foreground"><summary>Control details</summary><p className="mt-3 break-all font-mono">{identity.run_id}</p></details></div>
     {state?.pending && <p role="status" className="mt-3 text-xs text-muted-foreground">{state.pending === 'cancel' ? 'Requesting stop...' : 'Verifying settlement...'}</p>}
     {state?.accepted !== null && state?.accepted !== undefined && <p role="status" className="mt-3 text-sm">{state.accepted ? 'Stop accepted / settlement unconfirmed' : 'Stop not accepted / settlement unconfirmed'}</p>}
     {state?.settled !== null && state?.settled !== undefined && <p role="status" className="mt-3 text-sm">{state.settled ? 'Settlement verified / original outcome not inferred' : 'Settlement unconfirmed / new input blocked'}</p>}

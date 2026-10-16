@@ -4,8 +4,10 @@ import { resolve } from 'node:path'
 import { z } from 'zod'
 import { runEventSchema, streamHostRun, type RunEvent } from './run-transport'
 import { cancelHostRun, reconcileHostRun, reconcileResponseSchema, stopResponseSchema } from './api'
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react'
+import { createElement } from 'react'
 import { runControlKey, useHostRun } from './use-host-run'
+import { ToolActivity } from './tool-activity'
 
 const sessionId = '00000000-0000-4000-8000-000000000001'
 const runId = '00000000-0000-4000-8000-000000000002'
@@ -18,6 +20,34 @@ function response(text: string, chunkSize = 7) {
   return new Response(new ReadableStream<Uint8Array>({ start(controller) { for (let offset = 0; offset < bytes.length; offset += chunkSize) controller.enqueue(bytes.slice(offset, offset + chunkSize)); controller.close() } }), { headers: { 'content-type': 'text/event-stream; charset=utf-8' } })
 }
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers() })
+
+describe('Tool activity projection', () => {
+  const invocationId = '00000000-0000-4000-8000-000000000003'
+  const tool = { tool_invocation_id: invocationId, tool_name: 'inspect' }
+  const result = { content: [{ type: 'text', text: '<img src=x>' }], is_error: true, metadata: {} }
+  const event = (sequence: number, payload: unknown) => runEventSchema.parse(envelope(sequence, payload))
+
+  it('groups invocation progress, retains arguments and distinguishes a tool error from failed execution', () => {
+    const events = [event(1, { kind: 'tool.started', ...tool, arguments: { value: 42 } }), event(2, { kind: 'tool.completed', ...tool, result }), event(3, { kind: 'widget.failed', ...tool, application_resource_uri: 'ui://inspect', tool_result: result, error_message: 'App unavailable.' })]
+    const view = render(createElement(ToolActivity, { events, open: true }))
+    expect(screen.getByRole('list', { name: 'Tool activity' }).querySelectorAll('li')).toHaveLength(1)
+    expect(screen.getByText(/Tool error/)).toBeDefined()
+    expect(screen.getByText(/"value": 42/)).toBeDefined()
+    expect(screen.getByText('App unavailable: App unavailable.')).toBeDefined()
+    expect(document.querySelectorAll('img')).toHaveLength(0)
+    view.rerender(createElement(ToolActivity, { events: [...events, event(4, { kind: 'tool.failed', ...tool, error_code: 'transport', error_message: 'Tool invocation failed.', result })], open: false }))
+    expect(screen.getByText(/Failed/)).toBeDefined()
+    expect(screen.getByText('Tool invocation failed. (transport)')).toBeDefined()
+  })
+
+  it('preserves independent invocations and never marks a started-only tool as completed', () => {
+    const events = [event(1, { kind: 'tool.started', ...tool, arguments: {} }), event(2, { kind: 'tool.completed', ...tool, tool_invocation_id: sessionId, result: { ...result, is_error: false } })]
+    render(createElement(ToolActivity, { events, open: false }))
+    expect(screen.getByRole('list', { name: 'Tool activity' }).querySelectorAll('li')).toHaveLength(2)
+    expect(screen.getByText('Outcome unknown')).toBeDefined()
+    expect(screen.getByText('Completed')).toBeDefined()
+  })
+})
 
 describe('Run control state', () => {
   const identity = { session_id: sessionId, run_id: runId }

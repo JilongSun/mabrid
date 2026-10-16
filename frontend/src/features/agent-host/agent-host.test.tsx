@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHostSession, historySchema, hostSessionPageSchema, hostSessionSchema, loadHostHistory, loadHostSession, loadHostSessions } from './api'
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { featureKeys } from '@/features/status/api'
 import { AgentHostWorkspace } from './agent-host-workspace'
+import { RunPanel } from './run-panel'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { z } from 'zod'
@@ -84,6 +85,46 @@ describe('Host Session data boundary', () => {
 })
 
 describe('Agent Host Session browsing', () => {
+  it('sends Enter, keeps Shift+Enter as a newline and does not submit an IME composition', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockImplementation(async (input, options) => options?.method === 'POST' ? new Response('', { headers: { 'content-type': 'text/event-stream' } }) : String(input).endsWith(id(1)) ? json({ ...session, binding_state: 'available' }) : responseFor(input))
+    render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
+    await screen.findByText('Binding state')
+    const input = screen.getByRole('textbox', { name: 'New input' })
+    await user.type(input, 'Hello')
+    await user.keyboard('{Shift>}{Enter}{/Shift}World')
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true })
+    expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+    await user.keyboard('{Enter}')
+    await screen.findByText('Run unknown')
+    expect(fetchMock.mock.calls.find(([, options]) => options?.method === 'POST')?.[1]?.body).toBe(JSON.stringify({ input_text: 'Hello\nWorld' }))
+    expect(document.activeElement).toBe(input)
+  })
+
+  it('keeps the composer outside scrolling messages and pauses following when reading older content', async () => {
+    const user = userEvent.setup()
+    const run = { sessionId: id(1), runId: id(3), input: 'Inspect', text: 'First fragment', phase: 'streaming' as const, events: [], finishedAt: null, error: null }
+    const props = { conversationKey: id(1), run, draft: '', onDraft: vi.fn(), send: vi.fn(), disabled: true, available: true }
+    const view = render(<RunPanel {...props} />)
+    const viewport = screen.getByLabelText('Conversation messages')
+    Object.defineProperties(viewport, { scrollHeight: { configurable: true, value: 1200 }, clientHeight: { configurable: true, value: 400 } })
+    viewport.scrollTop = 0
+    fireEvent.scroll(viewport)
+    view.rerender(<RunPanel {...props} run={{ ...run, text: 'Another fragment' }} />)
+    expect(viewport.scrollTop).toBe(0)
+    expect(viewport.contains(screen.getByRole('textbox', { name: 'New input' }))).toBe(false)
+    await user.click(screen.getByRole('button', { name: 'Latest messages' }))
+    expect(viewport.scrollTop).toBe(1200)
+    expect(screen.queryByRole('button', { name: 'Latest messages' })).toBeNull()
+    viewport.scrollTop = 0
+    fireEvent.scroll(viewport)
+    view.rerender(<RunPanel {...props} draft="New turn" disabled={false} />)
+    await user.click(screen.getByRole('button', { name: 'Send input' }))
+    expect(props.send).toHaveBeenCalledTimes(1)
+    expect(viewport.scrollTop).toBe(1200)
+    expect(screen.queryByRole('button', { name: 'Latest messages' })).toBeNull()
+  })
+
   it('shows stop acceptance without cancelling the stream or enabling another Run', async () => {
     const user = userEvent.setup()
     let controller: ReadableStreamDefaultController<Uint8Array> | undefined
@@ -182,8 +223,7 @@ describe('Agent Host Session browsing', () => {
     await user.type(screen.getByLabelText('New input'), 'Only once')
     await user.click(screen.getByRole('button', { name: 'Send input' }))
     expect(await screen.findByText('Run unknown')).toBeDefined()
-    expect(screen.queryByRole('button', { name: 'Reconcile Run' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Refresh Session' }))
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith(id(1))).length).toBeGreaterThan(1))
     await user.click(await screen.findByRole('button', { name: 'Reconcile Run' }))
     expect(await screen.findByText('Run settled')).toBeDefined()
     await user.type(screen.getByLabelText('New input'), 'A different new turn')
@@ -250,10 +290,17 @@ describe('Agent Host Session browsing', () => {
     expect(fetchMock.mock.calls.find(([, options]) => options?.method === 'POST')?.[1]?.body).toBe(JSON.stringify({ input_text: 'Only new input' }))
   })
 
-  it('requires a new metadata read after a terminal on the current page, independently of the server clock', async () => {
+  it('automatically reads metadata and authoritative history after a terminal, independently of the server clock', async () => {
     const user = userEvent.setup()
+    let submitted = false
+    let finishMetadata: (response: Response) => void = () => { throw new Error('Metadata read not started') }
     const events = [{ kind: 'run.started', target_id: 'primary' }, { kind: 'run.completed', output_text: 'Finished', usage: {} }].map((event, index) => { const value = { session_id: id(1), run_id: id(3), event_id: id(100 + index), sequence: index + 1, created_at: '2099-10-15T00:00:00Z', event }; return `id: ${value.event_id}\nevent: ${event.kind}\ndata: ${JSON.stringify(value)}\n\n` }).join('')
-    fetchMock.mockImplementation(async (input, options) => options?.method === 'POST' ? new Response(events, { headers: { 'content-type': 'text/event-stream' } }) : String(input).endsWith(id(1)) ? json({ ...session, binding_state: 'available' }) : responseFor(input))
+    fetchMock.mockImplementation(async (input, options) => {
+      if (options?.method === 'POST') { submitted = true; return new Response(events, { headers: { 'content-type': 'text/event-stream' } }) }
+      if (String(input).endsWith(id(1))) return submitted ? new Promise<Response>((resolve) => { finishMetadata = resolve }) : json({ ...session, binding_state: 'available' })
+      if (String(input).includes('/history?') && submitted) return json({ ...history, messages: [...history.messages, { message_id: 'completed-1', role: 'assistant', content: [{ kind: 'text', text: 'Finished' }] }] })
+      return responseFor(input)
+    })
     render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
     await screen.findByText('Binding state')
     await user.type(screen.getByLabelText('New input'), 'First turn')
@@ -262,8 +309,51 @@ describe('Agent Host Session browsing', () => {
     await user.type(screen.getByLabelText('New input'), 'Second turn')
     expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(true)
     expect(screen.getByText('Session metadata refresh required')).toBeDefined()
+    await act(async () => { finishMetadata(json({ ...session, binding_state: 'available' })) })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(false))
+    expect(within(screen.getByRole('list', { name: 'Session history' })).getByText('Finished')).toBeDefined()
+    expect(screen.getByText('Last turn snapshot').closest('details')?.open).toBe(false)
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1)
+  })
+
+  it('retains the answer and blocks unsafe overlap when automatic metadata and history refresh fail, without replay', async () => {
+    const user = userEvent.setup()
+    let submitted = false
+    let failRefresh = true
+    const events = [{ kind: 'run.started', target_id: 'primary' }, { kind: 'run.completed', output_text: 'Retained answer', usage: {} }].map((event, index) => { const value = { session_id: id(1), run_id: id(3), event_id: id(100 + index), sequence: index + 1, created_at: '2026-10-15T00:00:00Z', event }; return `id: ${value.event_id}\nevent: ${event.kind}\ndata: ${JSON.stringify(value)}\n\n` }).join('')
+    fetchMock.mockImplementation(async (input, options) => {
+      if (options?.method === 'POST') { submitted = true; return new Response(events, { headers: { 'content-type': 'text/event-stream' } }) }
+      if (submitted && failRefresh && (String(input).endsWith(id(1)) || String(input).includes('/history?'))) return json({ code: 'runtime_unavailable', message: 'The runtime is unavailable.' }, 502)
+      return String(input).endsWith(id(1)) ? json({ ...session, binding_state: 'available' }) : responseFor(input)
+    })
+    render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}`]}><AgentHostWorkspace active /></MemoryRouter>)
+    await screen.findByText('Binding state')
+    await user.type(screen.getByLabelText('New input'), 'First turn')
+    await user.click(screen.getByRole('button', { name: 'Send input' }))
+    await screen.findByText('Refresh failed - showing previous Session metadata')
+    expect(await screen.findByText('Refresh failed - showing previous Session history')).toBeDefined()
+    expect(screen.getByLabelText('Current assistant output').textContent).toBe('Retained answer')
+    expect(screen.queryByText('Last turn snapshot')).toBeNull()
+    await user.type(screen.getByLabelText('New input'), 'Do not retry automatically')
+    expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(true)
+    failRefresh = false
     await user.click(screen.getByRole('button', { name: 'Refresh Session' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Send input' }).hasAttribute('disabled')).toBe(false))
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1)
+  })
+
+  it.each(['oldest', 'latest'])('does not hide the current answer when refreshing an older %s history window', async (order) => {
+    const user = userEvent.setup()
+    const events = [{ kind: 'run.started', target_id: 'primary' }, { kind: 'run.completed', output_text: 'Current answer', usage: {} }].map((event, index) => { const value = { session_id: id(1), run_id: id(3), event_id: id(100 + index), sequence: index + 1, created_at: '2026-10-15T00:00:00Z', event }; return `id: ${value.event_id}\nevent: ${event.kind}\ndata: ${JSON.stringify(value)}\n\n` }).join('')
+    fetchMock.mockImplementation(async (input, options) => options?.method === 'POST' ? new Response(events, { headers: { 'content-type': 'text/event-stream' } }) : String(input).includes('/history?') ? json({ ...history, query: { ...query, order, offset: 100 } }) : String(input).endsWith(id(1)) ? json({ ...session, binding_state: 'available' }) : responseFor(input))
+    render(<MemoryRouter initialEntries={[`/agent-host/sessions/${id(1)}?history_order=${order}&history_offset=100`]}><AgentHostWorkspace active /></MemoryRouter>)
+    await screen.findByText('Binding state')
+    await user.type(screen.getByLabelText('New input'), 'New question')
+    await user.click(screen.getByRole('button', { name: 'Send input' }))
+    await screen.findByText('Run completed')
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/history?'))).toHaveLength(2))
+    expect(screen.getByLabelText('Current assistant output').textContent).toBe('Current answer')
+    expect(screen.queryByText('Last turn snapshot')).toBeNull()
   })
 
   it('does not submit new input when remote streaming support is unknown', async () => {
