@@ -8,12 +8,15 @@ export type RunView = {
   error: Error | null
 }
 
+export type AppTurn = { sessionId: string; runId: string; input: string; events: RunEvent[] }
+
 export type RunControl = { pending: 'cancel' | 'reconcile' | null; accepted: boolean | null; settled: boolean | null; verifiedAt: number | null; error: Error | null }
 export const runControlKey = (identity: RunIdentity) => `${identity.session_id}/${identity.run_id}`
 
 /** Retain Run presentation across selection changes; unmount is not verified cancellation. */
 export function useHostRun() {
   const [runs, setRuns] = useState<Record<string, RunView>>({})
+  const [appTurns, setAppTurns] = useState<Record<string, AppTurn[]>>({})
   const views = useRef<Record<string, RunView>>({})
   const [controls, setControls] = useState<Record<string, RunControl>>({})
   const operation = useRef<AbortController | null>(null)
@@ -40,6 +43,11 @@ export function useHostRun() {
       await streamHostRun(sessionId, input, controller.signal, (event) => {
         const payload = event.event
         view = { ...view, runId: event.run_id, phase: 'streaming', events: [...view.events, event], text: payload.kind === 'assistant.text.delta' ? view.text + payload.delta : payload.kind === 'assistant.text.completed' ? payload.text : payload.kind === 'run.completed' ? payload.output_text : view.text }
+        if (payload.kind === 'widget.created' && mounted.current) {
+          const invocations = new Set(view.events.flatMap(({ event: payload }) => payload.kind === 'widget.created' ? [payload.widget.tool_invocation_id] : []))
+          const turn: AppTurn = { sessionId, runId: event.run_id, input, events: view.events.filter(({ event: payload }) => payload.kind === 'widget.created' || payload.kind === 'tool.started' && invocations.has(payload.tool_invocation_id)) }
+          setAppTurns((previous) => ({ ...previous, [sessionId]: [...(previous[sessionId] ?? []).filter((entry) => entry.runId !== turn.runId), turn] }))
+        }
         publish()
       })
       const terminal = view.events.at(-1)?.event
@@ -90,5 +98,5 @@ export function useHostRun() {
   const pending = Object.values(runs).find((run) => run.phase === 'submitting' || run.phase === 'streaming' || run.phase === 'unknown')
   const controlPending = Object.values(controls).some((state) => state.pending !== null)
   const settledAt = Math.max(0, ...Object.values(controls).map((state) => state.verifiedAt ?? 0))
-  return { runs, pending, start, controls, controlPending, settledAt, cancel: (identity: RunIdentity) => control(identity, 'cancel'), reconcile: (identity: RunIdentity) => control(identity, 'reconcile') }
+  return { runs, appTurns, pending, start, controls, controlPending, settledAt, cancel: (identity: RunIdentity) => control(identity, 'cancel'), reconcile: (identity: RunIdentity) => control(identity, 'reconcile') }
 }

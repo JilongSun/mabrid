@@ -49,6 +49,64 @@ describe('Tool activity projection', () => {
   })
 })
 
+describe('Delivered App turns', () => {
+  const widget = { widget_id: '00000000-0000-4000-8000-000000000004', tool_invocation_id: '00000000-0000-4000-8000-000000000003', tool_name: 'inspect', application_resource_uri: 'ui://inspect/result', resource_metadata: {}, resource_contents: [{ uri: 'ui://inspect/result', mime_type: 'text/html;profile=mcp-app', text: '<p>Result</p>' }], tool_result: { content: [{ type: 'text', text: 'Result' }], is_error: false, metadata: {} } }
+  const delivered = [started, envelope(2, { kind: 'tool.started', tool_invocation_id: widget.tool_invocation_id, tool_name: widget.tool_name, arguments: { value: 42 } }), envelope(3, { kind: 'widget.created', widget }), envelope(4, completed.event)]
+  const nextRunId = '00000000-0000-4000-8000-000000000006'
+
+  it('retains only delivered widgets and their tool input through a new streaming and unknown Run', async () => {
+    let finish = () => {}
+    const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode(frame({ ...started, run_id: nextRunId }))); finish = () => controller.close() } })
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(response(delivered.map((event) => frame(event)).join(''))).mockResolvedValueOnce(new Response(stream, { headers: { 'content-type': 'text/event-stream' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useHostRun())
+    await act(async () => { await result.current.start(sessionId, 'Inspect first') })
+    const retained = result.current.appTurns[sessionId]
+    expect(retained).toHaveLength(1)
+    expect(retained[0]).toMatchObject({ sessionId, runId, input: 'Inspect first' })
+    expect(retained[0].events.map(({ event }) => event.kind)).toEqual(['tool.started', 'widget.created'])
+    act(() => { void result.current.start(sessionId, 'New input only') })
+    await waitFor(() => expect(result.current.runs[sessionId].phase).toBe('streaming'))
+    expect(result.current.appTurns[sessionId]).toBe(retained)
+    await act(async () => { finish() })
+    await waitFor(() => expect(result.current.pending?.phase).toBe('unknown'))
+    expect(result.current.appTurns[sessionId]).toBe(retained)
+    expect(fetchMock.mock.calls.map(([, options]) => JSON.parse(String(options?.body)))).toEqual([{ input_text: 'Inspect first' }, { input_text: 'New input only' }])
+  })
+
+  it('updates one turn for multiple widgets and excludes unrelated tool inputs', async () => {
+    let emit = (_text: string) => {}
+    const unrelated = envelope(2, { kind: 'tool.started', tool_invocation_id: '00000000-0000-4000-8000-000000000009', tool_name: 'plain', arguments: { unrelated: true } })
+    const stream = new ReadableStream<Uint8Array>({ start(controller) { emit = (text) => controller.enqueue(new TextEncoder().encode(text)); emit([started, unrelated, envelope(3, delivered[1].event), envelope(4, delivered[2].event)].map((event) => frame(event)).join('')) } })
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(stream, { headers: { 'content-type': 'text/event-stream' } })))
+    const { result } = renderHook(() => useHostRun())
+    act(() => { void result.current.start(sessionId, 'Two widgets') })
+    await waitFor(() => expect(result.current.appTurns[sessionId]).toHaveLength(1))
+    const firstWidget = result.current.appTurns[sessionId][0].events.find(({ event }) => event.kind === 'widget.created')
+    const secondWidget = { ...widget, widget_id: nextRunId, tool_invocation_id: '00000000-0000-4000-8000-000000000007' }
+    await act(async () => { emit([envelope(5, { kind: 'tool.started', tool_invocation_id: secondWidget.tool_invocation_id, tool_name: widget.tool_name, arguments: { value: 84 } }), envelope(6, { kind: 'widget.created', widget: secondWidget }), envelope(7, completed.event)].map((event) => frame(event)).join('')) })
+    await waitFor(() => expect(result.current.runs[sessionId].phase).toBe('completed'))
+    expect(result.current.appTurns[sessionId]).toHaveLength(1)
+    const events = result.current.appTurns[sessionId][0].events
+    expect(events.map((event) => event.sequence)).toEqual([3, 4, 5, 6])
+    expect(events.find(({ event }) => event.kind === 'widget.created')).toBe(firstWidget)
+    expect(events.filter(({ event }) => event.kind === 'widget.created')).toHaveLength(2)
+  })
+
+  it('keeps distinct App turns under the owning Session without retaining plain Runs', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(response(delivered.map((event) => frame(event)).join('')))
+      .mockResolvedValueOnce(response(delivered.map((event) => frame({ ...event, run_id: nextRunId })).join('')))
+      .mockResolvedValueOnce(response([started, { ...completed, sequence: 2 }].map((event) => frame({ ...event, session_id: runId, run_id: nextRunId })).join('')))
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useHostRun())
+    await act(async () => { await result.current.start(sessionId, 'First App'); await result.current.start(sessionId, 'Second App'); await result.current.start(runId, 'Other Session, no App') })
+    expect(result.current.appTurns[sessionId].map((turn) => ({ runId: turn.runId, input: turn.input }))).toEqual([{ runId, input: 'First App' }, { runId: nextRunId, input: 'Second App' }])
+    expect(result.current.appTurns[runId]).toBeUndefined()
+    expect(result.current.runs[sessionId].runId).toBe(nextRunId)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+})
+
 describe('Run control state', () => {
   const identity = { session_id: sessionId, run_id: runId }
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })

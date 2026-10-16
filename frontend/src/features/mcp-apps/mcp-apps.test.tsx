@@ -5,7 +5,7 @@ import type { AppRendererProps } from '@mcp-ui/client'
 import { prepareAppResource, type HostWidget } from './app-resource'
 import { appSecurityPolicy } from './app-policy'
 import { WidgetRenderer } from './app-renderer'
-import { McpApps } from './mcp-apps'
+import { McpApps, SessionApps } from './mcp-apps'
 import { runEventSchema } from '@/features/agent-host/run-transport'
 import { RunPanel } from '@/features/agent-host/run-panel'
 
@@ -166,7 +166,7 @@ describe('Ephemeral App lifecycle', () => {
   it('retains an App outside a folded history snapshot and through an unconfirmed Run end', async () => {
     const event = runEventSchema.parse({ session_id: '00000000-0000-4000-8000-000000000001', run_id: '00000000-0000-4000-8000-000000000002', event_id: '00000000-0000-4000-8000-000000000005', sequence: 1, created_at: '2026-10-16T00:00:00Z', event: { kind: 'widget.created', widget } })
     const run = { sessionId: event.session_id, runId: event.run_id, input: 'Inspect', text: 'Result', events: [event], phase: 'completed' as const, finishedAt: Date.now(), error: null }
-    const props = { conversationKey: event.session_id, run, draft: '', onDraft: vi.fn(), send: vi.fn(), disabled: true, available: true, appsAvailable: true, historyConfirmed: true }
+    const props = { conversationKey: event.session_id, run, appTurns: [{ sessionId: event.session_id, runId: event.run_id, input: run.input, events: [event] }], draft: '', onDraft: vi.fn(), send: vi.fn(), disabled: true, available: true, appsAvailable: true, historyConfirmed: true }
     const view = render(<RunPanel {...props} />)
     const proxy = await screen.findByTitle('Controlled App proxy')
     expect(proxy.closest('details')).toBeNull()
@@ -174,6 +174,50 @@ describe('Ephemeral App lifecycle', () => {
     view.rerender(<RunPanel {...props} historyConfirmed={false} run={{ ...run, phase: 'unknown' }} />)
     expect(screen.getByTitle('Controlled App proxy')).toBe(proxy)
     expect(screen.getByText('Execution is unconfirmed. New input is blocked.')).toBeDefined()
+  })
+
+  it('keeps the same App frame when the current Run changes and history refreshes', async () => {
+    const event = runEventSchema.parse({ session_id: '00000000-0000-4000-8000-000000000001', run_id: '00000000-0000-4000-8000-000000000002', event_id: '00000000-0000-4000-8000-000000000005', sequence: 1, created_at: '2026-10-16T00:00:00Z', event: { kind: 'widget.created', widget } })
+    const run = { sessionId: event.session_id, runId: event.run_id, input: 'First input', text: 'Result', events: [event], phase: 'completed' as const, finishedAt: Date.now(), error: null }
+    const appTurns = [{ sessionId: event.session_id, runId: event.run_id, input: run.input, events: [event] }]
+    const props = { conversationKey: event.session_id, run, appTurns, draft: '', onDraft: vi.fn(), send: vi.fn(), disabled: true, available: true, appsAvailable: true, historyConfirmed: true }
+    const view = render(<RunPanel {...props} />)
+    const proxy = await screen.findByTitle('Controlled App proxy')
+    view.rerender(<RunPanel {...props} historyConfirmed={false} run={{ ...run, runId: '00000000-0000-4000-8000-000000000006', input: 'Second input', events: [], phase: 'streaming', text: '', finishedAt: null }} />)
+    expect(screen.getByTitle('Controlled App proxy')).toBe(proxy)
+    expect(screen.getByRole('region', { name: `Apps for Run ${event.run_id}` }).textContent).toContain('First input')
+    expect(screen.getByRole('region', { name: 'Current Run' }).querySelector('iframe')).toBeNull()
+    view.rerender(<RunPanel {...props} historyVersion="new history" run={{ ...run, phase: 'rejected' }} />)
+    expect(screen.getByTitle('Controlled App proxy')).toBe(proxy)
+  })
+
+  it('scopes input and dismissal by Session/Run and preserves closed Apps across selection changes', async () => {
+    const user = userEvent.setup()
+    const event = runEventSchema.parse({ session_id: '00000000-0000-4000-8000-000000000001', run_id: '00000000-0000-4000-8000-000000000002', event_id: '00000000-0000-4000-8000-000000000005', sequence: 2, created_at: '2026-10-16T00:00:00Z', event: { kind: 'widget.created', widget } })
+    const input = runEventSchema.parse({ ...event, event_id: '00000000-0000-4000-8000-000000000006', sequence: 1, event: { kind: 'tool.started', tool_invocation_id: widget.tool_invocation_id, tool_name: widget.tool_name, arguments: { value: 'first' } } })
+    const first = { sessionId: event.session_id, runId: event.run_id, input: 'First input', events: [input, event] }
+    const secondRunId = '00000000-0000-4000-8000-000000000007'
+    const second = { ...first, runId: secondRunId, input: 'Second input', events: [{ ...input, run_id: secondRunId, event: { ...input.event, arguments: { value: 'second' } } }, { ...event, run_id: secondRunId }] }
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const view = render(<SessionApps turns={[first]} sessionId={event.session_id} available />)
+    await screen.findByTitle('Controlled App proxy')
+    expect(renderer.props?.toolInput).toEqual({ value: 'first' })
+    await user.click(screen.getByRole('button', { name: 'Close App' }))
+    view.rerender(<SessionApps turns={[first, second]} sessionId={event.session_id} available />)
+    await screen.findByTitle('Controlled App proxy')
+    expect(renderer.props?.toolInput).toEqual({ value: 'second' })
+    expect(screen.getAllByTitle('Controlled App proxy')).toHaveLength(1)
+    expect(screen.getByText('App closed')).toBeDefined()
+    view.rerender(<SessionApps turns={[first, second]} sessionId={secondRunId} available />)
+    expect(screen.queryByRole('region', { name: 'Session Apps' })).toBeNull()
+    expect(screen.queryByTitle('Controlled App proxy')).toBeNull()
+    view.rerender(<SessionApps turns={[first]} sessionId={event.session_id} available />)
+    expect(screen.getByText('App closed')).toBeDefined()
+    expect(screen.queryByTitle('Controlled App proxy')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Reload App' }))
+    await screen.findByTitle('Controlled App proxy')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('contains a renderer crash without taking down the surrounding conversation', async () => {

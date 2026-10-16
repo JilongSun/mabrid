@@ -40,8 +40,10 @@ function AppFrame({ widget, input }: { widget: HostWidget; input?: Record<string
 }
 
 /** Keep reload local to the delivered resource; it never retries a tool or submits agent input. */
-export function WidgetRenderer({ widget, input }: { widget: HostWidget; input?: Record<string, unknown> }) {
-  const [closed, setClosed] = useState(false)
+export function WidgetRenderer({ widget, input, closed: controlledClosed, onClosedChange }: { widget: HostWidget; input?: Record<string, unknown>; closed?: boolean; onClosedChange?: (closed: boolean) => void }) {
+  const [locallyClosed, setLocallyClosed] = useState(false)
+  const closed = controlledClosed ?? locallyClosed
+  const setClosed = onClosedChange ?? setLocallyClosed
   const [revision, setRevision] = useState(0)
   return <section aria-label={`${widget.tool_name} App`} className="my-5 min-w-0 overflow-hidden rounded-md border">
     <header className="flex items-center justify-between gap-3 border-b px-3 py-2"><h3 className="min-w-0 break-all text-sm font-medium">{widget.tool_name}</h3><div className="flex shrink-0 gap-1"><Button variant="ghost" size="icon" title="Reload App" aria-label="Reload App" onClick={() => { setClosed(false); setRevision((value) => value + 1) }}><RotateCcw aria-hidden="true" /></Button><Button variant="ghost" size="icon" title="Close App" aria-label="Close App" disabled={closed} onClick={() => setClosed(true)}><X aria-hidden="true" /></Button></div></header>

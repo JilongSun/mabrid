@@ -2,13 +2,13 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { HostHttpError } from './api'
-import type { RunView } from './use-host-run'
+import type { AppTurn, RunView } from './use-host-run'
 import { ToolActivity } from './tool-activity'
-import { McpApps } from '@/features/mcp-apps/mcp-apps'
+import { SessionApps } from '@/features/mcp-apps/mcp-apps'
 
 /** Render ephemeral Run output separately from runtime-owned persisted history. */
-export function RunPanel({ run, draft, onDraft, send, disabled, available, reason, conversationKey, historyVersion, historyConfirmed = false, appsAvailable = false, children, controls }: {
-  run?: RunView; draft: string; onDraft: (value: string) => void; send: () => void; disabled: boolean; available: boolean; reason?: string
+export function RunPanel({ run, appTurns = [], draft, onDraft, send, disabled, available, reason, conversationKey, historyVersion, historyConfirmed = false, appsAvailable = false, children, controls }: {
+  run?: RunView; appTurns?: AppTurn[]; draft: string; onDraft: (value: string) => void; send: () => void; disabled: boolean; available: boolean; reason?: string
   conversationKey: string; historyVersion?: string | null; historyConfirmed?: boolean; appsAvailable?: boolean; children?: ReactNode; controls?: ReactNode
 }) {
   const viewport = useRef<HTMLDivElement>(null)
@@ -17,7 +17,7 @@ export function RunPanel({ run, draft, onDraft, send, disabled, available, reaso
   const following = scroll.key !== conversationKey || scroll.following
   useLayoutEffect(() => {
     if (following && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight
-  }, [conversationKey, historyVersion, run?.text, run?.events.length, following])
+  }, [conversationKey, historyVersion, run?.text, run?.events.length, appTurns, following])
   useLayoutEffect(() => {
     if (input.current) { input.current.style.height = 'auto'; input.current.style.height = `${Math.min(144, Math.max(72, input.current.scrollHeight))}px` }
   }, [draft])
@@ -31,9 +31,9 @@ export function RunPanel({ run, draft, onDraft, send, disabled, available, reaso
   return <section aria-label="New input and current Run" className="relative flex min-h-0 min-w-0 flex-1 flex-col">
     <div className="relative min-h-0 flex-1"><div ref={viewport} aria-label="Conversation messages" className="h-full min-h-0 overflow-y-auto overscroll-contain px-5 py-5 md:px-8" onScroll={(event) => { const element = event.currentTarget; const next = element.scrollHeight - element.clientHeight - element.scrollTop < 80; if (next !== following || scroll.key !== conversationKey) setScroll({ key: conversationKey, following: next }) }}>
     <div className="mx-auto w-full max-w-3xl min-w-0">{children}
+    <SessionApps turns={appTurns} sessionId={conversationKey} available={appsAvailable} />
     {run && <section aria-label="Current Run" className="mb-6 min-w-0">
       {historyConfirmed ? <details className="mt-4 text-xs text-muted-foreground"><summary>Last turn snapshot</summary><div className="mt-4 text-foreground">{turn}</div></details> : turn}
-      <McpApps events={run.events} available={appsAvailable} />
       <p role="status" className="mt-4 text-xs text-muted-foreground">Run {run.phase}</p>
       <details className="mt-4 text-xs text-muted-foreground"><summary>Run details</summary>{run.runId && <p className="mt-3 break-all font-mono">{run.runId}</p>}
         {progress.length > 0 && <ol aria-label="Current Run activity" className="mt-4 divide-y border-y">{progress.map((event) => <li key={event.event_id} className="min-w-0 py-3"><details><summary className="break-words">{event.sequence}. {event.event.kind}{'tool_name' in event.event ? ` / ${event.event.tool_name}` : event.event.kind === 'widget.created' ? ` / ${event.event.widget.tool_name}` : ''}</summary><pre className="mt-3 whitespace-pre-wrap break-all">{JSON.stringify(event.event, null, 2)}</pre></details></li>)}</ol>}
