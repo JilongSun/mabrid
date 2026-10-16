@@ -11,6 +11,15 @@ importers:
       '@fontsource-variable/geist':
         specifier: ^5.3.0
         version: 5.3.0
+      '@mcp-ui/client':
+        specifier: 7.1.1
+        version: 7.1.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@modelcontextprotocol/ext-apps':
+        specifier: 1.2.0
+        version: 1.2.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.6))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.6)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.32.1
+        version: 1.32.1(zod@4.6.6)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -297,6 +306,25 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@mcp-ui/client@7.1.1':
+    resolution: {integrity: sha512-Yy0q3YFl6WmcHRW0pRwD2F+Fs9Y/TFm1xpBpkuqvS1IRBaGGgc7PvkB0nvrKTqO6QZm+MufObfQM+oxo8mmLFw==}
+    peerDependencies:
+      react: ^18 || ^19
+      react-dom: ^18 || ^19
+
+  '@modelcontextprotocol/ext-apps@1.2.0':
+    resolution: {integrity: sha512-ijUQJX/FmNq8PWgOLzph/BAfy84sUZxoIRuHzr+F37wYtWjhdl8pliBJybapYolppY+XJ8oqjFZmTOuMqxwbWQ==}
+    peerDependencies:
+      '@modelcontextprotocol/sdk': ^1.24.0
+      react: ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^17.0.0 || ^18.0.0 || ^19.0.0
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
 
   '@modelcontextprotocol/sdk@1.32.1':
     resolution: {integrity: sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw==}
@@ -3344,6 +3372,33 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
+  '@mcp-ui/client@7.1.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      '@modelcontextprotocol/ext-apps': 1.2.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.6))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.32.1(zod@3.25.76)
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
+
+  '@modelcontextprotocol/ext-apps@1.2.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.6))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@3.25.76)':
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.32.1(zod@4.6.6)
+      zod: 3.25.76
+    optionalDependencies:
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+
+  '@modelcontextprotocol/ext-apps@1.2.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.6))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.6)':
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.32.1(zod@4.6.6)
+      zod: 4.6.6
+    optionalDependencies:
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+
   '@modelcontextprotocol/sdk@1.32.1(zod@3.25.76)':
     dependencies:
       '@hono/node-server': 2.1.4(hono@4.13.13)
@@ -3363,6 +3418,28 @@ snapshots:
       raw-body: 3.0.2
       zod: 3.25.76
       zod-to-json-schema: 3.25.2(zod@3.25.76)
+    transitivePeerDependencies:
+      - supports-color
+
+  '@modelcontextprotocol/sdk@1.32.1(zod@4.6.6)':
+    dependencies:
+      '@hono/node-server': 2.1.4(hono@4.13.13)
+      ajv: 8.20.0
+      ajv-formats: 3.0.1(ajv@8.20.0)
+      content-type: 1.0.5
+      cors: 2.8.6
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.1.1
+      express: 5.3.0
+      express-rate-limit: 8.7.1(express@5.3.0)
+      hono: 4.13.13
+      jose: 6.2.12
+      json-schema-typed: 8.0.2
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 4.6.6
+      zod-to-json-schema: 3.25.2(zod@4.6.6)
     transitivePeerDependencies:
       - supports-color
 
@@ -5882,6 +5959,10 @@ snapshots:
   zod-to-json-schema@3.25.2(zod@3.25.76):
     dependencies:
       zod: 3.25.76
+
+  zod-to-json-schema@3.25.2(zod@4.6.6):
+    dependencies:
+      zod: 4.6.6
 
   zod@3.25.76: {}
 

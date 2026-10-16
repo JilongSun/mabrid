@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button'
 import { HostHttpError } from './api'
 import type { RunView } from './use-host-run'
 import { ToolActivity } from './tool-activity'
+import { McpApps } from '@/features/mcp-apps/mcp-apps'
 
 /** Render ephemeral Run output separately from runtime-owned persisted history. */
-export function RunPanel({ run, draft, onDraft, send, disabled, available, reason, conversationKey, historyVersion, historyConfirmed = false, children, controls }: {
+export function RunPanel({ run, draft, onDraft, send, disabled, available, reason, conversationKey, historyVersion, historyConfirmed = false, appsAvailable = false, children, controls }: {
   run?: RunView; draft: string; onDraft: (value: string) => void; send: () => void; disabled: boolean; available: boolean; reason?: string
-  conversationKey: string; historyVersion?: string | null; historyConfirmed?: boolean; children?: ReactNode; controls?: ReactNode
+  conversationKey: string; historyVersion?: string | null; historyConfirmed?: boolean; appsAvailable?: boolean; children?: ReactNode; controls?: ReactNode
 }) {
   const viewport = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
@@ -32,6 +33,7 @@ export function RunPanel({ run, draft, onDraft, send, disabled, available, reaso
     <div className="mx-auto w-full max-w-3xl min-w-0">{children}
     {run && <section aria-label="Current Run" className="mb-6 min-w-0">
       {historyConfirmed ? <details className="mt-4 text-xs text-muted-foreground"><summary>Last turn snapshot</summary><div className="mt-4 text-foreground">{turn}</div></details> : turn}
+      <McpApps events={run.events} available={appsAvailable} />
       <p role="status" className="mt-4 text-xs text-muted-foreground">Run {run.phase}</p>
       <details className="mt-4 text-xs text-muted-foreground"><summary>Run details</summary>{run.runId && <p className="mt-3 break-all font-mono">{run.runId}</p>}
         {progress.length > 0 && <ol aria-label="Current Run activity" className="mt-4 divide-y border-y">{progress.map((event) => <li key={event.event_id} className="min-w-0 py-3"><details><summary className="break-words">{event.sequence}. {event.event.kind}{'tool_name' in event.event ? ` / ${event.event.tool_name}` : event.event.kind === 'widget.created' ? ` / ${event.event.widget.tool_name}` : ''}</summary><pre className="mt-3 whitespace-pre-wrap break-all">{JSON.stringify(event.event, null, 2)}</pre></details></li>)}</ol>}
