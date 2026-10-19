@@ -31,6 +31,7 @@ from mabrid.server.api.openai_compat import create_openai_compatibility_router
 from mabrid.server.api.host import create_host_router, host_error_response
 from mabrid.server.api.readiness import create_readiness_router
 from mabrid.server.api.capabilities import create_capabilities_router
+from mabrid.server.api.frontend import mount_frontend
 from mabrid.server.logging import get_logger
 
 if TYPE_CHECKING:
@@ -123,6 +124,7 @@ def create_app(
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    mount_frontend(app)
     return app
 
 

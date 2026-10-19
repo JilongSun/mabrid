@@ -52,6 +52,7 @@ def _endpoints() -> dict[str, EndpointFileConfig]:
     return {"fixture": EndpointFileConfig(bindings=[EndpointBindingFileConfig(upstream="fixture")])}
 
 
+@pytest.mark.parametrize("static_frontend", [False, True])
 @pytest.mark.parametrize(
     "mode",
     [
@@ -65,8 +66,16 @@ def _endpoints() -> dict[str, EndpointFileConfig]:
     ],
 )
 async def test_production_capabilities_use_selected_interfaces_without_changing_readiness(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str, static_frontend: bool
 ) -> None:
+    monkeypatch.delenv("MABRID_FRONTEND_DIST", raising=False)
+    if static_frontend:
+        directory = tmp_path / "dist"
+        directory.mkdir()
+        (directory / "index.html").write_text("<html>Host</html>", encoding="utf-8")
+        (directory / "sandbox.html").write_text("<html>Sandbox</html>", encoding="utf-8")
+        (directory / "assets").mkdir()
+        monkeypatch.setenv("MABRID_FRONTEND_DIST", str(directory))
     requests: list[httpx.Request] = []
 
     async def handle(request: httpx.Request) -> httpx.Response:
@@ -168,6 +177,10 @@ async def test_production_capabilities_use_selected_interfaces_without_changing_
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=server.config.app), base_url="http://mabrid.test"
         ) as client:
+            for page in ("/", "/agent-host/sessions/example", "/sandbox.html"):
+                assert (await client.get(page)).status_code == (200 if static_frontend else 404)
+            assert (await client.get("/api/v1/missing")).status_code == 404
+            assert (await client.post("/health")).status_code == 405
             assert (await client.get("/ready")).status_code == 200
             response = await client.get("/api/v1/capabilities")
             assert response.status_code == 200 and response.headers["cache-control"] == "no-store"

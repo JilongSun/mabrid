@@ -139,6 +139,28 @@ refactor or expansion implementation is bundled into these steps.
 GitHub's redirect limits and remote-update recommendation are documented in
 [Renaming a Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository).
 
+## Same-Origin Static Frontend
+
+The server can serve a compiled frontend on its existing HTTP origin. Build it with
+`pnpm --dir frontend build`, set the process environment variable `MABRID_FRONTEND_DIST` to the
+resulting distribution directory, and start the normal Mabrid server entry point. The selected
+directory must contain `index.html`, `sandbox.html`, and `assets/`; an incomplete or missing build
+is a configuration error. Relative paths resolve against the server process working directory,
+not the configuration file or checkout name. Leaving the variable unset preserves API-only startup.
+
+Static routes cover the root, Gateway and Agent Host pages, status, assets, and the independent
+sandbox entry. They do not replace `/api`, `/v1`, `/mcp`, health, readiness, or API documentation.
+Only known page paths fall back to the SPA entry; missing scripts and styles remain 404 responses.
+HTML entries require cache revalidation, while versioned assets use immutable caching. Responses
+use `nosniff`, a no-referrer policy, and same-origin framing; the App's inner sandbox and declared
+resource CSP remain independent restrictions. In particular, a production frontend does not gain
+the development-only HTTP loopback resource exception.
+
+[Static frontend tests](../../backend/apps/server/tests/test_frontend_static.py) cover navigation,
+GET/HEAD, missing assets, traversal, configuration failures, and API method precedence. Production
+bootstrap tests exercise the same frozen API contract with static serving both enabled and disabled.
+This provides the server-side hosting mechanism, not an OCI image or release-image acceptance.
+
 ## Remaining Release Gates
 
 The backend's planned v0.1 functional baseline is substantially complete. The product is not yet
@@ -149,7 +171,7 @@ a complete v0.1 release. Remaining gates include:
 - Actual deployment integration against the selected runtime and MCP servers/transports, including
   externally verified support, advertised endpoint URLs, continuation, stop/disconnect settlement,
   fresh resources, and rendered widgets. Controlled protocol tests are necessary but not sufficient.
-- OCI build/distribution, same-origin static frontend serving, and clean-database migration,
+- OCI build/distribution, packaging the compiled frontend for same-origin serving, and clean-database migration,
   configuration, shutdown, liveness/readiness, and startup validation inside the release image.
 - Post-migration code review, integration regressions, and the final release checklist under the
   accepted v0.1 scope. A public release README is written only when the project is complete.
