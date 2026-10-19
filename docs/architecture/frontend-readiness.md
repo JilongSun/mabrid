@@ -1,9 +1,10 @@
 # Frontend Readiness and Migration Handoff
 
-- Reviewed: 2026-10-13
+- Contract reviewed: 2026-10-13
+- Frontend functional baseline checked: 2026-10-19
 - Authority: [ADR 0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md)
-- Result: The first-party frontend contract and route-partition milestone is complete.
-- Boundary: Backend frontend readiness is established; v0.1 release readiness is not.
+- Result: The contract, route-partition milestone, and first-party frontend functional baseline are complete.
+- Boundary: Frontend functional completion does not establish deployment or v0.1 release readiness.
 
 ## Frozen Contract
 
@@ -54,7 +55,7 @@ Host SSE replay. Diagnostic inspection remains intentionally separate from model
 descriptions and public Host presentation. Management errors use `application/problem+json`; Host
 errors use `application/json`; successful Host Run delivery uses `text/event-stream`.
 
-## Readiness Evidence
+## Contract Readiness Evidence
 
 All six ADR 0016 frontend prerequisites are satisfied by controlled tests:
 
@@ -86,9 +87,9 @@ Project implementation and validation boundaries are:
 4. SDK replacement, Tauri packaging, further runtime integrations, remote conversation import, and
    Host follow-up actions remain outside the completed contract milestone. Exploratory proposals
    are not accepted requirements or implementation authorization.
-5. Implement the frontend rewrite against the frozen contract as a separately scoped task.
-   Product design and implementation can now focus on Sessions/history, live Run presentation,
-   widgets/sandboxing, read-only Gateway management, inspection, and connection/capability status.
+5. The separately scoped frontend rewrite has completed the functional baseline described below,
+   using the frozen contract for Sessions/history, live Run presentation, widgets/sandboxing,
+   read-only Gateway management, inspection, and connection/capability status.
 6. Finish integration and distribution gates before tagging v0.1. Backend corrections discovered
    during review or frontend integration still require their own focused regression checks.
 
@@ -98,6 +99,9 @@ cancellation ordering, reader/client cleanup, and durable lease release; protoco
 Host DTO privacy and safe errors; configuration/secret ownership; and production/image startup.
 
 ### Remote Migration Checklist
+
+This checklist records the contract-milestone handoff, not current frontend implementation status
+or verification that external repository settings have changed.
 
 Repository-local Mabrid identity is complete; external hosting changes require separate verification. The
 recommended About text and current product positioning are recorded in
@@ -139,6 +143,39 @@ refactor or expansion implementation is bundled into these steps.
 GitHub's redirect limits and remote-update recommendation are documented in
 [Renaming a Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository).
 
+## Completed Frontend Functional Baseline
+
+The first-party frontend's agreed functional scope is implemented. There are no known remaining
+frontend feature tasks in this baseline; release packaging and deployment acceptance remain separate.
+
+| Surface | Completed behavior and regression evidence |
+| --- | --- |
+| Gateway management | Read-only topology, endpoint/upstream details, filtering, navigation, and return context; [Gateway tests](../../frontend/src/features/gateway/endpoints-view.test.tsx) and [routing tests](../../frontend/src/App.test.tsx) |
+| Gateway Session diagnostics | Session lists, snapshots, event timelines, pagination, and refresh/error states; [Session tests](../../frontend/src/features/gateway/sessions.test.tsx) |
+| Connection and capabilities | Separate local, deployment, remote, and effective facts; read-only Target assignment; [status tests](../../frontend/src/features/status/status.test.tsx) |
+| Agent Host | Sessions, runtime-owned history, new-input-only POST-SSE, tool activity, stop, uncertain outcomes, and reconciliation; [Host tests](../../frontend/src/features/agent-host/agent-host.test.tsx) and [Run tests](../../frontend/src/features/agent-host/run.test.ts) |
+| MCP Apps | Official renderer, initialization and input/result exchange, sandbox/CSP, failure handling, page-local cross-turn retention, close/reload, and explicit unsupported follow-up actions; [MCP Apps tests](../../frontend/src/features/mcp-apps/mcp-apps.test.tsx) |
+
+The baseline has 163 tests across seven frontend test files, together with TypeScript, lint, and
+production-build checks. Browser checks cover desktop navigation and layout, controlled Run failure
+paths, and compiled renderer isolation. Live test-runtime checks have also exercised continuation,
+read-only mock tools, and delivered Apps. These are scoped evidence, not certification of every
+resource variant or external runtime deployment.
+
+App resources remain page-local: a full reload does not reconstruct historical widgets. Product-level
+Host follow-up actions, SSE replay, remote conversation import, and configuration editing are not
+missing frontend tasks in this baseline. The frontend does not advertise these as supported.
+
+Frontend-only completion can be rechecked from the repository root with:
+
+```sh
+pnpm --dir frontend test
+pnpm --dir frontend lint
+pnpm --dir frontend build
+```
+
+The build includes TypeScript checking and emits both the main page and the independent sandbox entry.
+
 ## Same-Origin Static Frontend
 
 The server can serve a compiled frontend on its existing HTTP origin. Build it with
@@ -163,19 +200,19 @@ This provides the server-side hosting mechanism, not an OCI image or release-ima
 
 ## Remaining Release Gates
 
-The backend's planned v0.1 functional baseline is substantially complete. The product is not yet
-a complete v0.1 release. Remaining gates include:
+The first-party frontend functional baseline is complete within its agreed scope. The backend's
+planned v0.1 functional baseline remains substantially complete. The product is not yet a complete
+v0.1 release. Remaining gates include:
 
-- The first-party frontend and MCP Apps renderer, including sandbox restrictions, initialization,
-  data exchange, unavailable historical widgets, and explicit unsupported Host actions.
 - Actual deployment integration against the selected runtime and MCP servers/transports, including
   externally verified support, advertised endpoint URLs, continuation, stop/disconnect settlement,
   fresh resources, and rendered widgets. Controlled protocol tests are necessary but not sufficient.
-- OCI build/distribution, packaging the compiled frontend for same-origin serving, and clean-database migration,
-  configuration, shutdown, liveness/readiness, and startup validation inside the release image.
+- OCI build/distribution, packaging the compiled frontend for same-origin serving, and clean-database
+   migration, configuration, shutdown, liveness/readiness, and startup validation inside the release image.
 - Post-migration code review, integration regressions, and the final release checklist under the
   accepted v0.1 scope. A public release README is written only when the project is complete.
 
 There is no need to reopen completed backend architecture batches merely because release work
 remains. There is also no permission to label live integration or distribution complete based on
-the contract freeze. Frontend work and release completion are separate, bounded next stages.
+the contract freeze or frontend functional completion. Deployment regressions can still require
+focused frontend fixes, but the remaining release gates are not unimplemented frontend features.
