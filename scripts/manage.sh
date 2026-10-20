@@ -6,7 +6,7 @@ fail() { printf '%s\n' "$*" >&2; exit 1; }
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 action=${1:-}
 if [ "$#" -gt 0 ]; then shift; fi
-config_dir=$root/deploy/local
+config_dir=$root
 image=mabrid:local
 name=mabrid
 port=8765
@@ -32,26 +32,21 @@ case "$timeout" in ''|*[!0-9]*) fail "Timeout must be a positive number of secon
 
 if [ "$action" = setup ]; then
     mkdir -p -- "$config_dir"
-    for file in mabrid.yaml .env; do
-        target=$config_dir/$file
-        if [ -e "$target" ]; then
-            [ -f "$target" ] || fail "Expected a regular file: $target"
-            printf 'Keeping existing %s\n' "$target"
-        else
-            mode=644
-            [ "$file" != .env ] || mode=600
-            (umask 077; set -C; cat "$root/deploy/container/$file.example" > "$target")
-            chmod "$mode" "$target"
-            printf 'Created %s\n' "$target"
-        fi
-    done
+    target=$config_dir/mabrid.yaml
+    if [ -e "$target" ]; then
+        [ -f "$target" ] || fail "Expected a regular file: $target"
+        printf 'Keeping existing %s\n' "$target"
+    else
+        cp "$root/mabrid.yaml.example" "$target"
+        printf 'Created %s\n' "$target"
+    fi
     exit 0
 fi
 
 [ -d "$config_dir" ] || fail "Configuration directory is missing; run setup first"
 config_dir=$(CDPATH= cd -- "$config_dir" && pwd -P)
 if [ "$action" != stop ]; then
-    [ -f "$config_dir/mabrid.yaml" ] && [ -f "$config_dir/.env" ] || fail "Run setup first"
+    [ -f "$config_dir/mabrid.yaml" ] || fail "Run setup first"
 fi
 command -v docker >/dev/null 2>&1 || fail "Docker CLI is required"
 [ "$(docker info --format '{{.OSType}}')" = linux ] || fail "Select a Docker context using Linux containers"
@@ -68,7 +63,7 @@ case "$config_dir" in *,*) fail "Docker bind mount paths cannot contain commas" 
 export MABRID_CONFIG_DIR="$config_dir" MABRID_IMAGE="$image" MABRID_NAME="$name" MABRID_PORT="$port"
 compose() {
     docker compose --project-name "$name" --project-directory "$root" \
-        --env-file "$root/deploy/container/.env.example" --file "$root/compose.yaml" "$@"
+        --file "$root/compose.yaml" "$@"
 }
 check_owner() {
     resource=$1
@@ -97,11 +92,8 @@ case "$action" in
         check_owner container "$name"
         check_owner volume "$name-data"
         [ -z "$(compose ps --status running --quiet mabrid)" ] || fail "Already running; use stop before run"
-        if ! compose run --rm --no-deps --pull never preflight >/dev/null 2>&1; then
-            fail "Configuration preflight failed; check YAML/.env, required secrets, example URLs and volume paths. Values are not printed."
-        fi
         compose up --detach --wait --wait-timeout "$timeout" --no-build --pull never mabrid
-        printf 'Running %s at http://localhost:%s\n' "$name" "$port"
+        printf 'Started %s; port mapping http://localhost:%s (application readiness is not checked).\n' "$name" "$port"
         ;;
     stop)
         check_owner container "$name"

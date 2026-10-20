@@ -25,7 +25,6 @@ Desktop.ini
 .env.*.local
 mcpapps-bridge.yaml
 mabrid.yaml
-deploy/local/
 
 # Logs
 *.log

@@ -38,12 +38,13 @@ class CamelModel(BaseModel):
 
 
 class BridgeRuntimeConfig(CamelModel):
-    """Configure listener, advertised origin, identity override, and transport timeout."""
+    """Configure listener, advertised origin, identity, diagnostics, and transport timeout."""
 
-    api_host: str = "127.0.0.1"
+    api_host: str = "0.0.0.0"
     api_port: int = 8765
     advertised_base_url: str | None = None
     proxy_name: str | None = None
+    diagnostic_upstream: str | None = None
     httpx_timeout_seconds: float | None = None
 
     @field_validator("advertised_base_url")
@@ -148,6 +149,11 @@ class MabridConfig(CamelModel):
     def validate_upstream_defaults(self) -> MabridConfig:
         if self.agent_host.enabled and self.bridge.advertised_base_url is None:
             raise ValueError("enabled Agent Host requires 'bridge.advertisedBaseUrl'")
+        diagnostic = self.bridge.diagnostic_upstream
+        if diagnostic is not None and diagnostic not in self.upstreams:
+            raise ValueError(
+                f"'bridge.diagnosticUpstream' references unknown upstream '{diagnostic}'"
+            )
         for endpoint_name, endpoint in self.endpoints.items():
             for binding in endpoint.bindings:
                 if binding.upstream not in self.upstreams:

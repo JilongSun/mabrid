@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -28,9 +27,7 @@ case "$*" in
     case "$*" in
       *' ps --status running '*)
         case "$DOCKER_TEST_SCENARIO" in active|stop) printf 'fixture-id\\n' ;; esac ;;
-      *' run --rm '*)
-        [ "$DOCKER_TEST_SCENARIO" != preflight ] || { printf 'fixture-secret' >&2; exit 1; } ;;
-      *' up --detach '*) [ "$DOCKER_TEST_SCENARIO" != health ] || exit 1 ;;
+            *' up --detach '*) [ "$DOCKER_TEST_SCENARIO" != start ] || exit 1 ;;
     esac ;;
 esac
 exit 0
@@ -60,11 +57,7 @@ function global:docker {
         if ($line.Contains(' ps --status running ')) {
             if ($env:DOCKER_TEST_SCENARIO -in @('active', 'stop')) { 'fixture-id' }
         }
-        elseif ($line.Contains(' run --rm ') -and $env:DOCKER_TEST_SCENARIO -eq 'preflight') {
-            $global:LASTEXITCODE = 1
-            'fixture-secret'
-        }
-        elseif ($line.Contains(' up --detach ') -and $env:DOCKER_TEST_SCENARIO -eq 'health') {
+        elseif ($line.Contains(' up --detach ') -and $env:DOCKER_TEST_SCENARIO -eq 'start') {
             $global:LASTEXITCODE = 1
         }
     }
@@ -91,7 +84,7 @@ def launcher(request: pytest.FixtureRequest, tmp_path: Path):
             pytest.skip("POSIX shell is unavailable")
         binaries = tmp_path / "bin"
         binaries.mkdir()
-        for utility in ("dirname", "mkdir", "cat", "chmod", "grep"):
+        for utility in ("dirname", "mkdir", "cp", "grep"):
             executable = shutil.which(utility)
             assert executable is not None
             (binaries / utility).symlink_to(executable)
@@ -158,12 +151,13 @@ def test_native_setup_is_idempotent_without_host_python(launcher) -> None:
     invoke, directory, log = launcher
     result = invoke("setup")
     assert result.returncode == 0, result.stderr
-    assert (directory / "mabrid.yaml").read_bytes() == (
-        ROOT / "deploy/container/mabrid.yaml.example"
-    ).read_bytes()
+    assert (directory / "mabrid.yaml").read_bytes() == (ROOT / "mabrid.yaml.example").read_bytes()
+    assert not (directory / ".env").exists()
+    (directory / "mabrid.yaml").write_bytes(b"user-owned configuration\n")
     (directory / ".env").write_bytes(b"USER_VALUE=fixture-only\n")
     result = invoke("setup")
     assert result.returncode == 0, result.stderr
+    assert (directory / "mabrid.yaml").read_bytes() == b"user-owned configuration\n"
     assert (directory / ".env").read_bytes() == b"USER_VALUE=fixture-only\n"
     assert not log.exists()
 
@@ -188,74 +182,44 @@ def test_native_docker_workflow(launcher, action: str) -> None:
         assert " build mabrid" in commands
         assert " preflight" not in commands
     elif action == "run":
-        assert commands.index(" run --rm") < commands.index(" up --detach")
+        assert " run --rm" not in commands
+        assert " up --detach" in commands
         assert "--no-build --pull never mabrid" in commands
         assert "--wait" in commands
+        assert "readiness is not checked" in result.stdout
     else:
         assert " stop --timeout 20 mabrid" in commands
         assert "volume rm" not in commands
         assert " down" not in commands
 
 
-@pytest.mark.parametrize(
-    "scenario", ["image", "foreign", "active", "preflight", "health", "old-compose"]
-)
+@pytest.mark.parametrize("scenario", ["image", "foreign", "active", "start", "old-compose"])
 def test_failed_prerequisites_do_not_claim_success(launcher, scenario: str) -> None:
     invoke, _, log = launcher
     assert invoke("setup").returncode == 0
     result = invoke("run", scenario)
     assert result.returncode != 0
     commands = log.read_text(encoding="utf-8")
-    if scenario != "health":
+    if scenario != "start":
         assert " up --detach" not in commands
-    assert "fixture-secret" not in result.stderr + result.stdout
 
 
 def test_compose_keeps_secrets_runtime_only() -> None:
     document = yaml.safe_load((ROOT / "compose.yaml").read_text(encoding="utf-8"))
     service = document["services"]["mabrid"]
-    preflight = document["services"]["preflight"]
+    assert list(document["services"]) == ["mabrid"]
     assert service["env_file"][0]["format"] == "raw"
+    assert service["env_file"][0]["required"] is False
     assert "args" not in service["build"]
-    assert preflight["network_mode"] == "none"
-    assert len(preflight["volumes"]) == 1
-    assert preflight["entrypoint"] == ["python", "/app/check_config.py"]
-    assert service["volumes"][0]["read_only"]
+    configuration = service["volumes"][1]
+    assert configuration["source"] == "${MABRID_CONFIG_DIR}/mabrid.yaml"
+    assert configuration["target"] == "/var/lib/mabrid/mabrid.yaml"
+    assert configuration["read_only"]
 
 
-@pytest.mark.parametrize("failure", [None, "storage", "placeholder", "secret"])
-def test_image_only_preflight_uses_real_config_models(tmp_path: Path, failure: str | None) -> None:
-    config = tmp_path / "mabrid.yaml"
-    data = tmp_path / "data"
-    settings = yaml.safe_load((ROOT / "deploy/container/mabrid.yaml.example").read_text())
-    settings["storage"]["sqlitePath"] = str(data / "mabrid.db")
-    settings["upstreams"]["example"]["url"] = "http://127.0.0.1:9/mcp"
-    if failure == "storage":
-        settings["storage"]["sqlitePath"] = str(tmp_path / "outside.db")
-    elif failure == "placeholder":
-        settings["upstreams"]["example"]["url"] = "https://fixture.invalid/mcp"
-    elif failure == "secret":
-        settings["agentHost"] = {
-            "enabled": True,
-            "targetId": "fixture",
-            "endpointSlug": "example",
-            "runtime": {"apiKeyEnv": "MABRID_PREFLIGHT_TEST_SECRET"},
-        }
-    config.write_text(yaml.safe_dump(settings), encoding="utf-8")
-    environment = os.environ.copy()
-    environment.pop("MABRID_PREFLIGHT_TEST_SECRET", None)
-    code = (ROOT / "deploy/container/check_config.py").read_text(encoding="utf-8")
-    code = code.replace('"/etc/mabrid/mabrid.yaml"', repr(str(config))).replace(
-        '"/var/lib/mabrid"', repr(str(data))
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        env=environment,
-        capture_output=True,
-        text=True,
-        timeout=20,
-        check=False,
-    )
-    assert result.returncode == (0 if failure is None else 2), result.stderr
-    assert "MABRID_PREFLIGHT_TEST_SECRET" not in result.stderr
-    assert not data.exists()
+def test_root_example_matches_current_configuration_contract() -> None:
+    from mabrid.server.config import load_bridge_config
+
+    loaded = load_bridge_config(str(ROOT / "mabrid.yaml.example"))
+    assert loaded.config.bridge.api_port == 8765
+    assert loaded.config.storage.sqlite_path == Path("backend/var/mabrid.db")

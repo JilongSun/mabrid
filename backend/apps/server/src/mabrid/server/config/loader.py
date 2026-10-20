@@ -56,26 +56,19 @@ def load_bridge_config(path: str | None = None) -> LoadedBridgeConfig:
     return LoadedBridgeConfig(path=config_path, config=config)
 
 
-def resolve_runtime_configuration(
-    config_path: str | None,
-    *,
-    upstream_name: str | None,
-    api_host: str | None,
-    api_port: int | None,
-    proxy_name: str | None,
-    httpx_timeout_seconds: float | None = None,
-) -> RuntimeConfiguration:
+DEFAULT_PROXY_NAME = "mabrid-gateway"
+
+
+def resolve_runtime_configuration(config_path: str | None) -> RuntimeConfiguration:
+    """Resolve deployment settings from the configuration file and its adjacent dotenv file.
+
+    Listener settings, proxy identity, diagnostic upstream selection, and transport timeout
+    are configuration-file values only. The process entry point does not override them.
+    """
     loaded = load_bridge_config(config_path)
     load_dotenv(loaded.path.with_name(".env"), override=False)
-    if upstream_name is not None and upstream_name not in loaded.config.upstreams:
-        raise ConfigError(f"Unknown upstream '{upstream_name}'")
-    bridge = _apply_bridge_overrides(
-        loaded.config.bridge,
-        upstream_name=upstream_name or "mabrid-gateway",
-        api_host=api_host,
-        api_port=api_port,
-        proxy_name=proxy_name,
-        httpx_timeout_seconds=httpx_timeout_seconds,
+    bridge = loaded.config.bridge.model_copy(
+        update={"proxy_name": loaded.config.bridge.proxy_name or DEFAULT_PROXY_NAME}
     )
     resolved_upstreams = {
         name: _to_runtime_upstream_config(upstream, loaded.path.parent, bridge)
@@ -90,7 +83,7 @@ def resolve_runtime_configuration(
         storage=loaded.config.storage.model_copy(update={"sqlite_path": sqlite_path}),
         upstreams=resolved_upstreams,
         endpoints=loaded.config.endpoints,
-        diagnostic_upstream=upstream_name,
+        diagnostic_upstream=loaded.config.bridge.diagnostic_upstream,
         agent_host=_resolve_agent_host_config(loaded.config.agent_host),
     )
 
@@ -147,29 +140,6 @@ def _project_root() -> Path:
         if (parent / CONFIG_FILE_NAME).is_file():
             return parent
     return Path.cwd()
-
-
-def _apply_bridge_overrides(
-    bridge: BridgeRuntimeConfig,
-    *,
-    upstream_name: str,
-    api_host: str | None,
-    api_port: int | None,
-    proxy_name: str | None,
-    httpx_timeout_seconds: float | None = None,
-) -> BridgeRuntimeConfig:
-    updates: dict[str, object] = {}
-    if api_host is not None:
-        updates["api_host"] = api_host
-    if api_port is not None:
-        updates["api_port"] = api_port
-    if proxy_name is not None:
-        updates["proxy_name"] = proxy_name
-    else:
-        updates["proxy_name"] = bridge.proxy_name or upstream_name
-    if httpx_timeout_seconds is not None:
-        updates["httpx_timeout_seconds"] = httpx_timeout_seconds
-    return bridge.model_copy(update=updates)
 
 
 def _to_runtime_upstream_config(

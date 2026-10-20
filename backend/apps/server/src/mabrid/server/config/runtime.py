@@ -44,7 +44,7 @@ class RuntimeAgentHostConfig(BaseModel):
 
 
 class RuntimeUpstreamConfig(BaseModel):
-    """Resolved transport settings after file paths, environment values, and overrides."""
+    """Resolved transport settings after relative paths and environment references are applied."""
 
     transport: Literal["stdio", "sse", "streamable-http"] = "stdio"
     command: str | None = None

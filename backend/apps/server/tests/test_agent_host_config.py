@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from mabrid.server import main as server_main
 from mabrid.server.config import (
     CONFIG_FILE_NAME,
     ConfigError,
@@ -57,13 +58,7 @@ def test_enabled_agent_host_resolves_api_key_from_environment(
     _write_config(config_path)
     monkeypatch.setenv("FIXTURE_HERMES_KEY", "fixture-secret")
 
-    configuration = resolve_runtime_configuration(
-        str(config_path),
-        upstream_name=None,
-        api_host=None,
-        api_port=None,
-        proxy_name=None,
-    )
+    configuration = resolve_runtime_configuration(str(config_path))
 
     assert configuration.agent_host.enabled is True
     assert configuration.agent_host.mcp_apps_enabled is True
@@ -95,13 +90,7 @@ def test_agent_host_can_disable_mcp_apps_workflow(
     )
     monkeypatch.setenv("FIXTURE_HERMES_KEY", "fixture-secret")
 
-    configuration = resolve_runtime_configuration(
-        str(config_path),
-        upstream_name=None,
-        api_host=None,
-        api_port=None,
-        proxy_name=None,
-    )
+    configuration = resolve_runtime_configuration(str(config_path))
 
     assert configuration.agent_host.enabled is True
     assert configuration.agent_host.mcp_apps_enabled is False
@@ -124,13 +113,7 @@ upstreams:
     )
 
     with pytest.raises(ConfigError, match="requires enabled Agent Host"):
-        resolve_runtime_configuration(
-            str(config_path),
-            upstream_name=None,
-            api_host=None,
-            api_port=None,
-            proxy_name=None,
-        )
+        resolve_runtime_configuration(str(config_path))
 
 
 def test_enabled_agent_host_requires_configured_api_key_environment(
@@ -142,13 +125,7 @@ def test_enabled_agent_host_requires_configured_api_key_environment(
     monkeypatch.delenv("FIXTURE_HERMES_KEY", raising=False)
 
     with pytest.raises(ConfigError, match="FIXTURE_HERMES_KEY"):
-        resolve_runtime_configuration(
-            str(config_path),
-            upstream_name=None,
-            api_host=None,
-            api_port=None,
-            proxy_name=None,
-        )
+        resolve_runtime_configuration(str(config_path))
 
 
 def test_agent_host_uses_hermes_api_server_key_by_default(
@@ -172,13 +149,7 @@ upstreams:
     )
     monkeypatch.setenv("API_SERVER_KEY", "fixture-secret")
 
-    configuration = resolve_runtime_configuration(
-        str(config_path),
-        upstream_name=None,
-        api_host=None,
-        api_port=None,
-        proxy_name=None,
-    )
+    configuration = resolve_runtime_configuration(str(config_path))
 
     assert configuration.agent_host.runtime.api_key is not None
     assert configuration.agent_host.runtime.api_key.get_secret_value() == "fixture-secret"
@@ -207,13 +178,7 @@ upstreams:
     (tmp_path / ".env").write_text("API_SERVER_KEY=dotenv-secret\n", encoding="utf-8")
     monkeypatch.delenv("API_SERVER_KEY", raising=False)
 
-    configuration = resolve_runtime_configuration(
-        str(config_path),
-        upstream_name=None,
-        api_host=None,
-        api_port=None,
-        proxy_name=None,
-    )
+    configuration = resolve_runtime_configuration(str(config_path))
 
     assert configuration.agent_host.runtime.api_key is not None
     assert configuration.agent_host.runtime.api_key.get_secret_value() == "dotenv-secret"
@@ -241,13 +206,7 @@ upstreams:
     (tmp_path / ".env").write_text("API_SERVER_KEY=dotenv-secret\n", encoding="utf-8")
     monkeypatch.setenv("API_SERVER_KEY", "process-secret")
 
-    configuration = resolve_runtime_configuration(
-        str(config_path),
-        upstream_name=None,
-        api_host=None,
-        api_port=None,
-        proxy_name=None,
-    )
+    configuration = resolve_runtime_configuration(str(config_path))
 
     assert configuration.agent_host.runtime.api_key is not None
     assert configuration.agent_host.runtime.api_key.get_secret_value() == "process-secret"
@@ -276,13 +235,7 @@ upstreams:
     )
 
     with pytest.raises(ConfigError, match="integration"):
-        resolve_runtime_configuration(
-            str(config_path),
-            upstream_name=None,
-            api_host=None,
-            api_port=None,
-            proxy_name=None,
-        )
+        resolve_runtime_configuration(str(config_path))
 
 
 def test_configuration_requires_explicit_endpoints(tmp_path: Path) -> None:
@@ -298,13 +251,7 @@ upstreams:
     )
 
     with pytest.raises(ConfigError, match="endpoints"):
-        resolve_runtime_configuration(
-            str(config_path),
-            upstream_name=None,
-            api_host=None,
-            api_port=None,
-            proxy_name=None,
-        )
+        resolve_runtime_configuration(str(config_path))
 
 
 def test_enabled_agent_host_requires_advertised_base_url(
@@ -328,13 +275,7 @@ upstreams:
     monkeypatch.setenv("API_SERVER_KEY", "fixture-secret")
 
     with pytest.raises(ConfigError, match="advertisedBaseUrl"):
-        resolve_runtime_configuration(
-            str(config_path),
-            upstream_name=None,
-            api_host=None,
-            api_port=None,
-            proxy_name=None,
-        )
+        resolve_runtime_configuration(str(config_path))
 
 
 def test_disabled_agent_host_allows_missing_advertised_base_url(tmp_path: Path) -> None:
@@ -353,13 +294,7 @@ upstreams:
         encoding="utf-8",
     )
 
-    configuration = resolve_runtime_configuration(
-        str(config_path),
-        upstream_name=None,
-        api_host=None,
-        api_port=None,
-        proxy_name=None,
-    )
+    configuration = resolve_runtime_configuration(str(config_path))
 
     assert configuration.bridge.advertised_base_url is None
 
@@ -396,22 +331,16 @@ upstreams:
     )
 
     with pytest.raises(ConfigError, match="advertisedBaseUrl"):
-        resolve_runtime_configuration(
-            str(config_path),
-            upstream_name=None,
-            api_host=None,
-            api_port=None,
-            proxy_name=None,
-        )
+        resolve_runtime_configuration(str(config_path))
 
 
-def test_advertised_base_url_is_normalized_and_independent_of_listener_overrides(
-    tmp_path: Path,
-) -> None:
+def test_listener_settings_come_from_the_configuration_file(tmp_path: Path) -> None:
     config_path = tmp_path / "fixture.yaml"
     config_path.write_text(
         """
 bridge:
+    apiHost: 127.0.0.1
+    apiPort: 9000
     advertisedBaseUrl: https://mabrid.example.test/
 endpoints:
     fixture:
@@ -424,17 +353,85 @@ upstreams:
         encoding="utf-8",
     )
 
-    configuration = resolve_runtime_configuration(
-        str(config_path),
-        upstream_name=None,
-        api_host="0.0.0.0",
-        api_port=9000,
-        proxy_name=None,
-    )
+    configuration = resolve_runtime_configuration(str(config_path))
 
-    assert configuration.bridge.api_host == "0.0.0.0"
+    assert configuration.bridge.api_host == "127.0.0.1"
     assert configuration.bridge.api_port == 9000
     assert configuration.bridge.advertised_base_url == "https://mabrid.example.test"
+
+
+def test_listener_defaults_to_all_interfaces(tmp_path: Path) -> None:
+    config_path = tmp_path / "fixture.yaml"
+    config_path.write_text(
+        """
+endpoints:
+    fixture:
+        bindings: [{upstream: fixture}]
+upstreams:
+    fixture:
+        transport: stdio
+        command: fixture-server
+""",
+        encoding="utf-8",
+    )
+
+    configuration = resolve_runtime_configuration(str(config_path))
+
+    assert configuration.bridge.api_host == "0.0.0.0"
+    assert configuration.bridge.api_port == 8765
+    assert configuration.diagnostic_upstream is None
+
+
+def test_diagnostic_upstream_is_read_from_the_configuration_file(tmp_path: Path) -> None:
+    config_path = tmp_path / "fixture.yaml"
+    config_path.write_text(
+        """
+bridge:
+    diagnosticUpstream: diagnostic
+endpoints:
+    fixture:
+        bindings: [{upstream: fixture}]
+upstreams:
+    fixture:
+        transport: stdio
+        command: fixture-server
+    diagnostic:
+        transport: stdio
+        command: diagnostic-server
+""",
+        encoding="utf-8",
+    )
+
+    configuration = resolve_runtime_configuration(str(config_path))
+
+    assert configuration.diagnostic_upstream == "diagnostic"
+
+
+def test_diagnostic_upstream_must_reference_a_configured_upstream(tmp_path: Path) -> None:
+    config_path = tmp_path / "fixture.yaml"
+    config_path.write_text(
+        """
+bridge:
+    diagnosticUpstream: missing
+endpoints:
+    fixture:
+        bindings: [{upstream: fixture}]
+upstreams:
+    fixture:
+        transport: stdio
+        command: fixture-server
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="diagnosticUpstream"):
+        resolve_runtime_configuration(str(config_path))
+
+
+def test_process_arguments_accept_only_the_configuration_path() -> None:
+    assert server_main.parse_args(["--config", "fixture.yaml"]).config == "fixture.yaml"
+    with pytest.raises(SystemExit):
+        server_main.parse_args(["--config", "fixture.yaml", "--api-port", "9000"])
 
 
 def test_build_advertised_mcp_url_uses_the_validated_origin() -> None:

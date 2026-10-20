@@ -3,16 +3,16 @@
 IMAGE ?= mabrid:local
 CONTAINER_NAME ?= mabrid
 PORT ?= 8765
-CONFIG_DIR ?= deploy/local
+CONFIG_DIR ?= .
 
 help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "  install   Install backend and frontend dependencies"
 	@echo "  dev       Start the whole project (backend + frontend)"
-	@echo "  setup     Create local container configuration and environment files"
+	@echo "  setup     Copy mabrid.yaml.example to mabrid.yaml if missing"
 	@echo "  build     Build the image after setup (IMAGE=mabrid:local)"
-	@echo "  run       Validate configuration and start the built image"
+	@echo "  run       Start the built image with the local YAML configuration"
 	@echo "  stop      Stop the managed container without deleting its data"
 	@echo "  help      Show this help"
 

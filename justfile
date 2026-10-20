@@ -7,7 +7,7 @@ default:
 image := "mabrid:local"
 name := "mabrid"
 port := "8765"
-config_dir := "deploy/local"
+config_dir := "."
 
 [unix]
 install:

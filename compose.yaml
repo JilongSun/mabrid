@@ -1,26 +1,7 @@
-x-runtime: &runtime
-  image: ${MABRID_IMAGE:-mabrid:local}
-  pull_policy: never
-  read_only: true
-  cap_drop: [ALL]
-  security_opt: [no-new-privileges:true]
-  tmpfs:
-    - /tmp:rw,nosuid,noexec,size=64m
-  env_file:
-    - path: ${MABRID_CONFIG_DIR:?Run setup first}/.env
-      format: raw
-  volumes:
-    - &configuration
-      type: bind
-      source: ${MABRID_CONFIG_DIR}/mabrid.yaml
-      target: /etc/mabrid/mabrid.yaml
-      read_only: true
-      bind:
-        create_host_path: false
-
 services:
   mabrid:
-    <<: *runtime
+    image: ${MABRID_IMAGE:-mabrid:local}
+    pull_policy: never
     container_name: ${MABRID_NAME:-mabrid}
     build:
       context: .
@@ -29,15 +10,24 @@ services:
       io.mabrid.config-directory: ${MABRID_CONFIG_DIR}
     ports:
       - 127.0.0.1:${MABRID_PORT:-8765}:8765
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=64m
+    env_file:
+      - path: ${MABRID_CONFIG_DIR:?Run setup first}/.env
+        format: raw
+        required: false
     volumes:
-      - *configuration
       - data:/var/lib/mabrid
+      - type: bind
+        source: ${MABRID_CONFIG_DIR}/mabrid.yaml
+        target: /var/lib/mabrid/mabrid.yaml
+        read_only: true
+        bind:
+          create_host_path: false
     stop_grace_period: 20s
-  preflight:
-    <<: *runtime
-    profiles: [checks]
-    network_mode: none
-    entrypoint: [python, /app/check_config.py]
 
 volumes:
   data:

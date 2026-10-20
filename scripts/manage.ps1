@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [ValidateSet('setup', 'build', 'run', 'stop')][string]$Action,
-    [string]$ConfigDir = 'deploy/local',
+    [string]$ConfigDir = (Split-Path -Parent $PSScriptRoot),
     [string]$Image = 'mabrid:local',
     [string]$Name = 'mabrid',
     [ValidateRange(1, 65535)][int]$Port = 8765,
@@ -19,7 +19,7 @@ if ($Name -cnotmatch '^[a-z0-9][a-z0-9_-]*$') {
 }
 
 function Invoke-Docker {
-    param([string[]]$DockerArguments, [switch]$Quiet, [switch]$Live)
+    param([string[]]$DockerArguments, [switch]$Live)
     if ($Live) {
         & docker @DockerArguments
         if ($LASTEXITCODE -ne 0) { throw 'Docker command failed; see output above' }
@@ -34,17 +34,14 @@ function Invoke-Docker {
         $ErrorActionPreference = $previousPreference
     }
     if ($code -ne 0) {
-        if ($Quiet) {
-            throw 'Configuration preflight failed; check YAML/.env, required secrets, example URLs and volume paths. Values are not printed.'
-        }
         throw (($output | Out-String).Trim())
     }
-    if (-not $Quiet) { return (($output | Out-String).Trim()) }
+    if (-not $Live) { return (($output | Out-String).Trim()) }
 }
 
 function Invoke-Compose {
-    param([string[]]$ComposeArguments, [switch]$Quiet, [switch]$Live)
-    Invoke-Docker -DockerArguments ($script:ComposeBase + $ComposeArguments) -Quiet:$Quiet -Live:$Live
+    param([string[]]$ComposeArguments, [switch]$Live)
+    Invoke-Docker -DockerArguments ($script:ComposeBase + $ComposeArguments) -Live:$Live
 }
 
 function Confirm-Owner {
@@ -67,19 +64,15 @@ function Confirm-Owner {
 try {
     if ($Action -eq 'setup') {
         [IO.Directory]::CreateDirectory($ConfigDir) | Out-Null
-        foreach ($file in @('mabrid.yaml', '.env')) {
-            $target = Join-Path $ConfigDir $file
-            if (Test-Path -LiteralPath $target) {
-                if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
-                    throw "Expected a regular file: $target"
-                }
-                Write-Output "Keeping existing $target"
-            } else {
-                $content = [IO.File]::ReadAllBytes((Join-Path $Root "deploy/container/$file.example"))
-                $stream = [IO.File]::Open($target, [IO.FileMode]::CreateNew)
-                try { $stream.Write($content, 0, $content.Length) } finally { $stream.Dispose() }
-                Write-Output "Created $target"
+        $target = Join-Path $ConfigDir 'mabrid.yaml'
+        if (Test-Path -LiteralPath $target) {
+            if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+                throw "Expected a regular file: $target"
             }
+            Write-Output "Keeping existing $target"
+        } else {
+            Copy-Item -LiteralPath (Join-Path $Root 'mabrid.yaml.example') -Destination $target
+            Write-Output "Created $target"
         }
         exit 0
     }
@@ -88,10 +81,8 @@ try {
     }
     $ConfigDir = (Get-Item -LiteralPath $ConfigDir).FullName
     if ($Action -ne 'stop') {
-        foreach ($file in @('mabrid.yaml', '.env')) {
-            if (-not (Test-Path -LiteralPath (Join-Path $ConfigDir $file) -PathType Leaf)) {
-                throw 'Run setup first'
-            }
+        if (-not (Test-Path -LiteralPath (Join-Path $ConfigDir 'mabrid.yaml') -PathType Leaf)) {
+            throw 'Run setup first'
         }
     }
     Get-Command docker -ErrorAction Stop | Out-Null
@@ -109,7 +100,6 @@ try {
     $env:MABRID_PORT = [string]$Port
     $script:ComposeBase = @(
         'compose', '--project-name', $Name, '--project-directory', $Root,
-        '--env-file', (Join-Path $Root 'deploy/container/.env.example'),
         '--file', (Join-Path $Root 'compose.yaml')
     )
     switch ($Action) {
@@ -126,12 +116,11 @@ try {
             if (Invoke-Compose -ComposeArguments @('ps', '--status', 'running', '--quiet', 'mabrid')) {
                 throw 'Already running; use stop before run'
             }
-            Invoke-Compose -ComposeArguments @('run', '--rm', '--no-deps', '--pull', 'never', 'preflight') -Quiet
             Invoke-Compose -ComposeArguments @(
                 'up', '--detach', '--wait', '--wait-timeout', [string]$Timeout,
                 '--no-build', '--pull', 'never', 'mabrid'
             ) -Live
-            Write-Output "Running $Name at http://localhost:$Port"
+            Write-Output "Started $Name; port mapping http://localhost:$Port (application readiness is not checked)."
         }
         'stop' {
             Confirm-Owner 'container' $Name

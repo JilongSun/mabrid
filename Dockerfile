@@ -24,18 +24,15 @@ ENV PATH="/opt/venv/bin:$PATH" \
     MABRID_FRONTEND_DIST=/app/frontend
 RUN groupadd --gid 10001 mabrid \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin mabrid \
-    && mkdir -p /etc/mabrid /var/lib/mabrid \
+    && mkdir -p /var/lib/mabrid \
     && chown mabrid:mabrid /var/lib/mabrid
 WORKDIR /app
 COPY --from=backend-build /opt/venv /opt/venv
 COPY --from=frontend-build /build/frontend/dist /app/frontend
-COPY deploy/container/check_config.py /app/check_config.py
 COPY LICENSE /app/LICENSE
 USER 10001:10001
 EXPOSE 8765
 VOLUME ["/var/lib/mabrid"]
 STOPSIGNAL SIGTERM
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD ["python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8765/ready', timeout=3).close()"]
 ENTRYPOINT ["mabrid"]
-CMD ["--config", "/etc/mabrid/mabrid.yaml", "--api-host", "0.0.0.0", "--api-port", "8765"]
+CMD ["--config", "/var/lib/mabrid/mabrid.yaml"]
