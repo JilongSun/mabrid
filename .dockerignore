@@ -2,6 +2,9 @@
 !Dockerfile
 !.dockerignore
 !LICENSE
+!deploy/
+!deploy/container/
+!deploy/container/check_config.py
 !backend/
 !backend/pyproject.toml
 !backend/uv.lock

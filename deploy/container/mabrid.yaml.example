@@ -1,0 +1,24 @@
+bridge:
+  apiHost: 0.0.0.0
+  apiPort: 8765
+  advertisedBaseUrl: http://localhost:8765
+
+storage:
+  sqlitePath: /var/lib/mabrid/mabrid.db
+  autoMigrate: true
+
+agentHost:
+  enabled: false
+
+upstreams:
+  example:
+    transport: streamable-http
+    url: https://mcp.example.invalid/mcp
+
+endpoints:
+  example:
+    displayName: Example Endpoint
+    mode: aggregate
+    bindings:
+      - upstream: example
+        namespace: example

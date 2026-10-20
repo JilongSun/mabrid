@@ -29,6 +29,7 @@ RUN groupadd --gid 10001 mabrid \
 WORKDIR /app
 COPY --from=backend-build /opt/venv /opt/venv
 COPY --from=frontend-build /build/frontend/dist /app/frontend
+COPY deploy/container/check_config.py /app/check_config.py
 COPY LICENSE /app/LICENSE
 USER 10001:10001
 EXPOSE 8765

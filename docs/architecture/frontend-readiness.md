@@ -200,10 +200,10 @@ This provides the server-side hosting mechanism, not an OCI image or release-ima
 
 ## Remaining Release Gates
 
-The [OCI packaging and startup guide](../deployment/oci.md) provides a multi-stage image build,
-external configuration/data-volume contract, and an isolated image-check command. Non-Docker
-production-installation and startup checks do not establish OCI acceptance: building and running
-the image in a Docker-enabled environment remains required.
+The [container workflow guide](../deployment/container.md) provides setup, build, run, and stop
+commands with external configuration, runtime environment injection, persistent storage, and
+startup checks. Non-Docker checks do not establish OCI acceptance: building and running the image
+in a Docker-enabled environment remains required.
 
 The first-party frontend functional baseline is complete within its agreed scope. The backend's
 planned v0.1 functional baseline remains substantially complete. The product is not yet a complete

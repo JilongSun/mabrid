@@ -1,17 +1,55 @@
+set shell := ["sh", "-eu", "-c"]
+set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"]
+
 default:
     @just --list
 
 image := "mabrid:local"
+name := "mabrid"
+port := "8765"
+config_dir := "deploy/local"
 
+[unix]
 install:
-    cd backend && uv sync --all-packages
-    cd frontend && pnpm install
+    uv sync --directory backend --all-packages
+    pnpm --dir frontend install
+
+[windows]
+install:
+    uv sync --directory backend --all-packages
+    pnpm.cmd --dir frontend install
 
 dev:
-    cd backend && uv run --all-packages python ../scripts/dev.py
+    uv run --directory backend --all-packages python ../scripts/dev.py
 
-oci-build:
-    uv run --directory backend --no-project python ../scripts/oci.py build --image "{{image}}"
+[unix]
+setup:
+    sh scripts/manage.sh setup --config-dir "{{config_dir}}" --image "{{image}}" --name "{{name}}" --port "{{port}}"
 
-oci-check:
-    uv run --directory backend --no-project python ../scripts/oci.py check --image "{{image}}"
+[unix]
+build:
+    sh scripts/manage.sh build --config-dir "{{config_dir}}" --image "{{image}}" --name "{{name}}" --port "{{port}}"
+
+[unix]
+run:
+    sh scripts/manage.sh run --config-dir "{{config_dir}}" --image "{{image}}" --name "{{name}}" --port "{{port}}"
+
+[unix]
+stop:
+    sh scripts/manage.sh stop --config-dir "{{config_dir}}" --image "{{image}}" --name "{{name}}" --port "{{port}}"
+
+[windows]
+setup:
+    & ./scripts/manage.ps1 setup -ConfigDir "{{config_dir}}" -Image "{{image}}" -Name "{{name}}" -Port {{port}}
+
+[windows]
+build:
+    & ./scripts/manage.ps1 build -ConfigDir "{{config_dir}}" -Image "{{image}}" -Name "{{name}}" -Port {{port}}
+
+[windows]
+run:
+    & ./scripts/manage.ps1 run -ConfigDir "{{config_dir}}" -Image "{{image}}" -Name "{{name}}" -Port {{port}}
+
+[windows]
+stop:
+    & ./scripts/manage.ps1 stop -ConfigDir "{{config_dir}}" -Image "{{image}}" -Name "{{name}}" -Port {{port}}
