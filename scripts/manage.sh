@@ -23,7 +23,7 @@ while [ "$#" -gt 0 ]; do
     esac
     shift 2
 done
-case "$action" in setup|build|run|stop) ;; *) fail "Usage: manage.sh setup|build|run|stop [options]" ;; esac
+case "$action" in setup|build|run|recreate|stop) ;; *) fail "Usage: manage.sh setup|build|run|recreate|stop [options]" ;; esac
 case "$name" in ''|[!a-z0-9]*|*[!a-z0-9_-]*) fail "Use a lowercase Docker project name" ;; esac
 case "$port" in ''|*[!0-9]*) fail "Port must be 1..65535" ;; esac
 [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || fail "Port must be 1..65535"
@@ -106,6 +106,19 @@ case "$action" in
         [ -z "$(compose ps --status running --quiet mabrid)" ] || fail "Already running; use stop before run"
         compose up --detach --wait --wait-timeout "$timeout" --no-build --pull never mabrid
         printf 'Started %s; port mapping http://localhost:%s (application readiness is not checked).\n' "$name" "$port"
+        ;;
+    recreate)
+        [ "$(docker image inspect --format '{{.Os}}' "$image" 2>/dev/null)" = linux ] || fail "Local image missing; run build first"
+        check_owner container "$name"
+        check_owner volume "$name-data"
+        if [ -n "$(compose ps --status running --quiet mabrid)" ]; then
+            compose stop --timeout 20 mabrid
+            code=$(docker container inspect --format '{{.State.ExitCode}}' "$name")
+            case "$code" in 0|143) ;; *) fail "Container did not stop gracefully; inspect Docker logs" ;; esac
+            docker logs "$name" 2>&1 | grep -F 'Application shutdown complete.' >/dev/null || fail "Application shutdown completion was not verified"
+        fi
+        compose up --detach --wait --wait-timeout "$timeout" --force-recreate --no-build --pull never mabrid
+        printf 'Recreated %s; volume %s-data is preserved.\n' "$name" "$name"
         ;;
     stop)
         check_owner container "$name"

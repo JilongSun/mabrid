@@ -164,7 +164,7 @@ def test_native_setup_is_idempotent_without_host_python(launcher) -> None:
     assert not log.exists()
 
 
-@pytest.mark.parametrize("action", ["build", "run"])
+@pytest.mark.parametrize("action", ["build", "run", "recreate"])
 def test_missing_setup_never_contacts_docker(launcher, action: str) -> None:
     invoke, _, log = launcher
     result = invoke(action)
@@ -193,6 +193,40 @@ def test_native_docker_workflow(launcher, action: str) -> None:
         assert " stop --timeout 20 mabrid" in commands
         assert "volume rm" not in commands
         assert " down" not in commands
+
+
+def test_native_recreate_gracefully_replaces_running_container(launcher) -> None:
+    invoke, _, log = launcher
+    assert invoke("setup").returncode == 0
+    result = invoke("recreate", "stop")
+    assert result.returncode == 0, result.stderr
+    commands = log.read_text(encoding="utf-8")
+    assert "image inspect" in commands
+    assert " stop --timeout 20 mabrid" in commands
+    assert " up --detach" in commands
+    assert "--force-recreate --no-build --pull never mabrid" in commands
+    assert "volume rm" not in commands
+    assert "Recreated mabrid" in result.stdout
+    assert "mabrid-data is preserved" in result.stdout
+
+
+def test_native_recreate_without_running_container_skips_stop(launcher) -> None:
+    invoke, _, log = launcher
+    assert invoke("setup").returncode == 0
+    result = invoke("recreate", "success")
+    assert result.returncode == 0, result.stderr
+    commands = log.read_text(encoding="utf-8")
+    assert " stop --timeout" not in commands
+    assert "--force-recreate --no-build --pull never mabrid" in commands
+
+
+@pytest.mark.parametrize("scenario", ["image", "foreign", "old-compose"])
+def test_recreate_prerequisites_never_start_containers(launcher, scenario: str) -> None:
+    invoke, _, log = launcher
+    assert invoke("setup").returncode == 0
+    result = invoke("recreate", scenario)
+    assert result.returncode != 0
+    assert " up --detach" not in log.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("scenario", ["image", "foreign", "active", "start", "old-compose"])

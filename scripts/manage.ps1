@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet('setup', 'build', 'run', 'stop')][string]$Action,
+    [ValidateSet('setup', 'build', 'run', 'recreate', 'stop')][string]$Action,
     [string]$ConfigDir = (Split-Path -Parent $PSScriptRoot),
     [string]$Image = 'mabrid:local',
     [string]$Name = 'mabrid',
@@ -136,6 +136,28 @@ try {
                 '--no-build', '--pull', 'never', 'mabrid'
             ) -Live
             Write-Output "Started $Name; port mapping http://localhost:$Port (application readiness is not checked)."
+        }
+        'recreate' {
+            try {
+                $imageOs = Invoke-Docker -DockerArguments @('image', 'inspect', '--format', '{{.Os}}', $Image)
+            } catch { throw 'Local image missing; run build first' }
+            if ($imageOs -ne 'linux') { throw 'A Linux image is required; run build first' }
+            Confirm-Owner 'container' $Name
+            Confirm-Owner 'volume' "$Name-data"
+            if (Invoke-Compose -ComposeArguments @('ps', '--status', 'running', '--quiet', 'mabrid')) {
+                Invoke-Compose -ComposeArguments @('stop', '--timeout', '20', 'mabrid') -Live
+                $code = Invoke-Docker -DockerArguments @('container', 'inspect', '--format', '{{.State.ExitCode}}', $Name)
+                if ($code -notin @('0', '143')) { throw 'Container did not stop gracefully; inspect Docker logs' }
+                $logs = Invoke-Docker -DockerArguments @('logs', $Name)
+                if (-not $logs.Contains('Application shutdown complete.')) {
+                    throw 'Application shutdown completion was not verified'
+                }
+            }
+            Invoke-Compose -ComposeArguments @(
+                'up', '--detach', '--wait', '--wait-timeout', [string]$Timeout,
+                '--force-recreate', '--no-build', '--pull', 'never', 'mabrid'
+            ) -Live
+            Write-Output "Recreated $Name; volume $Name-data is preserved."
         }
         'stop' {
             Confirm-Owner 'container' $Name

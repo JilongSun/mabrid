@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install dev setup build run stop
+.PHONY: help install dev setup build run recreate stop
 IMAGE ?= mabrid:local
 CONTAINER_NAME ?= mabrid
 PORT ?= 8765
@@ -13,6 +13,7 @@ help:
 	@echo "  setup     Copy mabrid.yaml.example to mabrid.yaml if missing"
 	@echo "  build     Build the image after setup (IMAGE=mabrid:local)"
 	@echo "  run       Start the built image with the local YAML configuration"
+	@echo "  recreate  Replace the container so changed .env values take effect"
 	@echo "  stop      Stop the managed container without deleting its data"
 	@echo "  help      Show this help"
 
@@ -23,5 +24,5 @@ install:
 dev:
 	cd backend && uv run --all-packages python ../scripts/dev.py
 
-setup build run stop:
+setup build run recreate stop:
 	sh scripts/manage.sh $@ --config-dir "$(CONFIG_DIR)" --image "$(IMAGE)" --name "$(CONTAINER_NAME)" --port "$(PORT)"

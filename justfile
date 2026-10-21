@@ -35,6 +35,10 @@ run:
     sh scripts/manage.sh run --config-dir "{{config_dir}}" --image "{{image}}" --name "{{name}}" --port "{{port}}"
 
 [unix]
+recreate:
+    sh scripts/manage.sh recreate --config-dir "{{config_dir}}" --image "{{image}}" --name "{{name}}" --port "{{port}}"
+
+[unix]
 stop:
     sh scripts/manage.sh stop --config-dir "{{config_dir}}" --image "{{image}}" --name "{{name}}" --port "{{port}}"
 
@@ -49,6 +53,10 @@ build:
 [windows]
 run:
     & ./scripts/manage.ps1 run -ConfigDir "{{config_dir}}" -Image "{{image}}" -Name "{{name}}" -Port {{port}}
+
+[windows]
+recreate:
+    & ./scripts/manage.ps1 recreate -ConfigDir "{{config_dir}}" -Image "{{image}}" -Name "{{name}}" -Port {{port}}
 
 [windows]
 stop:

@@ -51,9 +51,10 @@ resolve from the mounted YAML's directory, so the root example's `./backend/var/
 remains inside this volume without rewriting the configuration. Absolute paths must likewise
 point to writable persistent storage. Stop and image rebuilds do not delete the volume.
 
-An optional adjacent `.env` supplies runtime secrets referenced by YAML. It is read using Compose's
-raw env-file format, not copied by setup or included in image layers. Use `NAME=value` lines
-without shell interpolation. Docker administrators can inspect container environment values.
+An optional adjacent `.env` supplies runtime secrets referenced by YAML. Setup creates a commented
+template when the file is absent; Compose reads it using the raw env-file format, and it is never
+included in image layers. Use `NAME=value` lines without shell interpolation. Docker administrators
+can inspect container environment values.
 
 The default mapping is host loopback port 8765 to container port 8765. If YAML changes the
 container listener port, the Compose mapping must match; no helper discovers or overrides it.
@@ -83,6 +84,41 @@ Consequences:
 - Because the YAML is mounted inside the volume's mount point, a relative `storage.sqlitePath`
   resolves against `/var/lib/mabrid` and therefore stays inside the volume.
 
+## Configuration and Secret Ownership
+
+YAML owns structured configuration; `.env` owns secret values. The split is deliberate rather than
+a leftover of the original development workflow.
+
+| Content | Owner | Reason |
+| --- | --- | --- |
+| Listener settings, upstream URLs, endpoint topology, timeouts, Agent Host enablement, and the *names* of secret variables (`apiKeyEnv`) | `mabrid.yaml` | Typed models reject unknown fields and invalid values at startup; the file can be reviewed and committed |
+| Secret *values* such as `API_SERVER_KEY` | `.env` | Kept out of images, the data volume, and Git; injected only at container creation |
+| Product and runtime state | Named volume | Written by the application and required across restarts |
+| Diagnostics | Standard error | Owned by the container runtime |
+
+YAML never stores a secret value; it stores the environment variable name to read:
+
+```yaml
+agentHost:
+  runtime:
+    apiKeyEnv: API_SERVER_KEY
+```
+
+Do not treat `.env` as a second configuration file. The application reads environment variables
+only for the secrets named by `apiKeyEnv` and for `MABRID_FRONTEND_DIST`, which the image sets. An
+unrelated variable added to `.env` has no effect on the server. Environment injection also lacks
+structure, type validation, nesting, and review history, and changing it requires container
+recreation rather than a restart.
+
+One exception deserves attention: when the configuration directory is the repository root, Compose
+also auto-loads that `.env` for `${...}` interpolation in `compose.yaml`. Variables such as
+`MABRID_PORT` therefore influence Compose itself, not only the application. Keep deployment choices
+in YAML and leave Compose interpolation variables to the launcher.
+
+Secret inheritance is bounded. The MCP SDK spawns stdio upstream servers with a small allow-list of
+inherited variables (`PATH`, `HOME`, and similar) plus the upstream's explicitly configured `env`,
+so injected secrets are not forwarded to third-party MCP subprocesses.
+
 ## Changing Configuration at Runtime
 
 The two configuration inputs are applied at different times.
@@ -93,14 +129,15 @@ The two configuration inputs are applied at different times.
 | `.env` | No effect. Environment variables are fixed when the container is created | Recreate the container; a plain restart reuses the existing environment |
 
 `just stop` followed by `just run` starts the existing container again. Compose does not reliably
-detect changes to `env_file` contents, so an environment change requires explicit recreation. With
-the default configuration directory:
+detect changes to `env_file` contents, so an environment change requires explicit recreation:
 
 ```sh
-MABRID_CONFIG_DIR="$PWD" MABRID_NAME=mabrid MABRID_PORT=8765 \
-  docker compose --project-name mabrid --project-directory . --file compose.yaml \
-  up --detach --force-recreate --no-build --pull never mabrid
+just recreate
 ```
+
+`make recreate` provides the same behavior where `just` is unavailable. Recreation performs a
+verified graceful stop first, then replaces the container from the existing image. It never builds,
+pulls, or deletes the data volume.
 
 Neither input triggers a hot reload, and YAML topology changes still never overwrite a populated
 database.
@@ -115,6 +152,10 @@ health-check script. A running container is not proof of application readiness; 
 Stop sends SIGTERM, verifies shutdown, and preserves the stopped container and data volume.
 Use stop before applying new runtime settings. Existing resource-ownership checks still reject
 unrelated containers/volumes with the same names; this workflow does not adopt or delete them.
+
+Recreate applies settings that Compose fixes when a container is created, such as `.env` values. It
+stops a running container with the same verified shutdown check, then replaces the container from
+the existing image. The data volume is preserved, and no build or pull occurs.
 
 Existing topology behavior is unchanged: YAML seeds an empty database, but later YAML topology
 edits do not overwrite populated topology. No command resets the database or adds hot reload.
