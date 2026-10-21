@@ -74,6 +74,21 @@ try {
             Copy-Item -LiteralPath (Join-Path $Root 'mabrid.yaml.example') -Destination $target
             Write-Output "Created $target"
         }
+        $envTarget = Join-Path $ConfigDir '.env'
+        if (Test-Path -LiteralPath $envTarget) {
+            if (-not (Test-Path -LiteralPath $envTarget -PathType Leaf)) {
+                throw "Expected a regular file: $envTarget"
+            }
+            Write-Output "Keeping existing $envTarget"
+        } else {
+            $envContent = @(
+                '# Container runtime secrets. Values are injected as environment variables,'
+                '# not mounted as a file. Set variables referenced by mabrid.yaml, for example:'
+                '# API_SERVER_KEY='
+            ) -join "`n"
+            [IO.File]::WriteAllText($envTarget, $envContent + "`n")
+            Write-Output "Created $envTarget"
+        }
         exit 0
     }
     if (-not (Test-Path -LiteralPath $ConfigDir -PathType Container)) {

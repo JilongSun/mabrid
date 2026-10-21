@@ -24,8 +24,11 @@ separate tooling requirements.
 
 Setup copies [mabrid.yaml.example](../../mabrid.yaml.example) to `mabrid.yaml` in the repository
 root, removing only the `.example` suffix. Contents are unchanged. An existing target is kept.
-There is no separate container configuration template, generated environment file, or configuration
-transformation. An existing `.env` is left untouched.
+
+Setup also creates `.env` beside that configuration file when it does not exist yet. The new file
+contains only commented guidance and no active values, so an Agent Host deployment still fails fast
+until the referenced environment variable is supplied. An existing `.env` is never modified or
+overwritten. There is no separate container configuration template or configuration transformation.
 
 The direct entry points are:
 
@@ -56,6 +59,51 @@ The default mapping is host loopback port 8765 to container port 8765. If YAML c
 container listener port, the Compose mapping must match; no helper discovers or overrides it.
 Container `localhost` is not the host. Use a reachable host/container address for upstreams and
 an agent-reachable `bridge.advertisedBaseUrl` when Agent Host is enabled.
+
+## Storage and Injection Channels
+
+External state reaches the container through three distinct channels. Only one of them becomes a
+file inside the container.
+
+| Content | Host location | Inside the container | Channel |
+| --- | --- | --- | --- |
+| `mabrid.yaml` | `<config-dir>/mabrid.yaml` | `/var/lib/mabrid/mabrid.yaml`, read-only file | Bind mount of one host file |
+| `.env` | `<config-dir>/.env` | No file; values become process environment variables | Compose `env_file` injection |
+| SQLite database | Docker volume `<name>-data` | The directory `/var/lib/mabrid` | Named volume |
+| Logs | Not stored | Not stored; standard error | Docker log driver (`docker logs`) |
+
+Consequences:
+
+- The YAML is a real file the application opens through `--config`. It is mounted read-only and is
+  never copied into the image or the data volume.
+- `.env` is not mounted. Compose reads it on the host and injects every active `NAME=value` line as
+  an environment variable. `docker exec ... ls /var/lib/mabrid` shows no `.env` file.
+- The named volume is the only writable persistent location, because the container root filesystem
+  is read-only and `/tmp` is a `tmpfs`.
+- Because the YAML is mounted inside the volume's mount point, a relative `storage.sqlitePath`
+  resolves against `/var/lib/mabrid` and therefore stays inside the volume.
+
+## Changing Configuration at Runtime
+
+The two configuration inputs are applied at different times.
+
+| Changed file | Effect on the running container | Required action |
+| --- | --- | --- |
+| `mabrid.yaml` | The host change is visible inside the container immediately, but the process already loaded its configuration at startup | Restart the container process: `just stop` then `just run` |
+| `.env` | No effect. Environment variables are fixed when the container is created | Recreate the container; a plain restart reuses the existing environment |
+
+`just stop` followed by `just run` starts the existing container again. Compose does not reliably
+detect changes to `env_file` contents, so an environment change requires explicit recreation. With
+the default configuration directory:
+
+```sh
+MABRID_CONFIG_DIR="$PWD" MABRID_NAME=mabrid MABRID_PORT=8765 \
+  docker compose --project-name mabrid --project-directory . --file compose.yaml \
+  up --detach --force-recreate --no-build --pull never mabrid
+```
+
+Neither input triggers a hot reload, and YAML topology changes still never overwrite a populated
+database.
 
 ## Build, Run, and Stop
 

@@ -40,6 +40,18 @@ if [ "$action" = setup ]; then
         cp "$root/mabrid.yaml.example" "$target"
         printf 'Created %s\n' "$target"
     fi
+    env_target=$config_dir/.env
+    if [ -e "$env_target" ]; then
+        [ -f "$env_target" ] || fail "Expected a regular file: $env_target"
+        printf 'Keeping existing %s\n' "$env_target"
+    else
+        umask 077
+        printf '%s\n' \
+            '# Container runtime secrets. Values are injected as environment variables,' \
+            '# not mounted as a file. Set variables referenced by mabrid.yaml, for example:' \
+            '# API_SERVER_KEY=' >"$env_target"
+        printf 'Created %s\n' "$env_target"
+    fi
     exit 0
 fi
 

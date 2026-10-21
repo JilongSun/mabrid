@@ -152,7 +152,9 @@ def test_native_setup_is_idempotent_without_host_python(launcher) -> None:
     result = invoke("setup")
     assert result.returncode == 0, result.stderr
     assert (directory / "mabrid.yaml").read_bytes() == (ROOT / "mabrid.yaml.example").read_bytes()
-    assert not (directory / ".env").exists()
+    env_file = directory / ".env"
+    assert env_file.is_file()
+    assert "API_SERVER_KEY" in env_file.read_text(encoding="utf-8")
     (directory / "mabrid.yaml").write_bytes(b"user-owned configuration\n")
     (directory / ".env").write_bytes(b"USER_VALUE=fixture-only\n")
     result = invoke("setup")
