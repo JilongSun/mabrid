@@ -21,6 +21,9 @@ from mabrid.server.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Leave half of the container's 20-second stop grace period for app cleanup.
+_GRACEFUL_REQUEST_SHUTDOWN_TIMEOUT_SECONDS = 10
+
 
 class MabridServerRuntime:
     """Own listener serving for [create_app](../api/app.py:43)'s composed HTTP application.
@@ -73,6 +76,7 @@ class MabridServerRuntime:
                 port=self._api_port,
                 access_log=False,
                 log_level="info",
+                timeout_graceful_shutdown=_GRACEFUL_REQUEST_SHUTDOWN_TIMEOUT_SECONDS,
             )
         )
         await server.serve()
