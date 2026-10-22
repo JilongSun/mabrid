@@ -16,6 +16,8 @@ from mabrid.application.agent_host import (
 
 from .schema import AgentSessionRow, UnsettledAgentRunRow
 
+_MAX_SESSION_READ_LIMIT = 201
+
 
 class SqliteAgentSessionRepository:
     """Persist Session bindings and unresolved Target ownership, never transcripts.
@@ -57,7 +59,7 @@ class SqliteAgentSessionRepository:
         self, *, target_id: str, limit: int, offset: int
     ) -> tuple[AgentSessionRecord, ...]:
         """Implement [AgentSessionRepository.list_sessions](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py:85)."""
-        if not 1 <= limit <= 200 or offset < 0:
+        if not 1 <= limit <= _MAX_SESSION_READ_LIMIT or offset < 0:
             raise ValueError("Invalid Agent Session pagination")
         async with self._sessions() as transaction:
             rows = await transaction.scalars(

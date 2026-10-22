@@ -183,7 +183,8 @@ def create_host_router(
     ):
         if sessions is None:
             return host_error_response("unsupported_operation")
-        records = await sessions.list_sessions(limit=limit + 1, offset=offset)
+        lookahead_limit = limit + 1
+        records = await sessions.list_sessions(limit=lookahead_limit, offset=offset)
         target_run = await sessions.get_target_run()
         return HostSessionPageResponse(
             sessions=tuple(

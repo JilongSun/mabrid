@@ -121,6 +121,62 @@ async def test_first_party_session_http_keeps_history_remote_and_errors_safe(
         await database.close()
 
 
+async def test_first_party_session_list_uses_one_row_lookahead_at_page_limit(
+    tmp_path: Path,
+) -> None:
+    fixture = NativeHermesFixture()
+    adapter = HermesSessionAdapter(
+        api_root="http://hermes.test/",
+        api_key="fixture",
+        runtime_binding_id="fixture-deployment",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(fixture.handle)),
+    )
+    database = SqliteDatabase(tmp_path / "session-pagination.db")
+    await database.migrate()
+    repository = SqliteAgentSessionRepository(database.session_factory)
+    service = session_service(database, adapter)
+    app = create_app(Mock(spec=GatewaySessionCoordinator), agent_sessions=service)
+    try:
+        created_at = datetime.now(timezone.utc)
+        for _ in range(201):
+            await repository.add(
+                AgentSessionRecord(
+                    target_id=TARGET.target_id,
+                    runtime_session=RuntimeSessionReference(
+                        runtime_binding_id="fixture-deployment",
+                        remote_session_id=f"remote-{uuid4()}",
+                    ),
+                    created_at=created_at,
+                )
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://mabrid.test"
+        ) as client:
+            page_199 = await client.get("/api/v1/host/sessions", params={"limit": 199})
+            assert page_199.status_code == 200
+            assert len(page_199.json()["sessions"]) == 199
+            assert page_199.json()["has_more"] is True
+
+            page_200 = await client.get("/api/v1/host/sessions", params={"limit": 200})
+            assert page_200.status_code == 200
+            assert len(page_200.json()["sessions"]) == 200
+            assert page_200.json()["has_more"] is True
+
+            final_page = await client.get(
+                "/api/v1/host/sessions", params={"limit": 200, "offset": 1}
+            )
+            assert final_page.status_code == 200
+            assert len(final_page.json()["sessions"]) == 200
+            assert final_page.json()["has_more"] is False
+
+            over_limit = await client.get("/api/v1/host/sessions", params={"limit": 201})
+            assert over_limit.status_code == 422
+    finally:
+        await adapter.close()
+        await database.close()
+
+
 @pytest.mark.parametrize("cancel_first", [True, False])
 async def test_native_cancel_acknowledgement_order_and_session_control_binding(
     tmp_path: Path, cancel_first: bool
