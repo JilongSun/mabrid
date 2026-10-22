@@ -3,9 +3,8 @@
 This module intentionally mirrors the normal runtime entry point so debugger
 launches exercise the exact same configuration and startup path as `main.py`.
 
-Edit ``_DEBUG_CONFIG`` and ``_DEBUG_UPSTREAM`` below to change the upstream
-without touching YAML or launch.json.  Set ``_DEBUG_UPSTREAM`` to ``""`` to fall
-back to the normal YAML-driven selection.
+Edit ``_DEBUG_CONFIG`` below to select a configuration file without touching
+launch.json. All other settings come from the YAML file.
 """
 
 from __future__ import annotations
@@ -16,14 +15,8 @@ from mabrid.server.logging import LogMode, configure_logging
 
 configure_logging(LogMode.DEBUG)
 
-# ── Debug overrides — edit these lines ───────────────────────────────────
-# Set _DEBUG_UPSTREAM to an upstream name defined in mabrid.yaml
-# to bypass the YAML default, e.g. _DEBUG_UPSTREAM = "mock_stdio"
+# ── Debug overrides — edit this line ─────────────────────────────────────
 _DEBUG_CONFIG: str | None = None  # e.g. "mabrid.yaml"
-_DEBUG_UPSTREAM = ""  # set to "" to use YAML default
-_DEBUG_HTTPX_TIMEOUT: float | None = (
-    9999.999  # seconds, None = use YAML default; set e.g. 30.0 to override
-)
 # ─────────────────────────────────────────────────────────────────────────
 
 from mabrid.server.main import main  # noqa: E402
@@ -32,9 +25,5 @@ if __name__ == "__main__":
     argv = list(sys.argv[1:])
     if _DEBUG_CONFIG is not None:
         argv.extend(["--config", _DEBUG_CONFIG])
-    if _DEBUG_UPSTREAM:
-        argv.extend(["--upstream", _DEBUG_UPSTREAM])
-    if _DEBUG_HTTPX_TIMEOUT is not None:
-        argv.extend(["--httpx-timeout", str(_DEBUG_HTTPX_TIMEOUT)])
     sys.argv = [sys.argv[0], *argv]
     main()
