@@ -1,0 +1,8 @@
+set shell := ["sh", "-eu", "-c"]
+set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"]
+
+install:
+    uv sync --all-packages
+
+dev:
+    uv run --all-packages python -m mabrid.server.main

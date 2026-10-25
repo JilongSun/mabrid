@@ -1,0 +1,18 @@
+set shell := ["sh", "-eu", "-c"]
+set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"]
+
+[unix]
+install:
+    pnpm install
+
+[windows]
+install:
+    pnpm.cmd install
+
+[unix]
+dev:
+    pnpm dev
+
+[windows]
+dev:
+    pnpm.cmd dev
