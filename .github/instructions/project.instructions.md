@@ -25,6 +25,27 @@ belong to the product.
 - Treat accepted ADRs and `docs/architecture/` as authoritative for current ownership and migration
 	status. Do not duplicate implementation snapshots in instruction files.
 
+## Delivery and Decision Workflow
+
+- Maintain `explore/frontend-experience` as a long-lived exploration workstream for Mabrid's
+	interaction model and user experience. Exploration does not authorize product contract changes
+	or bulk integration of experimental code.
+- Deliver a feature's backend and supporting frontend behavior together in its feature workstream.
+	Keep unrelated frontend experience exploration out of functional delivery changes.
+- Keep the long-lived `feat/managed-config-and-recovery` workstream centered on replacing
+	handwritten product YAML with managed configuration, plus basic CI and tag-triggered releases.
+	Include topology, runtime, recovery, and historically deferred work only where required for
+	those outcomes or separately approved; historical Pending entries are not blanket authorization.
+- Keep integrations small and coherent even when a workstream is long-lived. Merging into `main`
+	does not itself require a release. Isolate unrelated fixes and return release hotfixes to `main`.
+- Before the next product implementation batch, reconcile its related ADRs as one change set.
+	Keep decision lifecycle, delivery status, and verification evidence separate; identify conflicts,
+	dependencies, explicit amendments, and owner approvals in one review entry.
+- Preserve ADR identities and historical rationale. Do not infer precedence from ADR number or
+	implementation progress, and do not treat coupled decisions as independent feature tickets.
+- Follow [Decision Governance](../../docs/architecture/decision-governance.md) and start from the
+	active review entry in the [decision log](../../docs/architecture/decision-log.md).
+
 ## Conventions
 
 - Use precise MCP terminology such as `bridge`, `host`, `adapter`, `session`, and `resource`.

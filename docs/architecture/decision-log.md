@@ -1,5 +1,12 @@
 # Architecture Decision Log
 
+## Reading And Review
+
+Use [Decision Governance](decision-governance.md) for lifecycle transitions, owner approval,
+scoped delivery assessments, and review of coupled decisions. Start with the active change-set
+entry below; follow only its relevant ADR sections and amendments. The index remains a historical
+decision inventory, not a list of independent implementation tickets.
+
 This log separates accepted product and architecture decisions from their current implementation
 state. ADRs remain historical records; implementation notes may advance without rewriting the
 original context or decision.
@@ -15,7 +22,11 @@ Implementation states:
 - **Implemented**: the decision is represented in executable code and has focused validation.
 - **Partial**: a usable slice exists, but one or more stated behaviors or release checks are absent.
 - **Pending**: no executable implementation exists yet.
-- **Proposed**: the decision is still under discussion and does not constrain implementation yet.
+
+These are scoped delivery assessments, not decision lifecycle states. Proposed belongs to the
+decision lifecycle. The ADR index below retains the historical assessment through 2026-10-22;
+current release facts and workstream scope are recorded separately below. This governance change
+does not re-audit every implementation or promote historical verification to live acceptance.
 
 | ADR | Decision status | Implementation state | Summary |
 | --- | --- | --- | --- |
@@ -37,7 +48,91 @@ Implementation states:
 | [0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md) | Accepted | Implemented | All eight backend batches and six frontend prerequisites are complete with frozen contracts and controlled evidence; the subsequent first-party frontend functional baseline is implemented, while deployment and release acceptance remain separate |
 | [0017](decisions/0017-protocol-aware-sessions-and-context-owned-model-reuse.md) | Accepted | Pending | Future SDK v2 compatibility must reassess Gateway Session semantics; consolidate model ownership and reuse equivalent definitions without requiring one universal model or expanding v0.1 scope |
 
-## Current v0.1 Position
+## Current Publication And Governance Position
+
+As of 2026-10-26, the owner has confirmed that v0.1 is formally released. This is an owner-reported
+publication fact, not a fresh independent audit of release artifacts or all deployment scenarios.
+Continued real-world validation and known defect follow-up do not reopen release preparation.
+The dated implementation and deployment evidence below remains historical and is not silently
+promoted to completed live acceptance.
+
+The owner approved the two long-lived workstream boundaries in
+[Decision Governance](decision-governance.md#workstream-and-integration-boundaries) and explicitly
+authorized adoption of the lightweight governance process before the next product implementation
+batch. No product design, Git branch, workflow, tag, or release artifact is created by that approval.
+
+## Active Change-Set Reviews
+
+### Managed Configuration And Release Foundations
+
+- Review identifier: `managed-config-foundations`.
+- Workstream: `feat/managed-config-and-recovery`.
+- Review state: **Draft**; the workstream's goals are approved, but the detailed design and next
+	product implementation batch are not yet approved.
+- Delivery: not implemented by this governance change; reuse the existing v0.1 foundations.
+- Next eligible work: prepare the focused configuration/CI design review below, not feature code.
+
+#### Approved Outcome And Boundaries
+
+The core outcomes are managed product configuration instead of handwritten YAML, plus basic CI
+and version-tag-triggered releases with automatic source-version handling. Topology mutation,
+Agent Host/runtime configuration improvements, recovery, and historical deferrals are supporting
+work only where necessary for those outcomes or where the owner separately approves inclusion.
+They are not four equal mandatory workstreams or permission to complete every Pending ADR.
+
+Keep `explore/frontend-experience` as the separate long-lived experience exploration workstream.
+Deliver the functional management frontend with its backend feature. Do not combine unrelated
+navigation, visual, or interaction-model experiments with configuration delivery. Basic CI may
+land as an independently verified slice without making it a separate product objective.
+
+#### Coupled Decision Map
+
+| Concern | Existing authority to preserve | Required reconciliation before the affected batch |
+| --- | --- | --- |
+| Configuration authority and write scope | [0002](decisions/0002-sqlite-persistence-and-configuration-authority.md), [0014](decisions/0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership) | Classify product/deployment/secret settings together; define write protection, first-run setup, migration precedence, and non-destructive existing-database updates |
+| Revision writes and runtime application | [0008](decisions/0008-restart-applied-managed-topology.md), [0014](decisions/0014-read-only-v0-1-management-plane.md#saved-configuration-and-runtime-application) | Specify transactions, concurrency, dependent endpoint revisions, saved/running reads, and restart reporting as one consistent contract; do not claim hot reload |
+| Runtime configuration and durable ownership | [0011](decisions/0011-single-agent-target-and-endpoint-assignment.md), [0012](decisions/0012-agent-runtime-profiles-and-integration-composition.md), [0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md) | Reconcile Target assignment, integration/interface selection, deployment identity, active/unknown Runs, and old Session bindings before changing configuration ownership |
+| Fault handling required by configuration delivery | [0003](decisions/0003-mcp-apps-gateway-and-optional-agent-host.md), [0005](decisions/0005-upstream-transport-task-ownership.md), [0013](decisions/0013-backend-semantic-boundaries-and-mabrid-code-identity.md) | Preserve degradation and worker ownership; identify the actually necessary timeout/recovery slice, if any, rather than approving a general recovery system |
+| CI, versions, and release artifacts | [0004](decisions/0004-first-release-scope-and-distribution.md), existing OCI/native workflow, owner-approved workstream goal | Select source-version ownership, lockfile/build behavior, tag mapping, and CI permissions together; managed YAML removal does not require build-time secrets or user configuration |
+
+ADR 0014 narrowed v0.1 delivery, not the permanent configuration goal. Its destructive reset
+workaround is not a future managed update mechanism; ADR 0013's pre-v0.1 reset permission does
+not authorize deletion of released user data. The classified settings and new API/secret contracts
+still need design. This is a dependency and clarification map, not a newly selected schema.
+
+#### Owner Questions For The Next Review
+
+1. Which product settings move to managed storage first, how does an unconfigured installation
+	 remain manageable, and how is existing YAML imported without overwriting managed state?
+2. What write-access trust boundary and secret set/preserve/replace/clear contract apply? Which
+	 runtime address/deployment-binding changes can be accepted while execution is active or unknown?
+3. What is the minimum complete topology/Host configuration transaction and restart contract,
+	 including dependent revisions, conflict responses, and preserved Session ownership?
+4. Which source-version strategy feeds backend, frontend, and OCI builds, and what is the first
+	 credential-free CI slice? Generated build files and committed version changes are different choices.
+5. Is any broader automatic recovery/backoff work necessary now, or should it remain separately
+	 scoped? SDK v2/Session redesign and full model unification remain outside this workstream.
+
+Present these as coupled choices with concrete alternatives and an explicit recommended batch.
+If a choice changes an accepted clause, identify the exact amendment and its surviving constraints
+before seeking approval. Do not create a replacement ADR or mark this review Approved just because
+its overall workstream has owner support.
+
+#### Dispositions And Verification
+
+- 2026-10-26, owner: approved the two long-lived workstream boundaries and functional frontend/backend
+	co-delivery; narrowed this workstream to managed configuration and CI/tag publishing.
+- 2026-10-26, owner: explicitly selected direct adoption of lightweight ADR governance before
+	further product implementation.
+- Open: detailed configuration, security, migration, version, and minimum recovery designs.
+- Existing evidence: accepted ADR requirements and dated implementation records; this entry is
+	not evidence that writable configuration or release automation has been implemented.
+- Required for the first product batch: an owner-approved bounded delta, reconciled decision
+	notices where needed, and focused verification for that slice. Expected later checks include
+	temporary populated-database migrations, atomic/conflicting writes, saved-versus-running
+	behavior, unknown-Run ownership, frozen-contract compatibility, and isolated CI/build inputs.
+
+## Historical v0.1 Position (2026-10-22)
 
 The aggregate gateway data plane and the ADR 0014 read-only backend management plane are complete
 vertical slices. ADR 0015 establishes the composed text-Run and widget baseline. ADR 0016 defines
