@@ -1,6 +1,6 @@
 [project]
 name = "mabrid-application"
-version = "0.0.0"
+version = "0.1.0"
 description = "Mabrid MCP Apps gateway, Agent Host, and widget application services."
 requires-python = ">=3.12"
 dependencies = [

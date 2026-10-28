@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh.md)
 
-[![Version](https://img.shields.io/badge/Version-v0.0.1-4C1?logo=semver&logoColor=white)](https://github.com/JilongSun/mabrid/releases/tag/v0.0.1)
+[![Version](https://img.shields.io/badge/Version-v0.1.0-2F855A?logo=semver&logoColor=white)](https://github.com/JilongSun/mabrid/releases/tag/v0.1.0)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](./backend/pyproject.toml)
 [![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)](./Dockerfile)
 [![License](https://img.shields.io/badge/License-Apache%202.0-D22128?logo=apache&logoColor=white)](./LICENSE)

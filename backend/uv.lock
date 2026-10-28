@@ -469,7 +469,7 @@ wheels = [
 
 [[package]]
 name = "mabrid-application"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/application" }
 dependencies = [
     { name = "anyio" },
@@ -492,7 +492,7 @@ requires-dist = [
 
 [[package]]
 name = "mabrid-bridge"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/bridge" }
 dependencies = [
     { name = "anyio" },
@@ -554,7 +554,7 @@ requires-dist = [
 
 [[package]]
 name = "mabrid-workspace"
-version = "0.0.0"
+version = "0.1.0"
 source = { virtual = "." }
 
 [package.dev-dependencies]
