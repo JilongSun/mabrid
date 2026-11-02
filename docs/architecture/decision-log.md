@@ -34,9 +34,12 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 - Review identifier: `managed-config-foundations`.
 - Workstream: `feat/managed-config-and-recovery`.
 - Review state: **Draft**; the workstream's goals are approved, but the detailed design and next
-	product implementation batch are not yet approved.
+	product implementation batch are not yet approved. The configuration design under review is
+	[ADR 0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md)
+	(Proposed).
 - Delivery: not implemented by this governance change; reuse the existing v0.1 foundations.
-- Next eligible work: prepare the focused configuration/CI design review below, not feature code.
+- Next eligible work: owner review of ADR 0018 and the proposed first batch below, not feature code.
+	CI and release design follow after the configuration skeleton is substantially delivered.
 
 #### Approved Outcome And Boundaries
 
@@ -55,8 +58,8 @@ land as an independently verified slice without making it a separate product obj
 
 | Concern | Existing authority to preserve | Required reconciliation before the affected batch |
 | --- | --- | --- |
-| Configuration authority and write scope | [0002](decisions/0002-sqlite-persistence-and-configuration-authority.md), [0014](decisions/0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership) | Classify product/deployment/secret settings together; define write protection, first-run setup, migration precedence, and non-destructive existing-database updates |
-| Revision writes and runtime application | [0008](decisions/0008-restart-applied-managed-topology.md), [0014](decisions/0014-read-only-v0-1-management-plane.md#saved-configuration-and-runtime-application) | Specify transactions, concurrency, dependent endpoint revisions, saved/running reads, and restart reporting as one consistent contract; do not claim hot reload |
+| Configuration authority and write scope | [0002](decisions/0002-sqlite-persistence-and-configuration-authority.md), [0014](decisions/0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership) | Classify product/deployment/secret settings together; define write protection, first-run setup, migration precedence, and non-destructive existing-database updates. ADR 0018 proposes amending SQLite authority to file authority with a database revision ledger |
+| Revision writes and runtime application | [0008](decisions/0008-restart-applied-managed-topology.md), [0014](decisions/0014-read-only-v0-1-management-plane.md#saved-configuration-and-runtime-application) | Specify transactions, concurrency, dependent endpoint revisions, saved/running reads, and restart reporting as one consistent contract. ADR 0018 proposes amending restart-applied topology to generation-applied dynamic configuration; restart-applied remains authoritative until accepted |
 | Runtime configuration and durable ownership | [0011](decisions/0011-single-agent-target-and-endpoint-assignment.md), [0012](decisions/0012-agent-runtime-profiles-and-integration-composition.md), [0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md) | Reconcile Target assignment, integration/interface selection, deployment identity, active/unknown Runs, and old Session bindings before changing configuration ownership |
 | Fault handling required by configuration delivery | [0003](decisions/0003-mcp-apps-gateway-and-optional-agent-host.md), [0005](decisions/0005-upstream-transport-task-ownership.md), [0013](decisions/0013-backend-semantic-boundaries-and-mabrid-code-identity.md) | Preserve degradation and worker ownership; identify the actually necessary timeout/recovery slice, if any, rather than approving a general recovery system |
 | CI, versions, and release artifacts | [0004](decisions/0004-first-release-scope-and-distribution.md), existing OCI/native workflow, owner-approved workstream goal | Select source-version ownership, lockfile/build behavior, tag mapping, and CI permissions together; managed YAML removal does not require build-time secrets or user configuration |
@@ -65,6 +68,52 @@ ADR 0014 narrowed v0.1 delivery, not the permanent configuration goal. Its destr
 workaround is not a future managed update mechanism; ADR 0013's pre-v0.1 reset permission does
 not authorize deletion of released user data. The classified settings and new API/secret contracts
 still need design. This is a dependency and clarification map, not a newly selected schema.
+
+#### Proposed Configuration Direction
+
+On 2026-11-02 the owner proposed keeping declarative configuration files as the single source of
+truth and applying topology and Agent Host runtime changes without a restart. The owner selected
+these direction choices for the draft; they are inputs to ADR 0018, not its acceptance:
+
+| Choice | Selected direction |
+| --- | --- |
+| Database role | Applied-configuration revision ledger and last-known-good startup source |
+| File layout | Read-only static `mabrid.yaml` plus a writable dynamic runtime file in a mounted directory |
+| Object identity | Configuration keys normalized to slugs; a rename disables the old identity and creates a new one |
+| Removed or disabled endpoint | Existing bridge Sessions continue until they close naturally |
+| Secret value changes | Restart-applied for now |
+| Apply trigger | Explicit management apply and startup; file watching deferred |
+
+Proposed amendments, all pending acceptance:
+
+- ADR 0002 configuration boundary: files, not SQLite, are the configuration authority; reconciliation
+	replaces `seed-if-empty`.
+- ADR 0008 configuration ownership, publication, latch, and deferred live refresh: dynamic
+	configuration is applied as an atomic immutable generation for new work, while revision pinning,
+	dependent endpoint revisions, and no active-session migration remain.
+- ADR 0014 post-v0.1 ownership, first-run setup, and saved/running application: the frontend edits
+	the runtime file through validated APIs; an absent runtime file is a valid unconfigured state.
+
+Open design items before the affected batch:
+
+- Runtime file name, location, schema, and how the static file locates it.
+- Ledger representation of applied Agent Host settings for last-known-good startup.
+- Placement of the current global upstream HTTP timeout, now a static bridge setting.
+- Runtime address changes under an unchanged deployment binding (local issue LOCAL-002).
+- Write-access protection and secret-reference set/preserve/replace/clear semantics (batch 3).
+- Comment and formatting preservation when the API rewrites the runtime file.
+
+Proposed delivery order, each batch requiring its own approval:
+
+1. **Configuration skeleton**: split static and dynamic configuration models and allow an empty
+	 topology; replace `seed-if-empty` with ledger reconciliation; introduce the immutable active
+	 snapshot with generation numbers and atomic published-endpoint replacement; add explicit Gateway
+	 topology apply and management reads of active generation and file state.
+2. **Agent Host generation application**: snapshot capture by Session and Run operations, deferred
+	 client release, unsettled-Run guards, ledger persistence, and the deployment-identity decision.
+3. **Management writes and frontend settings**: write protection, validated atomic file writes with
+	 hash-based conflicts, secret-reference semantics, and settings pages.
+4. **First-run setup** and optional coalesced file watching.
 
 #### Owner Questions For The Next Review
 
@@ -90,7 +139,11 @@ its overall workstream has owner support.
 	co-delivery; narrowed this workstream to managed configuration and CI/tag publishing.
 - 2026-10-26, owner: explicitly selected direct adoption of lightweight ADR governance before
 	further product implementation.
-- Open: detailed configuration, security, migration, version, and minimum recovery designs.
+- 2026-11-02, owner: proposed file-authoritative configuration with generation-applied dynamic
+	settings and selected the draft direction choices above. ADR 0018 records the proposal as
+	Proposed; this is not acceptance of ADR 0018 or approval of an implementation batch.
+- Open: owner acceptance of ADR 0018 and batch 1, the open design items above, and the security,
+	version, and minimum recovery designs.
 - Existing evidence: accepted ADR requirements and dated implementation records; this entry is
 	not evidence that writable configuration or release automation has been implemented.
 - Required for the first product batch: an owner-approved bounded delta, reconciled decision
@@ -149,6 +202,7 @@ re-audit every implementation or promote historical verification to live accepta
 | [0015](decisions/0015-agent-host-runs-and-mcp-apps-endpoint-composition.md) | Accepted; amended by 0016 | Partial | Run attribution, fresh resources, timely delivery, frozen contracts, and first-party widget rendering are implemented; review follow-up and full deployed workflow acceptance remain open; product Host actions are deferred |
 | [0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md) | Accepted | Implemented | All eight backend batches and six frontend prerequisites are complete with frozen contracts and controlled evidence; the subsequent first-party frontend functional baseline is implemented, while deployment and release acceptance remain separate |
 | [0017](decisions/0017-protocol-aware-sessions-and-context-owned-model-reuse.md) | Accepted | Pending | Future SDK v2 compatibility must reassess Gateway Session semantics; consolidate model ownership and reuse equivalent definitions without requiring one universal model or expanding v0.1 scope |
+| [0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md) | Proposed; would amend 0002, 0008, and 0014 | Not implemented | Configuration files as the single source of truth, SQLite as the applied revision ledger, and generation-applied dynamic topology and Agent Host settings |
 
 ## Historical v0.1 Position (2026-10-22)
 
@@ -205,6 +259,10 @@ review follow-up, and release preparation remain distinct from the implemented f
 </details>
 
 ## Future Configuration Milestone
+
+[ADR 0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md)
+proposes replacing the SQLite authority and restart-applied baseline described here; until it is
+accepted, this section remains authoritative.
 
 ADR 0014 records the accepted post-v0.1 direction, not a delivered write-management feature:
 first-party frontend workflows edit both Gateway topology and Mabrid's Agent Host/Target/runtime
