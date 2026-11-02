@@ -125,6 +125,40 @@ need ceremonial new ADRs or repeated architectural approval. They still require 
 authorization and focused verification. If a fix changes an accepted boundary, record the focused
 decision delta, including during an urgent hotfix; urgency is not implicit architectural approval.
 
+## Context Selection And Archiving
+
+The owner approved index-level archiving on 2026-10-30. It controls default reading scope, not
+decision authority. Keep ADR identifiers, paths, and links unchanged; no archive directory or
+second catalog is needed.
+
+| Reading scope | Contents | When to read |
+| --- | --- | --- |
+| Current | Current project constraints, the active change-set entry, and its relevant ADR clauses | Start here for the task; follow only the dependencies needed to understand or change it |
+| Reference | Other accepted decisions, detailed rationale, and dated delivery assessments | Read when the affected behavior, dependency, compatibility rule, or migration requires it |
+| Archived | Explicitly archived Rejected, Withdrawn, or fully Superseded ADRs | Read for historical investigation or evaluation of a new proposal, not as current authority |
+
+These are reading scopes, not additional decision lifecycle states. An accepted decision outside
+the default reading scope remains binding. Implemented does not mean obsolete, and an amended ADR
+cannot be archived while any of its requirements still govern current behavior.
+
+Before archiving an ADR, confirm its final lifecycle state and record the reason, archive date,
+and accepted replacement where applicable in the decision log. If an old ADR still has valid
+requirements, first reconcile them into an explicitly accepted replacement and identify the full
+supersession. A short summary alone does not replace those requirements. Do not change a decision's
+status, hide unresolved conflicts, or drop migration obligations merely to reduce context size.
+
+The default reading path is the current publication/governance position and active change-set
+entry in the decision log, followed by task-relevant clauses. Do not bulk-load the historical
+index, archived ADRs, or every transitive amendment. Open historical material when needed to
+resolve a specific question. If a relevant dependency is missing from an entry, follow it and
+update the entry rather than ignoring it.
+
+Keep historical delivery assessments and closed reviews in the log's on-demand reference area.
+Folding a historical assessment does not archive the ADRs it lists or cancel their surviving
+constraints. Keep the existing index as the single inventory; archive entries record disposition
+and links without copying whole decisions. This change introduces the archive policy but does not
+declare any existing ADR fully superseded.
+
 ## Record Maintenance
 
 - Preserve existing ADR identifiers, paths, context, and historical rationale. Do not renumber,

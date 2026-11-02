@@ -46,6 +46,9 @@ belong to the product.
 	implementation progress, and do not treat coupled decisions as independent feature tickets.
 - Follow [Decision Governance](../../docs/architecture/decision-governance.md) and start from the
 	active review entry in the [decision log](../../docs/architecture/decision-log.md).
+- Load ADR context selectively. Keep historical reference and archive sections out of default
+	context; read them only for relevant constraints or investigation. Implementation completion
+	alone does not retire an accepted decision.
 
 ## Developer and Deployment Tooling
 
