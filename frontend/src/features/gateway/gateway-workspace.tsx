@@ -7,6 +7,7 @@ import { EndpointsView } from './endpoints-view'
 import { UpstreamsView } from './upstreams-view'
 import { TopologyView } from './topology-view'
 import { EndpointDetails, UpstreamDetails } from './gateway-details'
+import { GatewayConfigurationControls } from './configuration-controls'
 import { useGatewayNavigation, type GatewayView } from './gateway-navigation'
 export type { GatewayView, GatewaySelection, NavigateGateway } from './gateway-navigation'
 
@@ -14,6 +15,7 @@ const views = { topology: 'Topology', endpoints: 'Endpoints', upstreams: 'Upstre
 /** Owns the shared configuration reads, refresh lifecycle, and cross-view selection. */
 export function GatewayWorkspace({ onSnapshot }: { onSnapshot?: (snapshot: GatewaySnapshot) => void }) {
   const [revision, setRevision] = useState(0)
+  const [showConfiguration, setShowConfiguration] = useState(false)
   const [state, setState] = useState<{ snapshot: GatewaySnapshot | null; pending: boolean; error: string | null }>({
     snapshot: null, pending: true, error: null,
   })
@@ -45,6 +47,10 @@ export function GatewayWorkspace({ onSnapshot }: { onSnapshot?: (snapshot: Gatew
   const title = !navigation.found ? 'Gateway page not found'
     : kind ? endpoint?.display_name ?? upstream?.display_name ?? (state.snapshot ? `${kind === 'endpoint' ? 'Endpoint' : 'Upstream'} not found` : state.pending ? 'Loading details' : `${kind === 'endpoint' ? 'Endpoint' : 'Upstream'} details`)
       : views[view]
+  const refresh = () => {
+    setState((previous) => ({ ...previous, pending: true, error: null }))
+    setRevision((previous) => previous + 1)
+  }
 
   return (
     <Tabs value={view} onValueChange={(value) => { if (value in views) navigation.selectTab(value as GatewayView) }} className="gap-0">
@@ -57,14 +63,15 @@ export function GatewayWorkspace({ onSnapshot }: { onSnapshot?: (snapshot: Gatew
         {kind && <Button id="gateway-detail-back" variant="ghost" size="sm" className="mb-5" onClick={navigation.back}><ArrowLeft aria-hidden="true" />{navigation.backLabel}</Button>}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h2 id="gateway-view-heading" ref={heading} tabIndex={-1} className="min-w-0 break-words text-2xl font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring">{title}</h2>
-          <Button variant="outline" disabled={state.pending} onClick={() => {
-            setState((previous) => ({ ...previous, pending: true, error: null }))
-            setRevision((previous) => previous + 1)
-          }}>
-            <RefreshCw aria-hidden="true" className={state.pending ? 'animate-spin motion-reduce:animate-none' : ''} />
-            Refresh
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" aria-expanded={showConfiguration} aria-controls="gateway-configuration-controls" onClick={() => setShowConfiguration((value) => !value)}>Configuration application</Button>
+            <Button variant="outline" disabled={state.pending} onClick={refresh}>
+              <RefreshCw aria-hidden="true" className={state.pending ? 'animate-spin motion-reduce:animate-none' : ''} />
+              Refresh
+            </Button>
+          </div>
         </div>
+        {showConfiguration && <GatewayConfigurationControls revision={revision} onApplied={refresh} />}
         {navigation.found && !kind && view !== 'topology' && <div className="mt-5 flex flex-wrap gap-3">
           <input id={`gateway-search-${view}`} type="search" aria-label={`Search ${view}`} placeholder={`Search ${view}`} value={query} className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm sm:max-w-sm" onChange={(event) => navigation.changeFilter('q', event.target.value)} />
           <select id={`gateway-configuration-${view}`} aria-label="Configuration filter" value={configuration} className="h-9 max-w-full rounded-md border bg-background px-3 text-sm" onChange={(event) => navigation.changeFilter('configuration', event.target.value)}>

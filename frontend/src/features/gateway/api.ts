@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { HttpError, readJson } from '@/lib/http'
+import { HttpError, postJson, readJson } from '@/lib/http'
 
 const revisionSchema = z.object({
   revision_id: z.uuid(), revision_number: z.int(), created_at: z.string(),
@@ -55,8 +55,27 @@ const publicationSchema = z.object({
   published_endpoint_slugs: z.array(z.string()),
 })
 
+const appliedConfigurationSource = z.enum(['runtime_file', 'legacy_file', 'unconfigured', 'provided', 'ledger'])
+const desiredConfigurationSource = z.enum(['runtime_file', 'legacy_file', 'unconfigured', 'provided', 'unknown'])
+const configurationHash = z.string().regex(/^[a-f0-9]{64}$/).nullable()
+export const gatewayConfigurationSchema = z.object({
+  generation: z.int().positive(),
+  applied_at: z.string(),
+  applied_hash: configurationHash,
+  applied_source: appliedConfigurationSource,
+  desired_hash: configurationHash,
+  desired_source: desiredConfigurationSource,
+  file_valid: z.boolean(),
+  pending: z.boolean(),
+  error: z.string().nullable(),
+  restart_required: z.boolean(),
+  host_unavailable: z.boolean(),
+  recovery_required: z.boolean(),
+})
+
 export type Endpoint = z.infer<typeof topologySchema>['endpoints'][number]
 export type Upstream = z.infer<typeof topologySchema>['upstreams'][number]
+export type GatewayConfiguration = z.infer<typeof gatewayConfigurationSchema>
 export type GatewaySnapshot = {
   topology: z.infer<typeof topologySchema>
   publication:
@@ -103,4 +122,22 @@ export async function loadGatewaySnapshot(signal: AbortSignal): Promise<GatewayS
     ),
   ])
   return { topology, publication }
+}
+
+export const loadGatewayConfiguration = (signal: AbortSignal) =>
+  readGateway('configuration', gatewayConfigurationSchema, signal)
+
+export async function applyGatewayConfiguration(expectedHash: string | null, signal: AbortSignal) {
+  try {
+    return await postJson(
+      '/api/v1/gateway/configuration/apply',
+      { expected_hash: expectedHash },
+      gatewayConfigurationSchema,
+      signal,
+      'Gateway',
+    )
+  } catch (error) {
+    if (error instanceof HttpError) throw new GatewayHttpError(error.message, error.status)
+    throw error
+  }
 }

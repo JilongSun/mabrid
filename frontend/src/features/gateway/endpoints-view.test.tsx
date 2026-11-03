@@ -27,7 +27,7 @@ const topology = {
   }],
 }
 const publication = {
-  version: '0.1.0', lifecycle_state: 'running', topology_mode: 'frozen_seeded',
+  version: '0.1.0', lifecycle_state: 'running', topology_mode: 'generation_applied',
   advertised_base_url: 'https://gateway.example', published_endpoint_count: 1,
   published_endpoint_slugs: ['tools'],
 }
@@ -153,6 +153,25 @@ describe('Endpoint data boundary', () => {
 })
 
 describe('Endpoints view', () => {
+  it('opens the configuration application controls without writing the file', async () => {
+    const user = userEvent.setup()
+    const hash = 'a'.repeat(64)
+    fetchMock.mockImplementation(async (input) => json(
+      String(input).endsWith('/topology') ? topology
+        : String(input).endsWith('/configuration') ? {
+          generation: 1, applied_at: '2026-10-27T12:00:00Z',
+          applied_hash: hash, applied_source: 'runtime_file',
+          desired_hash: hash, desired_source: 'runtime_file',
+          file_valid: true, pending: false, error: null, restart_required: false, host_unavailable: false, recovery_required: false,
+        } : publication,
+    ))
+    renderGateway()
+    await user.click(screen.getByRole('button', { name: 'Configuration application' }))
+    expect(await screen.findByRole('region', { name: 'Configuration application' })).toBeDefined()
+    expect(screen.getByText('Applied')).toBeDefined()
+    expect(fetchMock.mock.calls.every(([, options]) => options?.method !== 'POST')).toBe(true)
+  })
+
   it('shows loading, then upstream bindings and independent configuration/publication facts', async () => {
     const user = userEvent.setup()
     renderGateway()

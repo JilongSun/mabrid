@@ -15,13 +15,20 @@ export class HttpError extends Error {
   }
 }
 
-export async function readJson<T>(path: string, schema: z.ZodType<T>, signal: AbortSignal, service: string, errorFromBody?: (body: unknown, status: number) => Error): Promise<T> {
+type JsonRequest = { method: 'GET' } | { method: 'POST'; body: unknown }
+
+async function requestJson<T>(path: string, schema: z.ZodType<T>, signal: AbortSignal, service: string, request: JsonRequest, errorFromBody?: (body: unknown, status: number) => Error): Promise<T> {
   const timeout = AbortSignal.timeout(10_000)
   let response: Response
   try {
     response = await fetch(path, {
       signal: AbortSignal.any([signal, timeout]),
-      headers: { Accept: 'application/json, application/problem+json' }, cache: 'no-store',
+      ...(request.method === 'POST' ? { method: 'POST', body: JSON.stringify(request.body) } : {}),
+      headers: {
+        Accept: 'application/json, application/problem+json',
+        ...(request.method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+      },
+      cache: 'no-store',
     })
   } catch (error) {
     if (signal.aborted) throw error
@@ -52,4 +59,12 @@ export async function readJson<T>(path: string, schema: z.ZodType<T>, signal: Ab
   const parsed = schema.safeParse(body)
   if (!parsed.success) throw new Error(`The ${service} response does not match the expected contract.`)
   return parsed.data
+}
+
+export function readJson<T>(path: string, schema: z.ZodType<T>, signal: AbortSignal, service: string, errorFromBody?: (body: unknown, status: number) => Error): Promise<T> {
+  return requestJson(path, schema, signal, service, { method: 'GET' }, errorFromBody)
+}
+
+export function postJson<T>(path: string, body: unknown, schema: z.ZodType<T>, signal: AbortSignal, service: string): Promise<T> {
+  return requestJson(path, schema, signal, service, { method: 'POST', body })
 }
