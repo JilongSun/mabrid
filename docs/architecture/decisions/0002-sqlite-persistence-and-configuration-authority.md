@@ -18,7 +18,9 @@ YAML-managed; its transition to authoritative managed storage is separate pendin
 
 ADR 0018 amends the configuration-authority and seed-only clauses below: configuration files
 become the desired-state authority and SQLite retains applied revisions and Session history.
-The persistence, transaction, and non-destructive evolution requirements continue to apply.
+The persistence and transaction requirements continue to apply. Its 2026-11-03 preview amendment
+removes old-schema upgrade and single-file seed compatibility; normal configuration application
+still preserves identities, revisions, and Session/Run references without automatic database reset.
 
 ## Context
 

@@ -9,9 +9,6 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from alembic import command
-from alembic.config import Config
-from anyio import to_thread
 from mabrid.application.gateway.sessions import BridgeSessionRecord, BridgeSessionStatus
 from mabrid.application.gateway.topology import (
     EndpointBinding,
@@ -24,11 +21,10 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSessionTransaction
 
-from mabrid.server import main as server_main
 from mabrid.server.composition import BootstrapResult, bootstrap_server
 from mabrid.server.composition.configuration import ConfigurationApplyError
 from mabrid.server.api import create_app
-from mabrid.server.config import ConfigError, resolve_runtime_configuration
+from mabrid.server.config import resolve_runtime_configuration
 from mabrid.server.persistence import SqliteDatabase
 from mabrid.server.persistence.schema import (
     AgentSessionRow,
@@ -39,7 +35,7 @@ from mabrid.server.persistence.schema import (
     UpstreamServerRow,
 )
 from mabrid.server.persistence.sessions import SqlAlchemyBridgeSessionRepository
-from mabrid.server.persistence.topology import seed_topology_if_empty
+from mabrid.server.persistence.topology import reconcile_topology
 
 
 def _static(path: Path, *, host: bool = False) -> None:
@@ -64,14 +60,6 @@ bridge:
 storage:
   sqlitePath: gateway.db
 {agent_host}
-upstreams:
-  fixture:
-    transport: streamable-http
-    url: https://old.example.test/mcp
-endpoints:
-  fixture:
-    bindings:
-      - upstream: fixture
 """,
         encoding="utf-8",
     )
@@ -95,9 +83,7 @@ endpoints:
 
 @asynccontextmanager
 async def _running(config_path: Path) -> AsyncIterator[BootstrapResult]:
-    configuration = resolve_runtime_configuration(
-        str(config_path), defer_legacy_topology_errors=True
-    )
+    configuration = resolve_runtime_configuration(str(config_path))
     result = await bootstrap_server(configuration)
     try:
         yield result
@@ -107,15 +93,10 @@ async def _running(config_path: Path) -> AsyncIterator[BootstrapResult]:
         await result.database.close()
 
 
-async def _old_database(path: Path) -> tuple[BridgeSessionRecord, str]:
-    config = Config()
-    config.set_main_option(
-        "script_location", str(Path(__file__).resolve().parents[1] / "migrations")
-    )
-    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{path.as_posix()}")
-    await to_thread.run_sync(command.upgrade, config, "0002_agent_sessions")
+async def _populated_database(path: Path) -> tuple[BridgeSessionRecord, str]:
     database = SqliteDatabase(path)
     try:
+        await database.migrate()
         upstream = UpstreamServerDefinition(
             slug="fixture",
             display_name="fixture",
@@ -126,7 +107,8 @@ async def _old_database(path: Path) -> tuple[BridgeSessionRecord, str]:
             display_name="fixture",
             bindings=[EndpointBinding(upstream_server_id=upstream.server_id)],
         )
-        await seed_topology_if_empty(database.session_factory, [upstream], [endpoint])
+        async with database.session_factory.begin() as session:
+            await reconcile_topology(session, [upstream], [endpoint])
         async with database.session_factory() as session:
             revision_id = await session.scalar(select(EndpointRevisionRow.revision_id))
         assert revision_id is not None
@@ -162,13 +144,14 @@ async def _old_database(path: Path) -> tuple[BridgeSessionRecord, str]:
         await database.close()
 
 
-async def test_existing_database_migrates_and_file_changes_preserve_references(
+async def test_file_changes_preserve_current_database_references(
     tmp_path: Path,
 ) -> None:
     config_path = tmp_path / "mabrid.yaml"
     runtime_path = tmp_path / "mabrid.runtime.yaml"
     _static(config_path)
-    bridge_session, agent_id = await _old_database(tmp_path / "gateway.db")
+    _runtime(runtime_path, "https://old.example.test/mcp")
+    bridge_session, agent_id = await _populated_database(tmp_path / "gateway.db")
 
     async with _running(config_path) as result:
         manager = result.gateway_management.configuration
@@ -178,7 +161,7 @@ async def test_existing_database_migrates_and_file_changes_preserve_references(
         assert (
             before.endpoints[0].current_revision.revision_id == bridge_session.endpoint_revision_id
         )
-        assert (await manager.status()).applied_source == "legacy_file"
+        assert (await manager.status()).applied_source == "runtime_file"
 
         _runtime(runtime_path, "https://new.example.test/mcp")
         pending = await manager.status()
@@ -210,6 +193,7 @@ async def test_conflict_invalid_candidate_and_concurrent_apply_are_safe(tmp_path
     config_path = tmp_path / "mabrid.yaml"
     runtime_path = tmp_path / "mabrid.runtime.yaml"
     _static(config_path)
+    _runtime(runtime_path, "https://old.example.test/mcp")
     async with _running(config_path) as result:
         manager = result.gateway_management.configuration
         assert manager is not None
@@ -248,6 +232,7 @@ async def test_cancellation_after_commit_keeps_publication_and_status_consistent
     config_path = tmp_path / "mabrid.yaml"
     runtime_path = tmp_path / "mabrid.runtime.yaml"
     _static(config_path)
+    _runtime(runtime_path, "https://old.example.test/mcp")
     async with _running(config_path) as result:
         manager = result.gateway_management.configuration
         assert manager is not None
@@ -287,6 +272,7 @@ async def test_uncertain_commit_reloads_or_disables_publication_safely(
     config_path = tmp_path / "mabrid.yaml"
     runtime_path = tmp_path / "mabrid.runtime.yaml"
     _static(config_path)
+    _runtime(runtime_path, "https://old.example.test/mcp")
     async with _running(config_path) as result:
         manager = result.gateway_management.configuration
         assert manager is not None
@@ -334,7 +320,7 @@ async def test_uncertain_commit_reloads_or_disables_publication_safely(
             assert status.generation == 2 and not status.pending
 
 
-async def test_recovery_rechecks_file_adoption_before_selecting_a_candidate(
+async def test_recovery_rechecks_runtime_file_before_applying_a_candidate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "mabrid.yaml"
@@ -365,9 +351,11 @@ async def test_recovery_rechecks_file_adoption_before_selecting_a_candidate(
             with pytest.raises(ConfigurationApplyError):
                 await manager.apply(candidate.desired_hash)
             runtime_path.unlink()
-            stale = await manager.status()
+            unavailable = await manager.status()
+            assert unavailable.recovery_required
+            assert unavailable.desired_source == "unconfigured"
         with pytest.raises(ConfigurationApplyError) as conflict:
-            await manager.apply(stale.desired_hash)
+            await manager.apply(candidate.desired_hash)
         assert conflict.value.code == "configuration_conflict"
         refreshed = await manager.status()
         assert refreshed.desired_source == "unconfigured"
@@ -450,7 +438,7 @@ async def test_invalid_runtime_restart_uses_last_known_good_and_reports_error(
         assert await result.gateway_management.is_ready()
 
 
-async def test_missing_adopted_runtime_does_not_restore_stale_legacy_topology(
+async def test_missing_runtime_clears_publication_without_restoring_ledger_heads(
     tmp_path: Path,
 ) -> None:
     config_path = tmp_path / "mabrid.yaml"
@@ -468,81 +456,6 @@ async def test_missing_adopted_runtime_does_not_restore_stale_legacy_topology(
         assert status.applied_source == "unconfigured" and not status.pending
         assert not result.gateway.published_endpoints
         assert not await result.gateway_management.is_ready()
-
-
-@pytest.mark.parametrize(
-    ("original", "invalid"),
-    [
-        ("transport: streamable-http", "transport: unsupported"),
-        ("upstream: fixture", "upstream: missing"),
-    ],
-)
-async def test_missing_adopted_runtime_ignores_invalid_legacy_topology(
-    tmp_path: Path, original: str, invalid: str
-) -> None:
-    config_path = tmp_path / "mabrid.yaml"
-    runtime_path = tmp_path / "mabrid.runtime.yaml"
-    _static(config_path)
-    _runtime(runtime_path, "https://new.example.test/mcp")
-    async with _running(config_path) as result:
-        assert result.gateway.published_endpoints
-
-    legacy = config_path.read_text(encoding="utf-8")
-    assert original in legacy
-    config_path.write_text(legacy.replace(original, invalid), encoding="utf-8")
-    runtime_path.unlink()
-
-    async with _running(config_path) as result:
-        manager = result.gateway_management.configuration
-        assert manager is not None
-        status = await manager.status()
-        assert status.file_valid and status.error is None
-        assert status.applied_source == "unconfigured" and not status.pending
-        assert not result.gateway.published_endpoints
-        assert not await result.gateway_management.is_ready()
-
-
-async def test_invalid_legacy_topology_is_rejected_before_runtime_adoption(tmp_path: Path) -> None:
-    config_path = tmp_path / "mabrid.yaml"
-    _static(config_path)
-    legacy = config_path.read_text(encoding="utf-8")
-    config_path.write_text(
-        legacy.replace("transport: streamable-http", "transport: unsupported"),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ConfigError, match="Invalid topology configuration"):
-        resolve_runtime_configuration(str(config_path))
-    with pytest.raises(ConfigError, match="Invalid topology configuration"):
-        async with _running(config_path):
-            pytest.fail("Invalid legacy topology must not be published")
-
-
-async def test_server_entry_point_ignores_invalid_legacy_after_runtime_adoption(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    config_path = tmp_path / "mabrid.yaml"
-    runtime_path = tmp_path / "mabrid.runtime.yaml"
-    _static(config_path)
-    _runtime(runtime_path, "https://new.example.test/mcp")
-    async with _running(config_path):
-        pass
-
-    legacy = config_path.read_text(encoding="utf-8")
-    config_path.write_text(
-        legacy.replace("transport: streamable-http", "transport: unsupported"),
-        encoding="utf-8",
-    )
-    runtime_path.unlink()
-    served = False
-
-    async def serve(_runtime: server_main.MabridServerRuntime) -> None:
-        nonlocal served
-        served = True
-
-    monkeypatch.setattr(server_main.MabridServerRuntime, "serve", serve)
-    await server_main.serve_runtime(server_main.parse_args(["--config", str(config_path)]))
-    assert served
 
 
 async def test_missing_host_endpoint_rejects_apply_and_invalid_first_start_degrades(
@@ -625,6 +538,29 @@ async def test_static_setting_changes_are_reported_but_not_hot_applied(tmp_path:
             await manager.apply(invalid.desired_hash)
 
 
+@pytest.mark.parametrize("key", ["upstreams", "endpoints"])
+async def test_static_topology_keys_reject_apply_without_changing_publication(
+    tmp_path: Path, key: str
+) -> None:
+    config_path = tmp_path / "mabrid.yaml"
+    _static(config_path)
+    _runtime(tmp_path / "mabrid.runtime.yaml", "https://old.example.test/mcp")
+    async with _running(config_path) as result:
+        manager = result.gateway_management.configuration
+        assert manager is not None
+        previous = result.gateway.published_endpoints[0]
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8") + f"\n{key}: {{}}\n", encoding="utf-8"
+        )
+        status = await manager.status()
+        assert not status.file_valid and status.restart_required
+        assert status.error and "Invalid process configuration" in status.error
+        with pytest.raises(ConfigurationApplyError) as failure:
+            await manager.apply(status.desired_hash)
+        assert failure.value.code == "configuration_invalid"
+        assert result.gateway.published_endpoints[0] == previous
+
+
 @pytest.mark.parametrize("collision", ["upstream", "endpoint"])
 async def test_normalized_name_collisions_are_rejected_without_changing_heads(
     tmp_path: Path, collision: str
@@ -632,6 +568,7 @@ async def test_normalized_name_collisions_are_rejected_without_changing_heads(
     config_path = tmp_path / "mabrid.yaml"
     runtime_path = tmp_path / "mabrid.runtime.yaml"
     _static(config_path)
+    _runtime(runtime_path, "https://old.example.test/mcp")
     async with _running(config_path) as result:
         manager = result.gateway_management.configuration
         assert manager is not None

@@ -120,7 +120,7 @@ class UpstreamFileConfig(CamelModel):
 
 
 class EndpointBindingFileConfig(CamelModel):
-    """Declare a seed binding by upstream name, namespace, order, and enablement."""
+    """Declare a runtime binding by upstream name, namespace, order, and enablement."""
 
     upstream: str
     namespace: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
@@ -129,7 +129,7 @@ class EndpointBindingFileConfig(CamelModel):
 
 
 class EndpointFileConfig(CamelModel):
-    """Validate one transitional endpoint seed and its explicit upstream bindings."""
+    """Validate one runtime endpoint and its explicit upstream bindings."""
 
     display_name: str | None = None
     mode: Literal["passthrough", "aggregate"] = "passthrough"
@@ -166,17 +166,4 @@ class TopologyFileConfig(CamelModel):
                         f"endpoint '{endpoint_name}' references unknown upstream "
                         f"'{binding.upstream}'"
                     )
-        return self
-
-
-class MabridConfig(ProcessFileConfig, TopologyFileConfig):
-    """Combine process and selected topology settings for the legacy loading interface."""
-
-    @model_validator(mode="after")
-    def validate_diagnostic_upstream(self) -> MabridConfig:
-        diagnostic = self.bridge.diagnostic_upstream
-        if diagnostic is not None and diagnostic not in self.upstreams:
-            raise ValueError(
-                f"'bridge.diagnosticUpstream' references unknown upstream '{diagnostic}'"
-            )
         return self

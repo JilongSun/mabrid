@@ -152,15 +152,45 @@ def test_native_setup_is_idempotent_without_host_python(launcher) -> None:
     result = invoke("setup")
     assert result.returncode == 0, result.stderr
     assert (directory / "mabrid.yaml").read_bytes() == (ROOT / "mabrid.yaml.example").read_bytes()
+    assert (directory / "mabrid.runtime.yaml").read_bytes() == (
+        ROOT / "mabrid.runtime.yaml.example"
+    ).read_bytes()
     env_file = directory / ".env"
     assert env_file.is_file()
     assert "API_SERVER_KEY" in env_file.read_text(encoding="utf-8")
     (directory / "mabrid.yaml").write_bytes(b"user-owned configuration\n")
+    (directory / "mabrid.runtime.yaml").write_bytes(b"user-owned runtime configuration\n")
     (directory / ".env").write_bytes(b"USER_VALUE=fixture-only\n")
     result = invoke("setup")
     assert result.returncode == 0, result.stderr
     assert (directory / "mabrid.yaml").read_bytes() == b"user-owned configuration\n"
+    assert (directory / "mabrid.runtime.yaml").read_bytes() == b"user-owned runtime configuration\n"
     assert (directory / ".env").read_bytes() == b"USER_VALUE=fixture-only\n"
+    assert not log.exists()
+
+
+@pytest.mark.parametrize("existing", ["mabrid.yaml", "mabrid.runtime.yaml"])
+def test_setup_creates_only_missing_configuration_files(launcher, existing: str) -> None:
+    invoke, directory, log = launcher
+    directory.mkdir()
+    existing_file = directory / existing
+    existing_file.write_bytes(b"owner-maintained configuration\n")
+    result = invoke("setup")
+    assert result.returncode == 0, result.stderr
+    assert existing_file.read_bytes() == b"owner-maintained configuration\n"
+    missing = "mabrid.runtime.yaml" if existing == "mabrid.yaml" else "mabrid.yaml"
+    assert (directory / missing).read_bytes() == (ROOT / f"{missing}.example").read_bytes()
+    assert not log.exists()
+
+
+@pytest.mark.parametrize("name", ["mabrid.yaml", "mabrid.runtime.yaml", ".env"])
+def test_setup_rejects_directories_in_place_of_configuration_files(launcher, name: str) -> None:
+    invoke, directory, log = launcher
+    (directory / name).mkdir(parents=True)
+    result = invoke("setup")
+    assert result.returncode != 0
+    assert "Expected a regular file" in result.stderr
+    assert (directory / name).is_dir()
     assert not log.exists()
 
 
@@ -254,16 +284,20 @@ def test_compose_keeps_secrets_runtime_only() -> None:
 
 
 def test_root_example_matches_current_configuration_contract(tmp_path: Path) -> None:
-    from mabrid.server.config import load_bridge_config
+    from mabrid.server.config import resolve_runtime_configuration
 
     config = tmp_path / "mabrid.yaml"
     config.write_bytes((ROOT / "mabrid.yaml.example").read_bytes())
-    loaded = load_bridge_config(str(config))
-    assert loaded.config.bridge.api_port == 8765
-    assert loaded.config.storage.sqlite_path == Path("backend/var/mabrid.db")
+    loaded = resolve_runtime_configuration(str(config))
+    assert loaded.bridge.api_port == 8765
+    assert loaded.storage.sqlite_path == tmp_path / "backend/var/mabrid.db"
+    assert loaded.topology_source == "unconfigured"
+    assert not loaded.upstreams and not loaded.endpoints
     (tmp_path / "mabrid.runtime.yaml").write_bytes(
         (ROOT / "mabrid.runtime.yaml.example").read_bytes()
     )
-    split = load_bridge_config(str(config))
-    assert split.config.upstreams == loaded.config.upstreams
-    assert split.config.endpoints == loaded.config.endpoints
+    split = resolve_runtime_configuration(str(config))
+    assert split.topology_source == "runtime_file"
+    assert split.topology_error is None
+    assert set(split.upstreams) == {"enterprise-ops-hub-http-1", "enterprise-ops-hub-http-2"}
+    assert set(split.endpoints) == {"test-endpoint"}

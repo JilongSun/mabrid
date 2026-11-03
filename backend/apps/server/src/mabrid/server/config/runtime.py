@@ -68,7 +68,7 @@ class RuntimeConfiguration:
     endpoints: dict[str, EndpointFileConfig]
     diagnostic_upstream: str | None
     agent_host: RuntimeAgentHostConfig = field(default_factory=RuntimeAgentHostConfig)
-    topology_source: Literal["runtime_file", "legacy_file", "unconfigured", "provided"] = "provided"
+    topology_source: Literal["runtime_file", "unconfigured", "provided"] = "provided"
     topology_hash: str | None = None
     topology_error: str | None = None
     static_signature: str | None = None

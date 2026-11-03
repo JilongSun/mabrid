@@ -16,7 +16,6 @@ from .file import (
     AgentHostFileConfig,
     BridgeRuntimeConfig,
     EndpointFileConfig,
-    MabridConfig,
     ProcessFileConfig,
     TopologyFileConfig,
     UpstreamFileConfig,
@@ -41,7 +40,7 @@ class ConfigError(RuntimeError):
         message: str,
         *,
         content_hash: str | None = None,
-        source: Literal["runtime_file", "legacy_file", "unconfigured"] | None = None,
+        source: Literal["runtime_file", "unconfigured"] | None = None,
     ) -> None:
         super().__init__(message)
         self.content_hash = content_hash
@@ -49,19 +48,11 @@ class ConfigError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class LoadedBridgeConfig:
-    """Pair validated file settings with the source path used to resolve relative resources."""
-
-    path: Path
-    config: MabridConfig
-
-
-@dataclass(frozen=True)
 class LoadedTopology:
     """Keep the selected topology file and its content identity together."""
 
     config: TopologyFileConfig
-    source: Literal["runtime_file", "legacy_file", "unconfigured"]
+    source: Literal["runtime_file", "unconfigured"]
     content_hash: str | None
 
 
@@ -71,32 +62,18 @@ class RuntimeTopologyCandidate:
 
     upstreams: dict[str, RuntimeUpstreamConfig]
     endpoints: dict[str, EndpointFileConfig]
-    source: Literal["runtime_file", "legacy_file", "unconfigured", "provided"]
+    source: Literal["runtime_file", "unconfigured", "provided"]
     content_hash: str | None
-
-
-def load_bridge_config(path: str | None = None) -> LoadedBridgeConfig:
-    config_path = _resolve_config_path(path)
-    raw, static_hash = _read_document(config_path)
-    process = _validate_process(raw, static_hash)
-    topology = _select_topology(config_path, raw, static_hash)
-    return LoadedBridgeConfig(
-        path=config_path,
-        config=_combine_configuration(process, topology),
-    )
 
 
 DEFAULT_PROXY_NAME = "mabrid-gateway"
 
 
-def resolve_runtime_configuration(
-    config_path: str | None, *, defer_legacy_topology_errors: bool = False
-) -> RuntimeConfiguration:
+def resolve_runtime_configuration(config_path: str | None) -> RuntimeConfiguration:
     """Resolve deployment settings from the configuration file and its adjacent dotenv file.
 
     Listener settings, proxy identity, diagnostic upstream selection, and transport timeout
-    are configuration-file values only. The process entry point does not override them. When
-    requested by startup, legacy topology errors are deferred until the adoption ledger is read.
+    are static-file values only. Gateway topology comes only from the adjacent runtime file.
     """
     path = _resolve_config_path(config_path)
     raw, static_hash = _read_document(path)
@@ -107,18 +84,13 @@ def resolve_runtime_configuration(
     )
     topology_error: str | None = None
     try:
-        topology = _select_topology(path, raw, static_hash)
-        _combine_configuration(process, topology)
+        topology = _load_topology(path, bridge.diagnostic_upstream)
     except ConfigError as exc:
-        if exc.source == "runtime_file":
-            source = "runtime_file"
-        elif exc.source == "legacy_file" and defer_legacy_topology_errors:
-            source = "legacy_file"
-        else:
+        if exc.source != "runtime_file":
             raise
         topology = LoadedTopology(
             config=TopologyFileConfig(),
-            source=source,
+            source="runtime_file",
             content_hash=exc.content_hash,
         )
         topology_error = str(exc)
@@ -141,22 +113,11 @@ def resolve_runtime_configuration(
     )
 
 
-def load_runtime_topology(
-    configuration: RuntimeConfiguration, *, allow_legacy: bool = True
-) -> RuntimeTopologyCandidate:
+def load_runtime_topology(configuration: RuntimeConfiguration) -> RuntimeTopologyCandidate:
     """Read the selected topology without applying changed process or Host settings."""
     raw, static_hash = _read_document(configuration.config_path)
     _validate_process(raw, static_hash)
-    topology = _select_topology(
-        configuration.config_path, raw, static_hash, allow_legacy=allow_legacy
-    )
-    diagnostic = configuration.diagnostic_upstream
-    if diagnostic is not None and diagnostic not in topology.config.upstreams:
-        raise ConfigError(
-            f"'bridge.diagnosticUpstream' references unknown upstream '{diagnostic}'",
-            content_hash=topology.content_hash,
-            source=topology.source,
-        )
+    topology = _load_topology(configuration.config_path, configuration.diagnostic_upstream)
     return _resolve_topology(topology, configuration.config_path.parent, configuration.bridge)
 
 
@@ -191,9 +152,8 @@ def _read_document(path: Path) -> tuple[dict[str, object], str]:
 
 
 def _validate_process(raw: dict[str, object], content_hash: str) -> ProcessFileConfig:
-    process = {key: value for key, value in raw.items() if key not in {"upstreams", "endpoints"}}
     try:
-        return ProcessFileConfig.model_validate(process)
+        return ProcessFileConfig.model_validate(raw)
     except ValidationError as exc:
         raise ConfigError(
             f"Invalid process configuration: {_validation_summary(exc)}",
@@ -201,13 +161,7 @@ def _validate_process(raw: dict[str, object], content_hash: str) -> ProcessFileC
         ) from exc
 
 
-def _select_topology(
-    config_path: Path,
-    raw: dict[str, object],
-    static_hash: str,
-    *,
-    allow_legacy: bool = True,
-) -> LoadedTopology:
+def _load_topology(config_path: Path, diagnostic_upstream: str | None) -> LoadedTopology:
     runtime_path = config_path.with_name(RUNTIME_CONFIG_FILE_NAME)
     if runtime_path.exists():
         try:
@@ -216,11 +170,7 @@ def _select_topology(
             raise ConfigError(
                 str(exc), content_hash=exc.content_hash, source="runtime_file"
             ) from exc
-        source: Literal["runtime_file", "legacy_file", "unconfigured"] = "runtime_file"
-    elif allow_legacy and ("upstreams" in raw or "endpoints" in raw):
-        topology_raw = {key: raw[key] for key in ("upstreams", "endpoints") if key in raw}
-        content_hash = static_hash
-        source = "legacy_file"
+        source: Literal["runtime_file", "unconfigured"] = "runtime_file"
     else:
         topology_raw = {}
         content_hash = None
@@ -233,24 +183,13 @@ def _select_topology(
             content_hash=content_hash,
             source=source,
         ) from exc
-    return LoadedTopology(config=config, source=source, content_hash=content_hash)
-
-
-def _combine_configuration(process: ProcessFileConfig, topology: LoadedTopology) -> MabridConfig:
-    try:
-        return MabridConfig(
-            bridge=process.bridge,
-            storage=process.storage,
-            agent_host=process.agent_host,
-            upstreams=topology.config.upstreams,
-            endpoints=topology.config.endpoints,
-        )
-    except ValidationError as exc:
+    if diagnostic_upstream is not None and diagnostic_upstream not in config.upstreams:
         raise ConfigError(
-            f"Invalid bridge configuration: {_validation_summary(exc)}",
-            content_hash=topology.content_hash,
-            source=topology.source,
-        ) from exc
+            f"'bridge.diagnosticUpstream' references unknown upstream '{diagnostic_upstream}'",
+            content_hash=content_hash,
+            source=source,
+        )
+    return LoadedTopology(config=config, source=source, content_hash=content_hash)
 
 
 def _validation_summary(error: ValidationError) -> str:

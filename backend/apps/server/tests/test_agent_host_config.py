@@ -14,45 +14,67 @@ from mabrid.server.config import (
 )
 
 
+TOPOLOGY = """
+upstreams:
+  fixture:
+    transport: stdio
+    command: fixture-server
+endpoints:
+  fixture:
+    bindings: [{upstream: fixture}]
+"""
+HOST = """
+bridge: {advertisedBaseUrl: http://mabrid.test:8765}
+agentHost:
+  enabled: true
+  mcpAppsEnabled: true
+  targetId: fixture-target
+  endpointSlug: fixture
+  runtime:
+    integration: hermes
+    interface: openai-chat-completions
+    baseUrl: http://hermes.test:8642/v1
+    apiKeyEnv: FIXTURE_HERMES_KEY
+    sessions:
+      apiRoot: http://hermes.test:8642/prefix
+      bindingId: fixture-deployment
+"""
+
+
+def _write_config(path: Path, process: str = HOST, topology: str = TOPOLOGY) -> None:
+    path.write_text(process, encoding="utf-8")
+    path.with_name("mabrid.runtime.yaml").write_text(topology, encoding="utf-8")
+
+
 def test_mabrid_owns_default_deployment_identifiers() -> None:
     assert CONFIG_FILE_NAME == "mabrid.yaml"
     assert StorageConfig().sqlite_path == Path("backend/var/mabrid.db")
 
 
-def _write_config(path: Path) -> None:
-    path.write_text(
-        """
-bridge:
-    advertisedBaseUrl: http://mabrid.test:8765
-agentHost:
-    enabled: true
-    mcpAppsEnabled: true
-    targetId: fixture-target
-    endpointSlug: fixture
-    runtime:
-        integration: hermes
-        interface: openai-chat-completions
-        baseUrl: http://hermes.test:8642/v1
-        apiKeyEnv: FIXTURE_HERMES_KEY
-        sessions:
-            apiRoot: http://hermes.test:8642/prefix
-            bindingId: fixture-deployment
-endpoints:
-    fixture:
-        bindings:
-            - upstream: fixture
-upstreams:
-    fixture:
-        transport: stdio
-        command: fixture-server
-""",
-        encoding="utf-8",
-    )
+@pytest.mark.parametrize("runtime_present", [False, True])
+@pytest.mark.parametrize("key", ["upstreams", "endpoints"])
+def test_static_file_rejects_topology_keys(tmp_path: Path, runtime_present: bool, key: str) -> None:
+    config_path = tmp_path / "mabrid.yaml"
+    config_path.write_text(f"{key}: {{}}\n", encoding="utf-8")
+    if runtime_present:
+        (tmp_path / "mabrid.runtime.yaml").write_text("{}\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="Invalid process configuration"):
+        resolve_runtime_configuration(str(config_path))
+
+
+@pytest.mark.parametrize("key", ["bridge", "storage", "agentHost"])
+def test_runtime_file_rejects_process_and_host_settings(tmp_path: Path, key: str) -> None:
+    config_path = tmp_path / "mabrid.yaml"
+    _write_config(config_path, "{}", f"{key}: {{}}\n")
+    configuration = resolve_runtime_configuration(str(config_path))
+    assert configuration.topology_error is not None
+    assert key in configuration.topology_error
+    assert configuration.topology_source == "runtime_file"
+    assert not configuration.upstreams and not configuration.endpoints
 
 
 def test_enabled_agent_host_resolves_api_key_from_environment(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "fixture.yaml"
     _write_config(config_path)
@@ -73,230 +95,121 @@ def test_enabled_agent_host_resolves_api_key_from_environment(
     assert configuration.agent_host.runtime.api_key is not None
     assert configuration.agent_host.runtime.api_key.get_secret_value() == "fixture-secret"
     assert configuration.bridge.advertised_base_url == "http://mabrid.test:8765"
+    assert configuration.topology_source == "runtime_file"
+    assert configuration.topology_error is None
+    assert set(configuration.endpoints) == {"fixture"}
 
 
 def test_agent_host_can_disable_mcp_apps_workflow(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "fixture.yaml"
-    _write_config(config_path)
-    config_path.write_text(
-        config_path.read_text(encoding="utf-8").replace(
-            "    mcpAppsEnabled: true\n",
-            "    mcpAppsEnabled: false\n",
-        ),
-        encoding="utf-8",
-    )
+    _write_config(config_path, HOST.replace("mcpAppsEnabled: true", "mcpAppsEnabled: false"))
     monkeypatch.setenv("FIXTURE_HERMES_KEY", "fixture-secret")
-
     configuration = resolve_runtime_configuration(str(config_path))
-
     assert configuration.agent_host.enabled is True
     assert configuration.agent_host.mcp_apps_enabled is False
 
 
 def test_mcp_apps_workflow_requires_enabled_agent_host(tmp_path: Path) -> None:
     config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
-        """
-agentHost: {mcpAppsEnabled: true}
-endpoints:
-    fixture:
-        bindings: [{upstream: fixture}]
-upstreams:
-    fixture:
-        transport: stdio
-        command: fixture-server
-""",
-        encoding="utf-8",
-    )
-
+    _write_config(config_path, "agentHost: {mcpAppsEnabled: true}")
     with pytest.raises(ConfigError, match="requires enabled Agent Host"):
         resolve_runtime_configuration(str(config_path))
 
 
 def test_enabled_agent_host_requires_configured_api_key_environment(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "fixture.yaml"
     _write_config(config_path)
     monkeypatch.delenv("FIXTURE_HERMES_KEY", raising=False)
-
     with pytest.raises(ConfigError, match="FIXTURE_HERMES_KEY"):
         resolve_runtime_configuration(str(config_path))
 
 
-def test_agent_host_uses_hermes_api_server_key_by_default(
+@pytest.mark.parametrize(
+    ("environment_key", "dotenv_key", "expected"),
+    [
+        ("fixture-secret", None, "fixture-secret"),
+        (None, "dotenv-secret", "dotenv-secret"),
+        ("process-secret", "dotenv-secret", "process-secret"),
+    ],
+)
+def test_agent_host_default_secret_and_dotenv_precedence(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    environment_key: str | None,
+    dotenv_key: str | None,
+    expected: str,
 ) -> None:
     config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
+    _write_config(
+        config_path,
         """
 bridge: {advertisedBaseUrl: http://mabrid.test:8765}
 agentHost: {enabled: true, targetId: fixture-target, endpointSlug: fixture}
-endpoints:
-    fixture:
-        bindings: [{upstream: fixture}]
-upstreams:
-  fixture:
-    transport: stdio
-    command: fixture-server
 """,
-        encoding="utf-8",
     )
-    monkeypatch.setenv("API_SERVER_KEY", "fixture-secret")
-
+    if dotenv_key is not None:
+        (tmp_path / ".env").write_text(f"API_SERVER_KEY={dotenv_key}\n", encoding="utf-8")
+    if environment_key is None:
+        monkeypatch.delenv("API_SERVER_KEY", raising=False)
+    else:
+        monkeypatch.setenv("API_SERVER_KEY", environment_key)
     configuration = resolve_runtime_configuration(str(config_path))
-
     assert configuration.agent_host.runtime.api_key is not None
-    assert configuration.agent_host.runtime.api_key.get_secret_value() == "fixture-secret"
+    assert configuration.agent_host.runtime.api_key.get_secret_value() == expected
     assert configuration.agent_host.mcp_apps_enabled is False
-
-
-def test_agent_host_loads_api_key_from_dotenv_next_to_config(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
-        """
-bridge: {advertisedBaseUrl: http://mabrid.test:8765}
-agentHost: {enabled: true, targetId: fixture-target, endpointSlug: fixture}
-endpoints:
-    fixture:
-        bindings: [{upstream: fixture}]
-upstreams:
-  fixture:
-    transport: stdio
-    command: fixture-server
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / ".env").write_text("API_SERVER_KEY=dotenv-secret\n", encoding="utf-8")
-    monkeypatch.delenv("API_SERVER_KEY", raising=False)
-
-    configuration = resolve_runtime_configuration(str(config_path))
-
-    assert configuration.agent_host.runtime.api_key is not None
-    assert configuration.agent_host.runtime.api_key.get_secret_value() == "dotenv-secret"
-
-
-def test_process_environment_takes_precedence_over_dotenv(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
-        """
-bridge: {advertisedBaseUrl: http://mabrid.test:8765}
-agentHost: {enabled: true, targetId: fixture-target, endpointSlug: fixture}
-endpoints:
-    fixture:
-        bindings: [{upstream: fixture}]
-upstreams:
-  fixture:
-    transport: stdio
-    command: fixture-server
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / ".env").write_text("API_SERVER_KEY=dotenv-secret\n", encoding="utf-8")
-    monkeypatch.setenv("API_SERVER_KEY", "process-secret")
-
-    configuration = resolve_runtime_configuration(str(config_path))
-
-    assert configuration.agent_host.runtime.api_key is not None
-    assert configuration.agent_host.runtime.api_key.get_secret_value() == "process-secret"
 
 
 def test_agent_host_rejects_an_unknown_runtime_integration(tmp_path: Path) -> None:
     config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
-        """
-bridge: {advertisedBaseUrl: http://mabrid.test:8765}
-agentHost:
-  enabled: true
-  targetId: fixture-target
-  endpointSlug: fixture
-  runtime:
-        integration: unknown
-endpoints:
-    fixture:
-        bindings: [{upstream: fixture}]
-upstreams:
-  fixture:
-    transport: stdio
-    command: fixture-server
-""",
-        encoding="utf-8",
-    )
-
+    _write_config(config_path, HOST.replace("integration: hermes", "integration: unknown"))
     with pytest.raises(ConfigError, match="integration"):
         resolve_runtime_configuration(str(config_path))
 
 
-def test_configuration_allows_an_unconfigured_gateway(tmp_path: Path) -> None:
-    config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
-        """
-upstreams:
-  fixture:
-    transport: stdio
-    command: fixture-server
-""",
-        encoding="utf-8",
-    )
+@pytest.mark.parametrize("runtime", [None, "", "{}", "upstreams: {}\nendpoints: {}"])
+def test_missing_or_empty_runtime_configures_no_topology(
+    tmp_path: Path, runtime: str | None
+) -> None:
+    config_path = tmp_path / "mabrid.yaml"
+    config_path.write_text("{}", encoding="utf-8")
+    if runtime is not None:
+        config_path.with_name("mabrid.runtime.yaml").write_text(runtime, encoding="utf-8")
+    configuration = resolve_runtime_configuration(str(config_path))
+    assert not configuration.upstreams and not configuration.endpoints
+    assert configuration.topology_error is None
+    assert configuration.topology_source == ("unconfigured" if runtime is None else "runtime_file")
+    assert (configuration.topology_hash is None) == (runtime is None)
 
+
+def test_configuration_allows_upstreams_without_endpoints(tmp_path: Path) -> None:
+    config_path = tmp_path / "fixture.yaml"
+    _write_config(
+        config_path, "{}", "upstreams: {fixture: {transport: stdio, command: fixture-server}}"
+    )
     configuration = resolve_runtime_configuration(str(config_path))
     assert list(configuration.upstreams) == ["fixture"]
     assert configuration.endpoints == {}
 
 
-def test_runtime_topology_file_takes_precedence_without_merging(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    config_path = tmp_path / "mabrid.yaml"
-    _write_config(config_path)
-    monkeypatch.setenv("FIXTURE_HERMES_KEY", "fixture-secret")
-    (tmp_path / "mabrid.runtime.yaml").write_text(
-        """
-upstreams:
-  other:
-    transport: stdio
-    command: other-server
-endpoints:
-  other:
-    bindings: [{upstream: other}]
-""",
-        encoding="utf-8",
-    )
-
-    configuration = resolve_runtime_configuration(str(config_path))
-
-    assert configuration.topology_source == "runtime_file"
-    assert configuration.topology_error is None
-    assert list(configuration.upstreams) == ["other"]
-    assert list(configuration.endpoints) == ["other"]
-    assert configuration.agent_host.target_id == "fixture-target"
-
-
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        "upstreams: [fixture-secret\n",
+        "upstreams: {fixture: {transport: fixture-secret}}",
+        "endpoints: {fixture: {bindings: [{upstream: missing}]}}",
+    ],
+)
 def test_invalid_runtime_topology_is_reported_without_exposing_file_contents(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalid: str
 ) -> None:
     config_path = tmp_path / "mabrid.yaml"
-    _write_config(config_path)
+    _write_config(config_path, topology=invalid)
     monkeypatch.setenv("FIXTURE_HERMES_KEY", "fixture-secret")
-    (tmp_path / "mabrid.runtime.yaml").write_text(
-        "upstreams: [invalid, fixture-secret\n", encoding="utf-8"
-    )
-
     configuration = resolve_runtime_configuration(str(config_path))
-
     assert configuration.topology_source == "runtime_file"
     assert configuration.topology_hash is not None
     assert configuration.topology_error is not None
@@ -305,49 +218,19 @@ def test_invalid_runtime_topology_is_reported_without_exposing_file_contents(
     assert configuration.agent_host.target_id == "fixture-target"
 
 
-def test_enabled_agent_host_requires_advertised_base_url(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_enabled_agent_host_requires_advertised_base_url(tmp_path: Path) -> None:
     config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
-        """
-agentHost: {enabled: true, targetId: fixture-target, endpointSlug: fixture}
-endpoints:
-    fixture:
-        bindings: [{upstream: fixture}]
-upstreams:
-    fixture:
-        transport: stdio
-        command: fixture-server
-""",
-        encoding="utf-8",
+    _write_config(
+        config_path, "agentHost: {enabled: true, targetId: fixture-target, endpointSlug: fixture}"
     )
-    monkeypatch.setenv("API_SERVER_KEY", "fixture-secret")
-
     with pytest.raises(ConfigError, match="advertisedBaseUrl"):
         resolve_runtime_configuration(str(config_path))
 
 
 def test_disabled_agent_host_allows_missing_advertised_base_url(tmp_path: Path) -> None:
     config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
-        """
-agentHost: {enabled: false}
-endpoints:
-    fixture:
-        bindings: [{upstream: fixture}]
-upstreams:
-    fixture:
-        transport: stdio
-        command: fixture-server
-""",
-        encoding="utf-8",
-    )
-
-    configuration = resolve_runtime_configuration(str(config_path))
-
-    assert configuration.bridge.advertised_base_url is None
+    _write_config(config_path, "agentHost: {enabled: false}")
+    assert resolve_runtime_configuration(str(config_path)).bridge.advertised_base_url is None
 
 
 @pytest.mark.parametrize(
@@ -357,55 +240,31 @@ upstreams:
         "http://mabrid.test/prefix",
         "http://mabrid.test?tenant=one",
         "http://mabrid.test#internal",
-        "http://user:password@mabrid.test",
+        "******mabrid.test",
         "http:///missing-host",
     ],
 )
 def test_configuration_rejects_invalid_advertised_base_url(
-    tmp_path: Path,
-    advertised_base_url: str,
+    tmp_path: Path, advertised_base_url: str
 ) -> None:
     config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
-        f"""
-bridge:
-    advertisedBaseUrl: {advertised_base_url}
-endpoints:
-    fixture:
-        bindings: [{{upstream: fixture}}]
-upstreams:
-    fixture:
-        transport: stdio
-        command: fixture-server
-""",
-        encoding="utf-8",
-    )
-
+    _write_config(config_path, f"bridge:\n  advertisedBaseUrl: '{advertised_base_url}'\n")
     with pytest.raises(ConfigError, match="advertisedBaseUrl"):
         resolve_runtime_configuration(str(config_path))
 
 
-def test_listener_settings_come_from_the_configuration_file(tmp_path: Path) -> None:
+def test_listener_settings_come_from_the_static_file(tmp_path: Path) -> None:
     config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
+    _write_config(
+        config_path,
         """
 bridge:
-    apiHost: 127.0.0.1
-    apiPort: 9000
-    advertisedBaseUrl: https://mabrid.example.test/
-endpoints:
-    fixture:
-        bindings: [{upstream: fixture}]
-upstreams:
-    fixture:
-        transport: stdio
-        command: fixture-server
+  apiHost: 127.0.0.1
+  apiPort: 9000
+  advertisedBaseUrl: https://mabrid.example.test/
 """,
-        encoding="utf-8",
     )
-
     configuration = resolve_runtime_configuration(str(config_path))
-
     assert configuration.bridge.api_host == "127.0.0.1"
     assert configuration.bridge.api_port == 9000
     assert configuration.bridge.advertised_base_url == "https://mabrid.example.test"
@@ -413,70 +272,28 @@ upstreams:
 
 def test_listener_defaults_to_all_interfaces(tmp_path: Path) -> None:
     config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
-        """
-endpoints:
-    fixture:
-        bindings: [{upstream: fixture}]
-upstreams:
-    fixture:
-        transport: stdio
-        command: fixture-server
-""",
-        encoding="utf-8",
-    )
-
+    _write_config(config_path, "{}")
     configuration = resolve_runtime_configuration(str(config_path))
-
     assert configuration.bridge.api_host == "0.0.0.0"
     assert configuration.bridge.api_port == 8765
     assert configuration.diagnostic_upstream is None
 
 
-def test_diagnostic_upstream_is_read_from_the_configuration_file(tmp_path: Path) -> None:
+def test_diagnostic_upstream_references_runtime_topology(tmp_path: Path) -> None:
     config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
-        """
-bridge:
-    diagnosticUpstream: diagnostic
-endpoints:
-    fixture:
-        bindings: [{upstream: fixture}]
-upstreams:
-    fixture:
-        transport: stdio
-        command: fixture-server
-    diagnostic:
-        transport: stdio
-        command: diagnostic-server
-""",
-        encoding="utf-8",
-    )
-
+    _write_config(config_path, "bridge: {diagnosticUpstream: fixture}")
     configuration = resolve_runtime_configuration(str(config_path))
-
-    assert configuration.diagnostic_upstream == "diagnostic"
+    assert configuration.diagnostic_upstream == "fixture"
+    assert configuration.topology_error is None
 
 
 def test_diagnostic_upstream_must_reference_a_configured_upstream(tmp_path: Path) -> None:
     config_path = tmp_path / "fixture.yaml"
-    config_path.write_text(
-        """
-bridge:
-    diagnosticUpstream: missing
-endpoints:
-    fixture:
-        bindings: [{upstream: fixture}]
-upstreams:
-    fixture:
-        transport: stdio
-        command: fixture-server
-""",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ConfigError, match="diagnosticUpstream"):
-        resolve_runtime_configuration(str(config_path))
+    _write_config(config_path, "bridge: {diagnosticUpstream: missing}")
+    configuration = resolve_runtime_configuration(str(config_path))
+    assert configuration.topology_error is not None
+    assert "diagnosticUpstream" in configuration.topology_error
+    assert not configuration.upstreams
 
 
 def test_process_arguments_accept_only_the_configuration_path() -> None:

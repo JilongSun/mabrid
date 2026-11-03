@@ -205,9 +205,9 @@ class GatewayConfigurationResponse(ManagementResponse):
     generation: int = Field(ge=1)
     applied_at: datetime
     applied_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
-    applied_source: Literal["runtime_file", "legacy_file", "unconfigured", "provided", "ledger"]
+    applied_source: Literal["runtime_file", "unconfigured", "provided", "ledger"]
     desired_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
-    desired_source: Literal["runtime_file", "legacy_file", "unconfigured", "provided", "unknown"]
+    desired_source: Literal["runtime_file", "unconfigured", "provided", "unknown"]
     file_valid: bool
     pending: bool
     error: str | None

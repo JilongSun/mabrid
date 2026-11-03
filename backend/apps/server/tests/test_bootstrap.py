@@ -292,7 +292,9 @@ async def test_main_runtime_wires_first_party_host_without_changing_gateway_read
     )
 
 
-async def test_clean_sqlite_database_migrates_seeds_and_composes_gateway(tmp_path: Path) -> None:
+async def test_clean_sqlite_database_migrates_reconciles_and_composes_gateway(
+    tmp_path: Path,
+) -> None:
     configuration = RuntimeConfiguration(
         config_path=tmp_path / "fixture.yaml",
         bridge=BridgeRuntimeConfig(),
@@ -381,6 +383,14 @@ async def test_initial_migration_matches_the_current_sqlite_schema(tmp_path: Pat
                     for column in inspect(sync_connection).get_columns("bridge_sessions")
                 }
             )
+            configuration_columns = await connection.run_sync(
+                lambda sync_connection: {
+                    column["name"]
+                    for column in inspect(sync_connection).get_columns(
+                        "gateway_configuration_state"
+                    )
+                }
+            )
     finally:
         await database.close()
 
@@ -390,6 +400,7 @@ async def test_initial_migration_matches_the_current_sqlite_schema(tmp_path: Pat
     assert "lazy_upstream_connections" not in endpoint_columns
     assert "idle_timeout_seconds" not in endpoint_columns
     assert "downstream_transport_session_id" not in session_columns
+    assert configuration_columns == {"id", "applied_hash", "applied_source", "applied_at"}
 
 
 async def test_enabled_agent_host_composes_hermes_http_adapter(tmp_path: Path) -> None:

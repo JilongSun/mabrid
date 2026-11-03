@@ -1291,7 +1291,6 @@
             "applied_source": {
               "enum": [
                 "runtime_file",
-                "legacy_file",
                 "unconfigured",
                 "provided",
                 "ledger"
@@ -1314,7 +1313,6 @@
             "desired_source": {
               "enum": [
                 "runtime_file",
-                "legacy_file",
                 "unconfigured",
                 "provided",
                 "unknown"

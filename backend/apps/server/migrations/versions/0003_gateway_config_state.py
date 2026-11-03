@@ -13,7 +13,6 @@ def upgrade() -> None:
     op.create_table(
         "gateway_configuration_state",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("runtime_file_adopted", sa.Boolean(), nullable=False),
         sa.Column("applied_hash", sa.String(64), nullable=True),
         sa.Column("applied_source", sa.String(32), nullable=False),
         sa.Column("applied_at", sa.DateTime(timezone=True), nullable=False),

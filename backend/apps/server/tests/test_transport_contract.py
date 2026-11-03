@@ -373,9 +373,9 @@ async def test_file_application_keeps_old_sessions_and_routes_new_sessions_to_ne
     )
     config_path = tmp_path / "mabrid.yaml"
     runtime_path = tmp_path / "mabrid.runtime.yaml"
-    config_path.write_text(
+    config_path.write_text("storage: {sqlitePath: gateway.db}\n", encoding="utf-8")
+    runtime_path.write_text(
         """
-storage: {sqlitePath: gateway.db}
 upstreams: {fixture: {transport: stdio, command: old-fixture}}
 endpoints:
   fixture:

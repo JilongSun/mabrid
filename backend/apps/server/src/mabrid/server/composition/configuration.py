@@ -88,7 +88,6 @@ class GatewayConfigurationManager:
         self._applied_hash: str | None = None
         self._applied_source = "unconfigured"
         self._last_error: str | None = None
-        self._runtime_file_adopted = False
         self._host_unavailable = False
         self._recovery_required = False
 
@@ -108,7 +107,6 @@ class GatewayConfigurationManager:
         async with self._database.session_factory() as session:
             state = await session.get(GatewayConfigurationStateRow, 1)
             if state is not None:
-                self._runtime_file_adopted = state.runtime_file_adopted
                 self._applied_hash = state.applied_hash
                 self._applied_source = state.applied_source
                 self._applied_at = state.applied_at.replace(tzinfo=timezone.utc)
@@ -120,15 +118,6 @@ class GatewayConfigurationManager:
             source=self._configuration.topology_source,
             content_hash=self._configuration.topology_hash,
         )
-        if self._runtime_file_adopted and candidate.source == "legacy_file":
-            try:
-                candidate = load_runtime_topology(self._configuration, allow_legacy=False)
-            except ConfigError as exc:
-                error = str(exc)
-            else:
-                error = None
-        elif error is not None and candidate.source == "legacy_file":
-            raise ConfigError(error, content_hash=candidate.content_hash, source="legacy_file")
         if error is None:
             try:
                 await self._reconcile_and_publish(candidate, allow_unconfigured_host=True)
@@ -164,9 +153,7 @@ class GatewayConfigurationManager:
                         self._last_error or "The configuration ledger is unavailable.",
                     )
             try:
-                candidate = load_runtime_topology(
-                    self._configuration, allow_legacy=not self._runtime_file_adopted
-                )
+                candidate = load_runtime_topology(self._configuration)
             except ConfigError as exc:
                 self._last_error = str(exc)
                 raise ConfigurationApplyError("configuration_invalid", str(exc)) from exc
@@ -220,14 +207,11 @@ class GatewayConfigurationManager:
                         if state is None:
                             state = GatewayConfigurationStateRow(id=1)
                             session.add(state)
-                        adopted = self._runtime_file_adopted or candidate.source == "runtime_file"
                         applied_at = datetime.now(timezone.utc)
-                        state.runtime_file_adopted = adopted
                         state.applied_hash = candidate.content_hash
                         state.applied_source = candidate.source
                         state.applied_at = applied_at
                     self._gateway.publish(publication)
-                    self._runtime_file_adopted = adopted
                     self._applied_at = applied_at
                     self._applied_hash = candidate.content_hash
                     self._applied_source = candidate.source
@@ -277,7 +261,6 @@ class GatewayConfigurationManager:
                 "The configuration database operation failed; the published topology was reloaded."
             )
             if state is not None:
-                self._runtime_file_adopted = state.runtime_file_adopted
                 self._applied_hash = state.applied_hash
                 self._applied_source = state.applied_source
                 self._applied_at = state.applied_at.replace(tzinfo=timezone.utc)
@@ -293,9 +276,7 @@ class GatewayConfigurationManager:
         error: str | None = None
         valid = True
         try:
-            candidate = load_runtime_topology(
-                self._configuration, allow_legacy=not self._runtime_file_adopted
-            )
+            candidate = load_runtime_topology(self._configuration)
             desired_hash = candidate.content_hash
             desired_source = candidate.source
             build_topology_definitions(

@@ -18,6 +18,8 @@ its dated delivery assessments are not a list of independent implementation tick
 
 As of 2026-10-26, the owner has confirmed that v0.1 is formally released. This is an owner-reported
 publication fact, not a fresh independent audit of release artifacts or all deployment scenarios.
+On 2026-11-03 the owner clarified that the product remains a developer preview: publication does
+not imply stable interfaces or a supported upgrade path for prior preview databases.
 Continued real-world validation and known defect follow-up do not reopen release preparation.
 The dated implementation and deployment evidence below remains historical and is not silently
 promoted to completed live acceptance.
@@ -33,14 +35,48 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 
 - Review identifier: `managed-config-foundations`.
 - Workstream: `feat/managed-config-and-recovery`.
-- Review state: **Approved for the first Gateway configuration batch**. The owner accepted
+- Review state: **Approved for runtime-only Gateway cleanup**. The owner accepted
 	[ADR 0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md)
 	and authorized the bounded batch below; later batches and unresolved details require review.
-- Delivery: the first Gateway configuration skeleton is implemented and verified with controlled
-	tests and an isolated frontend smoke check. Agent Host generation application, runtime-file
-	editing, and the remaining batches are not included.
-- Next eligible work: review and obtain approval for the next configuration batch. CI and release
-	design follow after the configuration skeleton is substantially delivered.
+- Delivery: the first Gateway configuration skeleton and runtime-only cleanup are implemented.
+	The first batch has controlled tests and an isolated frontend smoke check; cleanup verification
+	is recorded below. Agent Host generation application and runtime-file editing are not included.
+- Next eligible work: review and approve the Agent Host configuration/application batch.
+	Deployment integration and the other remaining batches require their own scope review.
+
+#### Runtime-Only Preview Cleanup (2026-11-03)
+
+The owner approved a breaking simplification rather than an old-format migration:
+
+- `mabrid.runtime.yaml` is the only file source for Gateway topology. Static-file topology keys
+	are rejected, not ignored or imported. Missing runtime configuration means unconfigured.
+- Remove legacy selection, adoption markers, seed-only persistence, and old-database compatibility
+	tests. Keep immutable revisions, Session/Run references, atomic publication, and last-known-good
+	recovery as current behavior, not as backward compatibility.
+- Setup creates the static and runtime examples independently and never overwrites existing files.
+- The preview configuration-state schema may change in place; no upgrade from the earlier
+	adoption-marker schema is supported. Startup must not automatically reset an existing database.
+- Agent Host stays in the static configuration until its separate configuration/application batch.
+	Compose integration is deferred; the existing deployment artifacts do not establish support for
+	this runtime-only layout. Container acceptance is outside this batch.
+- ADR 0018 replaces all of ADR 0008, including its surviving revision, Session, management-routing,
+	and restart-ownership constraints. ADR 0008 is archived at its existing path. ADRs 0002 and 0014
+	remain accepted for persistence and management contracts; their preview upgrade requirements are
+	amended, not grounds for wholesale archival.
+
+Verification on 2026-11-03:
+
+- `uv run --all-packages pytest -q --tb=short`: 412 tests passed, including strict file separation,
+	missing/invalid runtime files, startup/application, revision and Session/Run preservation,
+	current-schema creation without the adoption marker, and POSIX/PowerShell setup idempotence.
+	Launcher tests use a fake Docker command and temporary directories, not a container engine.
+- `uv run pyright` and `uv run ruff check`: passed. Changed Python files are Ruff-formatted;
+	Pylance reports no diagnostics in the loader or configuration coordinator.
+- `pnpm test src/features/gateway/configuration-controls.test.tsx src/features/gateway/endpoints-view.test.tsx`:
+	35 tests passed. `pnpm typecheck` and `pnpm lint` passed. The generated frontend contract removes
+	the legacy source value; no old API shape is retained.
+- No live Agent/MCP operations or container acceptance were performed. Delivery artifacts remain
+	outside this cleanup; the earlier Compose documentation does not describe the runtime-only layout.
 
 #### Approved Outcome And Boundaries
 
@@ -60,15 +96,14 @@ land as an independently verified slice without making it a separate product obj
 | Concern | Existing authority to preserve | Required reconciliation before the affected batch |
 | --- | --- | --- |
 | Configuration authority and write scope | [0002](decisions/0002-sqlite-persistence-and-configuration-authority.md), [0014](decisions/0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership), [0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md) | YAML is the desired-state authority and SQLite retains applied revisions; first-run setup, general write protection, and secret handling remain to be designed without destructive database updates |
-| Revision writes and runtime application | [0008](decisions/0008-restart-applied-managed-topology.md), [0014](decisions/0014-read-only-v0-1-management-plane.md#saved-configuration-and-runtime-application), [0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md) | Apply dynamic configuration through immutable generations while preserving dependent endpoint revisions and active Session ownership; process settings remain restart-applied |
+| Revision writes and runtime application | [0014](decisions/0014-read-only-v0-1-management-plane.md#saved-configuration-and-runtime-application), [0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md) | Apply dynamic configuration through immutable generations while preserving dependent endpoint revisions and active Session ownership; process settings remain restart-applied |
 | Runtime configuration and durable ownership | [0011](decisions/0011-single-agent-target-and-endpoint-assignment.md), [0012](decisions/0012-agent-runtime-profiles-and-integration-composition.md), [0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md) | Reconcile Target assignment, integration/interface selection, deployment identity, active/unknown Runs, and old Session bindings before changing configuration ownership |
 | Fault handling required by configuration delivery | [0003](decisions/0003-mcp-apps-gateway-and-optional-agent-host.md), [0005](decisions/0005-upstream-transport-task-ownership.md), [0013](decisions/0013-backend-semantic-boundaries-and-mabrid-code-identity.md) | Preserve degradation and worker ownership; identify the actually necessary timeout/recovery slice, if any, rather than approving a general recovery system |
 | CI, versions, and release artifacts | [0004](decisions/0004-first-release-scope-and-distribution.md), existing OCI/native workflow, owner-approved workstream goal | Select source-version ownership, lockfile/build behavior, tag mapping, and CI permissions together; managed YAML removal does not require build-time secrets or user configuration |
 
-ADR 0014 narrowed v0.1 delivery, not the permanent configuration goal. Its destructive reset
-workaround is not a future managed update mechanism; ADR 0013's pre-v0.1 reset permission does
-not authorize deletion of released user data. The classified settings and new API/secret contracts
-still need design. This is a dependency and clarification map, not a newly selected schema.
+ADR 0014 narrowed v0.1 delivery, not the permanent configuration goal. The preview cleanup removes
+upgrade compatibility, not the requirement to retain history during normal configuration changes.
+Automatic database reset remains unsupported. The new API/secret contracts still need design.
 
 #### Accepted Configuration Direction
 
@@ -84,13 +119,13 @@ and generation-applied topology and Agent Host runtime configuration:
 | Secret value changes | Restart-applied for now |
 | Apply trigger | Explicit management apply and startup; file watching deferred |
 
-Accepted amendments:
+Accepted amendments and replacement:
 
 - ADR 0002 configuration boundary: files, not SQLite, are the configuration authority; reconciliation
 	replaces `seed-if-empty`.
-- ADR 0008 configuration ownership, publication, latch, and deferred live refresh: dynamic
-	configuration is applied as an atomic immutable generation for new work, while revision pinning,
-	dependent endpoint revisions, and no active-session migration remain.
+- ADR 0008 is fully superseded by ADR 0018: dynamic configuration is applied as an atomic immutable
+	generation for new work. Revision pinning, dependent endpoint revisions, Session isolation,
+	management boundaries, and external restart ownership remain explicit in the replacement.
 - ADR 0014 post-v0.1 ownership, first-run setup, and saved/running application: the frontend edits
 	the runtime file through validated APIs; an absent runtime file is a valid unconfigured state.
 
@@ -168,10 +203,10 @@ seeking approval.
 
 ## Archived ADRs
 
-No ADR is newly archived by this change. Partial amendments, completed implementation, and older
-dates do not establish full supersession. Future archive entries must identify the ADR, its final
-decision status, archive date, reason, and accepted replacement where applicable. Archiving changes
-default reading scope; it does not replace an approval or remove surviving requirements.
+- **2026-11-03 — ADR 0008, Superseded by ADR 0018.** The owner authorized removal of obsolete
+	preview compatibility. ADR 0018 replaces database-authoritative, seed-only, restart-applied
+	topology and explicitly retains the revision, Session, management, and restart-ownership
+	requirements. The original path and historical rationale remain available for reference.
 
 ## Historical References
 
@@ -207,7 +242,7 @@ re-audit every implementation or promote historical verification to live accepta
 | [0005](decisions/0005-upstream-transport-task-ownership.md) | Accepted | Implemented | Upstream SDK contexts run and close in persistent owner tasks |
 | [0006](decisions/0006-core-service-and-server-packages.md) | Accepted | Implemented | Protocol core, application services, and the deployable server are separate dependency-ordered workspace packages |
 | [0007](decisions/0007-cembrid-identity-and-deployment-shells.md) | Accepted; brand superseded by 0009 | Partial | The Web/OCI service shell is implemented; Tauri desktop remains deferred and its Cembrid identity is superseded |
-| [0008](decisions/0008-restart-applied-managed-topology.md) | Accepted; amended by 0014 and 0018 | Pending | Preserve revision and Session invariants; ADR 0018 replaces the restart-applied topology direction |
+| [0008](decisions/0008-restart-applied-managed-topology.md) | Superseded by 0018; archived 2026-11-03 | Historical | Restart-applied managed topology; surviving constraints are now explicit in ADR 0018 |
 | [0009](decisions/0009-mabrid-product-identity.md) | Accepted; timing amended by 0013 | Partial | Backend and first-party frontend use Mabrid code identity; hosting and checkout paths are independent, and external hosting metadata requires separate verification |
 | [0010](decisions/0010-application-contexts-and-capability-composition.md) | Accepted; amended by 0011, 0012, 0013, 0014, 0015, and 0016 | Partial | v0.1 contexts, typed assembly, native bindings, widget presentation, effective capabilities, frozen contracts, and the first-party UI exist; full deployed workflow acceptance remains open; product Host actions are deferred |
 | [0011](decisions/0011-single-agent-target-and-endpoint-assignment.md) | Accepted; amended by 0012, 0014, 0015, and 0016 | Partial | Single Target, endpoint ownership, Run coordination, durable Sessions, restart ownership, and frozen controls complete the backend prerequisite; deployed endpoint/agent validation remains release work |

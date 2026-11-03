@@ -9,6 +9,9 @@
 ADR 0018 changes the post-v0.1 configuration authority and application direction, not the
 historical v0.1 read-only release. The requirements to preserve history, protect Session and Run
 ownership, and design access protection for general configuration writes continue to apply.
+ADR 0018's 2026-11-03 developer-preview amendment removes old-database upgrade and YAML import
+compatibility. Current-schema history and Session/Run ownership remain protected. Read contracts
+remain useful validation boundaries, not promises of stable developer-preview interfaces.
 
 ## Context
 

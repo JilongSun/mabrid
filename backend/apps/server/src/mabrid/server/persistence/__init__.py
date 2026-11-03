@@ -10,7 +10,6 @@ from .sessions import (
 )
 from .topology import (
     SqlAlchemyTopologyReader,
-    seed_topology_if_empty,
 )
 
 __all__ = [
@@ -21,5 +20,4 @@ __all__ = [
     "SqliteDatabase",
     "SqliteReadinessProbe",
     "mark_interrupted_sessions_failed",
-    "seed_topology_if_empty",
 ]

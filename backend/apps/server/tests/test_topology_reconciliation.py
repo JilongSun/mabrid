@@ -23,7 +23,6 @@ from mabrid.server.persistence.sessions import SqlAlchemyBridgeSessionRepository
 from mabrid.server.persistence.topology import (
     SqlAlchemyTopologySnapshotReader,
     reconcile_topology,
-    seed_topology_if_empty,
 )
 
 
@@ -44,14 +43,15 @@ def _topology(
     return [upstream], [endpoint]
 
 
-async def test_reconciliation_preserves_seeded_identities_and_revision_history(
+async def test_reconciliation_preserves_identities_and_revision_history(
     tmp_path: Path,
 ) -> None:
     database = SqliteDatabase(tmp_path / "topology.db")
     await database.migrate()
     try:
         upstreams, endpoints = _topology("https://old.example.test/mcp")
-        await seed_topology_if_empty(database.session_factory, upstreams, endpoints)
+        async with database.session_factory.begin() as transaction:
+            await reconcile_topology(transaction, upstreams, endpoints)
         reader = SqlAlchemyTopologySnapshotReader(database.session_factory)
         initial = await reader.read_snapshot()
         endpoint = initial.endpoints[0]
@@ -113,9 +113,8 @@ async def test_invalid_candidate_rolls_back_all_head_and_revision_changes(tmp_pa
     database = SqliteDatabase(tmp_path / "topology.db")
     await database.migrate()
     try:
-        await seed_topology_if_empty(
-            database.session_factory, *_topology("https://old.example.test/mcp")
-        )
+        async with database.session_factory.begin() as transaction:
+            await reconcile_topology(transaction, *_topology("https://old.example.test/mcp"))
         reader = SqlAlchemyTopologySnapshotReader(database.session_factory)
         initial = await reader.read_snapshot()
 

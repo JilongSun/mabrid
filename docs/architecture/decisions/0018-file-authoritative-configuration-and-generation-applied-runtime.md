@@ -2,11 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-11-02
+- Amended: 2026-11-03; runtime-only developer-preview configuration
+- Supersedes: ADR 0008, including its surviving constraints recorded below
 - Amends: ADR 0002 ([Configuration boundary](0002-sqlite-persistence-and-configuration-authority.md#configuration-boundary)),
-  ADR 0008 ([Configuration ownership](0008-restart-applied-managed-topology.md#configuration-ownership),
-  [Restart-applied publication](0008-restart-applied-managed-topology.md#restart-applied-publication),
-  [Minimal management semantics](0008-restart-applied-managed-topology.md#minimal-management-semantics),
-  [Explicitly deferred](0008-restart-applied-managed-topology.md#explicitly-deferred)), and
   ADR 0014 ([Post-v0.1 product-configuration ownership](0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership),
   [Existing-database evolution and first-run setup](0014-read-only-v0-1-management-plane.md#existing-database-evolution-and-first-run-setup),
   [Saved configuration and runtime application](0014-read-only-v0-1-management-plane.md#saved-configuration-and-runtime-application))
@@ -58,8 +56,10 @@ The static file remains `mabrid.yaml`. It is read-only to the management API. Th
 move to `mabrid.runtime.yaml` in the same directory as the static file; no separate path setting is
 required for the initial design. A missing or empty runtime file is a valid unconfigured
 installation: the process starts, publishes no endpoints, keeps Agent Host disabled, and reports
-Gateway readiness as not ready. Existing single-file installations require a non-destructive
-transition rather than treating their existing product configuration as an empty installation.
+Gateway readiness as not ready. Gateway topology is accepted only from the runtime file;
+`upstreams` and `endpoints` in the static file are errors. There is no single-file import or fallback.
+The developer preview does not promise old-format or old-database upgrade compatibility.
+Agent Host settings remain static until the separate Host application batch.
 
 Secret rotation and values for environment variables not present at startup require a restart.
 A reloadable secret source is deferred. Management reads and errors never return secret values.
@@ -102,11 +102,12 @@ Startup and every later apply use the same reconciliation against the ledger:
 5. Renaming a key means disabling the old identity and creating a new one. Explicit rename
    identifiers are deferred.
 
-Existing v0.1 databases must not be reset. Reconciliation reuses matching stable slugs and preserves
-historical references, but matching cannot be assumed for changed or colliding source names.
-Transition and conflicting input must be handled explicitly rather than silently discarding
-existing state. Normal startup applies the selected configuration source instead of ignoring it,
-which removes the populated-database freeze without merging two independent authorities.
+Reconciliation reuses stable slugs and preserves historical references in the current schema.
+Conflicting input is rejected rather than silently discarding existing state. Normal startup
+applies runtime configuration instead of ignoring it, removing the populated-database freeze.
+The preview may change its schema without an old-database upgrade path; the server must never
+automatically delete or reset a database. Removing upgrade compatibility does not weaken revision,
+Session, or unsettled-Run preservation during normal application.
 
 ### Generation-applied runtime configuration
 
@@ -152,6 +153,8 @@ is deferred and, if added later, must use the same pipeline with change coalesci
 Management writes validate the complete candidate before writing. They use optimistic concurrency
 based on the runtime file's content hash, reject stale writes with a conflict, and replace the file
 atomically within its directory. A file that fails validation is never written by the API.
+The eventual first-party settings surface supports creating, inspecting, revising, enabling, and
+disabling upstreams and endpoints, including their bindings, without destructive history deletion.
 The owner deferred authentication design for the initial development-stage apply-only operation;
 it retains the existing unauthenticated access model and is not safe to expose to untrusted clients.
 General file-writing management routes still require a separately reviewed access and secret
@@ -170,7 +173,12 @@ changes. This replaces the topology `restart_required` latch proposed by ADR 000
 
 ### Preserved constraints
 
-- Immutable revisions, revision-pinned bridge Sessions, and non-destructive database evolution.
+- Immutable revisions, coherent dependent endpoint revisions, revision-pinned bridge Sessions,
+  and non-destructive configuration reconciliation. Removal disables heads without deleting history.
+- Management routes remain separate from MCP data-plane routes and redact sensitive connection
+  values. Direct database mutation is unsupported; configuration writes go through the file contract.
+- Users, service managers, and deployment shells own process restarts. The Gateway exposes no
+  process-restart API. Future desktop sidecar supervision remains shell-owned under ADR 0007.
 - One active Agent Target, endpoint assignment rules, and deployment-binding protections from
   ADR 0011, ADR 0012, and ADR 0016.
 - Binding-level degradation from ADR 0003 and per-Session upstream task ownership from ADR 0005.
@@ -213,6 +221,8 @@ selected because files remain directly reviewable and editable as the single
 
 ## Implementation Status
 
-Accepted on 2026-11-02. The first Gateway configuration batch is authorized but not yet verified.
-Agent Host live application, general file-writing management, and their outstanding access and
-secret contracts remain separate later batches.
+The first Gateway configuration batch has controlled test and isolated browser evidence in the
+decision log. Runtime-only cleanup was approved on 2026-11-03. Agent Host live application,
+general file-writing management, and their outstanding access and secret contracts remain
+separate later batches. Compose integration is deferred and is not evidence of runtime-only
+deployment support.
