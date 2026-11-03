@@ -32,14 +32,16 @@ case "$timeout" in ''|*[!0-9]*) fail "Timeout must be a positive number of secon
 
 if [ "$action" = setup ]; then
     mkdir -p -- "$config_dir"
-    target=$config_dir/mabrid.yaml
-    if [ -e "$target" ]; then
-        [ -f "$target" ] || fail "Expected a regular file: $target"
-        printf 'Keeping existing %s\n' "$target"
-    else
-        cp "$root/mabrid.yaml.example" "$target"
-        printf 'Created %s\n' "$target"
-    fi
+    for file in mabrid.yaml mabrid.runtime.yaml; do
+        target=$config_dir/$file
+        if [ -e "$target" ]; then
+            [ -f "$target" ] || fail "Expected a regular file: $target"
+            printf 'Keeping existing %s\n' "$target"
+        else
+            cp "$root/$file.example" "$target"
+            printf 'Created %s\n' "$target"
+        fi
+    done
     env_target=$config_dir/.env
     if [ -e "$env_target" ]; then
         [ -f "$env_target" ] || fail "Expected a regular file: $env_target"
@@ -52,6 +54,7 @@ if [ "$action" = setup ]; then
             '# API_SERVER_KEY=' >"$env_target"
         printf 'Created %s\n' "$env_target"
     fi
+    printf '%s\n' 'Configure process settings in mabrid.yaml and Gateway topology in mabrid.runtime.yaml.'
     exit 0
 fi
 

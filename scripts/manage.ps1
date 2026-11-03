@@ -64,15 +64,17 @@ function Confirm-Owner {
 try {
     if ($Action -eq 'setup') {
         [IO.Directory]::CreateDirectory($ConfigDir) | Out-Null
-        $target = Join-Path $ConfigDir 'mabrid.yaml'
-        if (Test-Path -LiteralPath $target) {
-            if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
-                throw "Expected a regular file: $target"
+        foreach ($file in @('mabrid.yaml', 'mabrid.runtime.yaml')) {
+            $target = Join-Path $ConfigDir $file
+            if (Test-Path -LiteralPath $target) {
+                if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+                    throw "Expected a regular file: $target"
+                }
+                Write-Output "Keeping existing $target"
+            } else {
+                Copy-Item -LiteralPath (Join-Path $Root "$file.example") -Destination $target
+                Write-Output "Created $target"
             }
-            Write-Output "Keeping existing $target"
-        } else {
-            Copy-Item -LiteralPath (Join-Path $Root 'mabrid.yaml.example') -Destination $target
-            Write-Output "Created $target"
         }
         $envTarget = Join-Path $ConfigDir '.env'
         if (Test-Path -LiteralPath $envTarget) {
@@ -89,6 +91,7 @@ try {
             [IO.File]::WriteAllText($envTarget, $envContent + "`n")
             Write-Output "Created $envTarget"
         }
+        Write-Output 'Configure process settings in mabrid.yaml and Gateway topology in mabrid.runtime.yaml.'
         exit 0
     }
     if (-not (Test-Path -LiteralPath $ConfigDir -PathType Container)) {

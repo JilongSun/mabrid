@@ -10,28 +10,5 @@ storage:
   sqlitePath: ./backend/var/mabrid.db
   autoMigrate: true
 
-# Legacy single-file topology remains supported. For local runtime application, copy
-# mabrid.runtime.yaml.example beside this file; its entire topology takes precedence.
-# The current Compose workflow still uses the legacy topology in this file.
-endpoints:
-  test-endpoint:
-    displayName: Test Endpoint
-    mode: aggregate
-    bindings:
-      - upstream: enterprise-ops-hub-http-1
-        namespace: ops-one
-        priority: 10
-      - upstream: enterprise-ops-hub-http-2
-        namespace: ops-two
-        priority: 20
-
-upstreams:
-  enterprise-ops-hub-http-1:
-    transport: streamable-http
-    url: http://localhost:8760/mcp
-    # headers: {}
-
-  enterprise-ops-hub-http-2:
-    transport: streamable-http
-    url: http://localhost:8759/mcp
-    # headers: {}
+# Gateway upstreams and endpoints belong only in the adjacent mabrid.runtime.yaml.
+# Agent Host settings remain restart-applied in this file.

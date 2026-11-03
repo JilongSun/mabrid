@@ -1,5 +1,6 @@
-# Copy this file to mabrid.runtime.yaml beside mabrid.yaml for local use.
-# When present, it replaces all legacy upstreams and endpoints in mabrid.yaml.
+# Gateway topology is loaded only from mabrid.runtime.yaml beside mabrid.yaml.
+# Edit this file, then apply it from the Gateway configuration panel.
+# Missing or empty runtime configuration publishes no endpoints.
 endpoints:
   test-endpoint:
     displayName: Test Endpoint
