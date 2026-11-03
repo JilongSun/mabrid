@@ -98,6 +98,70 @@ its overall workstream has owner support.
 	temporary populated-database migrations, atomic/conflicting writes, saved-versus-running
 	behavior, unknown-Run ownership, frozen-contract compatibility, and isolated CI/build inputs.
 
+### Feature Adapter Ownership
+
+- Review identifier: `feature-adapter-ownership`.
+- Workstream: focused architecture review.
+- Review state: **Draft**; this review recommends an ownership direction but does not approve an
+	implementation boundary.
+- Outcome: allow future features to contribute their own inbound API and persistence adapters
+	without adding feature-specific routes, schema mappings, or adapter construction to the server.
+
+#### Current Ownership And Constraints
+
+The current boundary is intentional for the single packaged product: [ADR 0006](decisions/0006-core-service-and-server-packages.md#package-2-gateway-and-agent-host-services)
+places use cases and persistence ports in the application package, while
+[SQLite adapters, migrations, FastAPI routes, and composition](decisions/0006-core-service-and-server-packages.md#package-3-deployable-server)
+remain in the server. [ADR 0010](decisions/0010-application-contexts-and-capability-composition.md#composition-without-strong-binding)
+keeps feature contexts independent and composes them explicitly. [ADR 0013](decisions/0013-backend-semantic-boundaries-and-mabrid-code-identity.md#preserve-the-dependency-direction)
+forbids application imports of server, FastAPI, and SQLAlchemy. [ADR 0017](decisions/0017-protocol-aware-sessions-and-context-owned-model-reuse.md#unify-model-ownership-and-reuse-equivalent-definitions)
+permits future relocation of adapters near their feature but does not select a new owner or package.
+
+The implementation reflects that split: application ports are consumed by SQLAlchemy adapters
+under `backend/apps/server/src/mabrid/server/persistence/`; feature HTTP adapters are under
+`backend/apps/server/src/mabrid/server/api/`; and `server/composition/` constructs and injects
+them. Thus, adding a feature that needs both surfaces currently requires edits across feature
+modules in the server as well as its composition root.
+
+#### Review Recommendation
+
+Retain use cases, policy, and behavior-oriented ports in their application bounded contexts. For
+future feature work that needs inbound HTTP or durable storage, evaluate a feature-aligned adapter
+boundary outside `mabrid.application` (which must remain framework- and ORM-independent). A feature
+contribution could provide its HTTP adapter and persistence implementation against application-owned
+contracts. The server would retain process lifecycle, shared database and migration orchestration,
+configuration and secret resolution, and generic mounting/composition of explicitly supplied
+contributions—not feature-specific route definitions or port-to-SQLite wiring.
+
+Keep contributions statically composed and typed. Do not introduce dynamic plugin discovery,
+independent services, a generic repository framework, or a new storage profile as part of this
+review. Preserve one SQLite runtime and the existing public HTTP contracts. Existing adapters should
+not move until the ownership decision, schema/migration contribution contract, and migration impact
+are reviewed together.
+
+The alternatives are to retain the current server-owned adapters until a second product composition
+justifies extraction (least change, but does not meet the stated extension goal), or to adopt
+dynamically discovered plugins (more extensible, but adds lifecycle, trust, configuration, and
+migration complexity not supported by current requirements). The feature-aligned, explicit
+contribution model is the recommended direction for owner review, not an accepted decision.
+
+#### Owner Questions And Next Batch
+
+1. Approve or reject the proposed ownership split between application contracts, feature-aligned
+	 adapters, and generic server hosting/composition.
+2. If approved, should adapters be packages or modules, and how should a feature contribute its
+	 SQLAlchemy metadata and Alembic revisions while retaining one migration entrypoint?
+3. What typed contribution and enablement contract lets the server compose features without
+	 feature-specific registration code, while preserving startup validation and explicit deployments?
+4. Which existing vertical slice is the smallest migration proof, and what frozen HTTP, populated
+	 database, migration, and dependency-boundary checks must it pass?
+
+Next eligible work is a focused owner-reviewed design that reconciles ADRs 0006, 0010, 0013, and
+0017, including explicit amendments if required. No runtime move, plugin system, API contract
+change, or persistence migration is authorized by this review. Verification for an approved
+implementation should cover feature contribution composition, import boundaries, migration of a
+populated database, and unchanged frozen HTTP behavior.
+
 ## Archived ADRs
 
 No ADR is newly archived by this change. Partial amendments, completed implementation, and older
