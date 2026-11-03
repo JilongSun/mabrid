@@ -19,7 +19,7 @@ function response(text: string, chunkSize = 7) {
   const bytes = new TextEncoder().encode(text)
   return new Response(new ReadableStream<Uint8Array>({ start(controller) { for (let offset = 0; offset < bytes.length; offset += chunkSize) controller.enqueue(bytes.slice(offset, offset + chunkSize)); controller.close() } }), { headers: { 'content-type': 'text/event-stream; charset=utf-8' } })
 }
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers() })
+afterEach(() => { cleanup(); window.sessionStorage.clear(); vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('Tool activity projection', () => {
   const invocationId = '00000000-0000-4000-8000-000000000003'
@@ -104,6 +104,26 @@ describe('Delivered App turns', () => {
     expect(result.current.appTurns[runId]).toBeUndefined()
     expect(result.current.runs[sessionId].runId).toBe(nextRunId)
     expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('restores delivered App turns after remount without replaying a Run', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response(delivered.map((event) => frame(event)).join('')))
+    vi.stubGlobal('fetch', fetchMock)
+    const first = renderHook(() => useHostRun())
+    await act(async () => { await first.result.current.start(sessionId, 'Inspect') })
+    first.unmount()
+    fetchMock.mockClear()
+    const restored = renderHook(() => useHostRun())
+    expect(restored.result.current.appTurns[sessionId]).toMatchObject([{ sessionId, runId, input: 'Inspect' }])
+    expect(restored.result.current.appTurns[sessionId][0].events.map(({ event }) => event.kind)).toEqual(['tool.started', 'widget.created'])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores malformed stored App turns', () => {
+    window.sessionStorage.setItem('mabrid.agent-host.app-turns.v1', '{invalid')
+    const { result } = renderHook(() => useHostRun())
+    expect(result.current.appTurns).toEqual({})
+    expect(window.sessionStorage.getItem('mabrid.agent-host.app-turns.v1')).toBe('{}')
   })
 })
 

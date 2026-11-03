@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { z } from 'zod'
 import { cancelHostRun, HostHttpError, reconcileHostRun, type RunIdentity } from './api'
-import { streamHostRun, type RunEvent } from './run-transport'
+import { runEventSchema, streamHostRun, type RunEvent } from './run-transport'
 
 export type RunView = {
   sessionId: string; runId: string | null; input: string; text: string; events: RunEvent[]; finishedAt: number | null
@@ -9,6 +10,23 @@ export type RunView = {
 }
 
 export type AppTurn = { sessionId: string; runId: string; input: string; events: RunEvent[] }
+const appTurnsStorageKey = 'mabrid.agent-host.app-turns.v1'
+const appTurnsSchema = z.record(z.uuid(), z.array(z.object({
+  sessionId: z.uuid(), runId: z.uuid(), input: z.string(),
+  events: z.array(runEventSchema).min(1),
+}).refine((turn) => turn.events.every((event) => event.session_id === turn.sessionId && event.run_id === turn.runId && ['tool.started', 'widget.created'].includes(event.event.kind)) && turn.events.some(({ event }) => event.kind === 'widget.created'))))
+
+function readAppTurns(): Record<string, AppTurn[]> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const stored = window.sessionStorage.getItem(appTurnsStorageKey)
+    if (!stored) return {}
+    const parsed = appTurnsSchema.safeParse(JSON.parse(stored))
+    if (parsed.success && Object.entries(parsed.data).every(([sessionId, turns]) => turns.every((turn) => turn.sessionId === sessionId))) return parsed.data
+    window.sessionStorage.removeItem(appTurnsStorageKey)
+  } catch {}
+  return {}
+}
 
 export type RunControl = { pending: 'cancel' | 'reconcile' | null; accepted: boolean | null; settled: boolean | null; verifiedAt: number | null; error: Error | null }
 export const runControlKey = (identity: RunIdentity) => `${identity.session_id}/${identity.run_id}`
@@ -16,7 +34,7 @@ export const runControlKey = (identity: RunIdentity) => `${identity.session_id}/
 /** Retain Run presentation across selection changes; unmount is not verified cancellation. */
 export function useHostRun() {
   const [runs, setRuns] = useState<Record<string, RunView>>({})
-  const [appTurns, setAppTurns] = useState<Record<string, AppTurn[]>>({})
+  const [appTurns, setAppTurns] = useState<Record<string, AppTurn[]>>(readAppTurns)
   const views = useRef<Record<string, RunView>>({})
   const [controls, setControls] = useState<Record<string, RunControl>>({})
   const operation = useRef<AbortController | null>(null)
@@ -27,6 +45,9 @@ export function useHostRun() {
     mounted.current = true
     return () => { mounted.current = false; operation.current?.abort(); command.current?.abort() }
   }, [])
+  useEffect(() => {
+    try { window.sessionStorage.setItem(appTurnsStorageKey, JSON.stringify(appTurns)) } catch {}
+  }, [appTurns])
   const publishView = (view: RunView) => {
     if (!mounted.current) return
     views.current = { ...views.current, [view.sessionId]: view }
