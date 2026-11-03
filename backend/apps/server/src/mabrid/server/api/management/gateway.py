@@ -1,4 +1,4 @@
-"""Read-only Gateway management HTTP routes."""
+"""Gateway inspection and explicit file-backed configuration application routes."""
 
 from __future__ import annotations
 
@@ -10,10 +10,16 @@ from mabrid.application.gateway.inspection import SessionEventPageRequest
 from mabrid.application.gateway.sessions import BridgeSessionStatus, SessionPageRequest
 
 from mabrid.server.composition import GatewayManagementComposition
+from mabrid.server.composition.configuration import (
+    ConfigurationApplyError,
+    GatewayConfigurationManager,
+)
 from mabrid.server.logging import get_logger
 
 from .cursors import decode_session_cursor, encode_session_cursor
 from .dto import (
+    ApplyGatewayConfigurationRequest,
+    GatewayConfigurationResponse,
     GatewayStatusResponse,
     SequencedSessionEventResponse,
     SessionEventPageResponse,
@@ -38,13 +44,49 @@ def create_gateway_management_router(
 
     @router.get("/status", response_model=GatewayStatusResponse)
     async def get_status() -> GatewayStatusResponse:
-        slugs = management.published_endpoint_slugs
+        slugs = management.current_published_endpoint_slugs()
         return GatewayStatusResponse(
             version="0.1.0",
             advertised_base_url=management.advertised_base_url,
             published_endpoint_count=len(slugs),
             published_endpoint_slugs=slugs,
         )
+
+    @router.get(
+        "/configuration",
+        response_model=GatewayConfigurationResponse,
+        responses=problem_responses(503),
+    )
+    async def get_configuration() -> GatewayConfigurationResponse:
+        status = await _configuration_manager(management).status()
+        return GatewayConfigurationResponse.model_validate(status, from_attributes=True)
+
+    @router.post(
+        "/configuration/apply",
+        response_model=GatewayConfigurationResponse,
+        responses=problem_responses(409, 503),
+    )
+    async def apply_configuration(
+        request: ApplyGatewayConfigurationRequest,
+    ) -> GatewayConfigurationResponse:
+        try:
+            status = await _configuration_manager(management).apply(request.expected_hash)
+        except ConfigurationApplyError as exc:
+            status_code = {
+                "configuration_invalid": 422,
+                "configuration_conflict": 409,
+                "configuration_ledger_error": 500,
+                "configuration_storage_error": 500,
+            }[exc.code]
+            raise ManagementProblem(
+                problem(
+                    code=exc.code,
+                    title="Configuration application failed",
+                    status=status_code,
+                    detail=str(exc),
+                )
+            ) from exc
+        return GatewayConfigurationResponse.model_validate(status, from_attributes=True)
 
     @router.get("/topology", response_model=TopologyResponse)
     async def get_topology() -> TopologyResponse:
@@ -139,6 +181,19 @@ def create_gateway_management_router(
         )
 
     return router
+
+
+def _configuration_manager(management: GatewayManagementComposition) -> GatewayConfigurationManager:
+    if management.configuration is None:
+        raise ManagementProblem(
+            problem(
+                code="configuration_unavailable",
+                title="Configuration unavailable",
+                status=503,
+                detail="Gateway configuration application is not available.",
+            )
+        )
+    return management.configuration
 
 
 def _raise_session_not_found(session_id: UUID) -> NoReturn:

@@ -1,7 +1,7 @@
 """Validated YAML contracts for a Mabrid server deployment.
 
-These models preserve camelCase file syntax and reject unknown fields. They contain environment
-variable names but never resolved secrets or process-local absolute paths.
+These models preserve camelCase file syntax and reject unknown fields. Agent Host credentials use
+environment-variable references; legacy upstream headers and environment values may be literal.
 """
 
 from __future__ import annotations
@@ -99,9 +99,10 @@ class AgentHostFileConfig(CamelModel):
 
 
 class UpstreamFileConfig(CamelModel):
-    """Validate a transitional upstream seed before resolving transport-specific settings."""
+    """Validate file-backed upstream settings before resolving their transport."""
 
     transport: Literal["stdio", "sse", "streamable-http"]
+    enabled: bool = True
     command: str | None = None
     args: list[str] = Field(default_factory=list)
     cwd: Path | None = None
@@ -136,24 +137,28 @@ class EndpointFileConfig(CamelModel):
     enabled: bool = True
 
 
-class MabridConfig(CamelModel):
-    """Combine deployment settings with temporary topology seeds and Agent Host configuration."""
+class ProcessFileConfig(CamelModel):
+    """Validate restart-applied process settings and transitional Agent Host settings."""
 
     bridge: BridgeRuntimeConfig = Field(default_factory=BridgeRuntimeConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     agent_host: AgentHostFileConfig = Field(default_factory=AgentHostFileConfig)
-    upstreams: dict[str, UpstreamFileConfig] = Field(min_length=1)
-    endpoints: dict[str, EndpointFileConfig] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_upstream_defaults(self) -> MabridConfig:
+    def validate_agent_host(self) -> ProcessFileConfig:
         if self.agent_host.enabled and self.bridge.advertised_base_url is None:
             raise ValueError("enabled Agent Host requires 'bridge.advertisedBaseUrl'")
-        diagnostic = self.bridge.diagnostic_upstream
-        if diagnostic is not None and diagnostic not in self.upstreams:
-            raise ValueError(
-                f"'bridge.diagnosticUpstream' references unknown upstream '{diagnostic}'"
-            )
+        return self
+
+
+class TopologyFileConfig(CamelModel):
+    """Validate the desired Gateway topology independently of process settings."""
+
+    upstreams: dict[str, UpstreamFileConfig] = Field(default_factory=dict)
+    endpoints: dict[str, EndpointFileConfig] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_upstream_references(self) -> TopologyFileConfig:
         for endpoint_name, endpoint in self.endpoints.items():
             for binding in endpoint.bindings:
                 if binding.upstream not in self.upstreams:
@@ -161,4 +166,17 @@ class MabridConfig(CamelModel):
                         f"endpoint '{endpoint_name}' references unknown upstream "
                         f"'{binding.upstream}'"
                     )
+        return self
+
+
+class MabridConfig(ProcessFileConfig, TopologyFileConfig):
+    """Combine process and selected topology settings for the legacy loading interface."""
+
+    @model_validator(mode="after")
+    def validate_diagnostic_upstream(self) -> MabridConfig:
+        diagnostic = self.bridge.diagnostic_upstream
+        if diagnostic is not None and diagnostic not in self.upstreams:
+            raise ValueError(
+                f"'bridge.diagnosticUpstream' references unknown upstream '{diagnostic}'"
+            )
         return self

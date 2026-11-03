@@ -53,7 +53,20 @@ async def bootstrap_server(configuration: RuntimeConfiguration) -> BootstrapResu
             logger.info("Running database migrations")
             await database.migrate()
         gateway = await compose_gateway(configuration, database)
-        agent_host = await compose_agent_host(configuration, gateway.runtime, database)
+        manager = gateway.management.configuration
+        target_slug = configuration.agent_host.endpoint_slug
+        if (
+            manager is not None
+            and configuration.agent_host.enabled
+            and (
+                target_slug is None
+                or gateway.runtime.resolve_published_endpoint(target_slug) is None
+            )
+        ):
+            logger.error("Agent Host not started: its assigned endpoint is unavailable.")
+            manager.mark_host_unavailable()
+        else:
+            agent_host = await compose_agent_host(configuration, gateway.runtime, database)
         if agent_host is not None:
             mcp_apps = agent_host.capabilities.mcp_apps
             host_events = agent_host.capabilities.events

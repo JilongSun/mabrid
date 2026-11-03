@@ -5,6 +5,7 @@ Importing this facade registers every row on the shared ``Base.metadata`` regist
 
 from .base import Base
 from .agent_host import AgentSessionRow, UnsettledAgentRunRow
+from .configuration import GatewayConfigurationStateRow
 from .sessions import BridgeSessionRow, SessionEventRow, SessionSnapshotRow
 from .topology import (
     EndpointBindingRevisionRow,
@@ -24,6 +25,7 @@ __all__ = [
     "EndpointBindingRow",
     "EndpointRevisionRow",
     "EndpointRow",
+    "GatewayConfigurationStateRow",
     "SessionEventRow",
     "SessionSnapshotRow",
     "UpstreamRevisionRow",

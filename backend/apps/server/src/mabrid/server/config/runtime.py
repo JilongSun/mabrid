@@ -47,6 +47,7 @@ class RuntimeUpstreamConfig(BaseModel):
     """Resolved transport settings after relative paths and environment references are applied."""
 
     transport: Literal["stdio", "sse", "streamable-http"] = "stdio"
+    enabled: bool = True
     command: str | None = None
     args: list[str] = Field(default_factory=list)
     cwd: Path | None = None
@@ -58,7 +59,7 @@ class RuntimeUpstreamConfig(BaseModel):
 
 @dataclass(frozen=True)
 class RuntimeConfiguration:
-    """Typed deployment assembly input, not authoritative product topology storage."""
+    """Typed startup settings and the selected file-backed Gateway topology."""
 
     config_path: Path
     bridge: BridgeRuntimeConfig
@@ -67,3 +68,7 @@ class RuntimeConfiguration:
     endpoints: dict[str, EndpointFileConfig]
     diagnostic_upstream: str | None
     agent_host: RuntimeAgentHostConfig = field(default_factory=RuntimeAgentHostConfig)
+    topology_source: Literal["runtime_file", "legacy_file", "unconfigured", "provided"] = "provided"
+    topology_hash: str | None = None
+    topology_error: str | None = None
+    static_signature: str | None = None

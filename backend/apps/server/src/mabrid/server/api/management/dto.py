@@ -1,4 +1,4 @@
-"""Server-owned response DTOs for the read-only management HTTP contract."""
+"""Server-owned response DTOs for the management HTTP contract."""
 
 from __future__ import annotations
 
@@ -193,10 +193,33 @@ class GatewayStatusResponse(ManagementResponse):
 
     version: str
     lifecycle_state: Literal["running"] = "running"
-    topology_mode: Literal["frozen_seeded"] = "frozen_seeded"
+    topology_mode: Literal["generation_applied"] = "generation_applied"
     advertised_base_url: str | None
     published_endpoint_count: int
     published_endpoint_slugs: tuple[str, ...]
+
+
+class GatewayConfigurationResponse(ManagementResponse):
+    """Expose applied and desired configuration identity without connection values."""
+
+    generation: int = Field(ge=1)
+    applied_at: datetime
+    applied_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
+    applied_source: Literal["runtime_file", "legacy_file", "unconfigured", "provided", "ledger"]
+    desired_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
+    desired_source: Literal["runtime_file", "legacy_file", "unconfigured", "provided", "unknown"]
+    file_valid: bool
+    pending: bool
+    error: str | None
+    restart_required: bool
+    host_unavailable: bool
+    recovery_required: bool
+
+
+class ApplyGatewayConfigurationRequest(ManagementResponse):
+    """Require the file identity observed by the caller before an explicit apply."""
+
+    expected_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
 
 
 class SessionResponse(ManagementResponse):

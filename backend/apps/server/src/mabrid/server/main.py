@@ -30,7 +30,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 async def serve_runtime(args: argparse.Namespace) -> None:
-    configuration = resolve_runtime_configuration(args.config)
+    configuration = resolve_runtime_configuration(args.config, defer_legacy_topology_errors=True)
     logger.info("Configuration loaded from %s", configuration.config_path)
     logger.info(
         "API listening on %s:%d", configuration.bridge.api_host, configuration.bridge.api_port

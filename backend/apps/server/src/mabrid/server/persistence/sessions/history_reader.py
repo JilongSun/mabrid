@@ -23,7 +23,7 @@ class SqlAlchemySessionHistoryReader:
 
     Structurally implements [SessionHistoryReader](../../../../../../../packages/application/src/mabrid/application/gateway/sessions/ports.py:28)
     through `list_sessions` and `get_session`, independently of lifecycle writes.
-    [compose_gateway](../../composition/gateway.py:78) injects this reader into the
+    [compose_gateway](../../composition/gateway.py:73) injects this reader into the
     management view.
     """
 

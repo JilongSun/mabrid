@@ -10,7 +10,7 @@ from .queries import SessionPage, SessionPageRequest
 
 
 class BridgeSessionRepository(Protocol):
-    """Lifecycle storage consumed by [GatewaySessionCoordinator](service.py:51).
+    """Lifecycle storage consumed by [GatewaySessionCoordinator](service.py:52).
 
     Server persistence supplies `add`, `update`, `get`, and `list` structurally.
     Management pagination belongs to [SessionHistoryReader](ports.py:28), not here.

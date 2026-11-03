@@ -29,7 +29,7 @@ class SqlAlchemyTopologyReader:
     """Materialize immutable revisions for enabled runtime endpoint publication.
 
     Revision listing, slug resolution, and captured-revision lookup structurally
-    implement the application read port. [compose_gateway](../../composition/gateway.py:78)
+    implement the application read port. [compose_gateway](../../composition/gateway.py:73)
     injects this reader, not the all-heads management snapshot reader.
     Contract: [TopologyReader](../../../../../../../packages/application/src/mabrid/application/gateway/topology/ports.py:12).
     """
@@ -40,19 +40,27 @@ class SqlAlchemyTopologyReader:
     async def list_current_revisions(self) -> list[EndpointTopologyRevision]:
         """Implement [TopologyReader.list_current_revisions](../../../../../../../packages/application/src/mabrid/application/gateway/topology/ports.py:20)."""
         async with self._session_factory() as session:
-            revision_ids = (
+            endpoints = (
                 await session.scalars(
-                    select(EndpointRow.current_revision_id)
+                    select(EndpointRow)
                     .where(EndpointRow.enabled.is_(True))
-                    .where(EndpointRow.current_revision_id.is_not(None))
                     .order_by(EndpointRow.slug)
                 )
             ).all()
             revisions: list[EndpointTopologyRevision] = []
-            for revision_id in revision_ids:
-                if revision_id is None:
-                    raise ValueError("Enabled endpoint has no current revision")
-                revisions.append(await _load_revision(session, revision_id))
+            for endpoint in endpoints:
+                if endpoint.current_revision_id is None:
+                    raise ValueError(
+                        f"Enabled endpoint has no current revision: {endpoint.endpoint_id}"
+                    )
+                revision = await _load_revision(session, endpoint.current_revision_id)
+                if (
+                    revision.endpoint_id != endpoint.endpoint_id
+                    or revision.slug != endpoint.slug
+                    or not revision.enabled
+                ):
+                    raise ValueError(f"Invalid current endpoint revision: {endpoint.endpoint_id}")
+                revisions.append(revision)
             return revisions
 
     async def resolve_current_revision(

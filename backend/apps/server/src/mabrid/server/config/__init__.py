@@ -2,9 +2,13 @@
 
 from .loader import (
     CONFIG_FILE_NAME,
+    RUNTIME_CONFIG_FILE_NAME,
     ConfigError,
     LoadedBridgeConfig,
+    RuntimeTopologyCandidate,
     load_bridge_config,
+    load_runtime_topology,
+    read_process_signature,
     resolve_runtime_configuration,
 )
 from .file import (
@@ -15,7 +19,9 @@ from .file import (
     HermesAgentRuntimeFileConfig,
     HermesSessionFileConfig,
     MabridConfig,
+    ProcessFileConfig,
     StorageConfig,
+    TopologyFileConfig,
     UpstreamFileConfig,
 )
 from .runtime import (
@@ -29,6 +35,7 @@ from .urls import build_advertised_mcp_url
 
 __all__ = [
     "CONFIG_FILE_NAME",
+    "RUNTIME_CONFIG_FILE_NAME",
     "AgentHostFileConfig",
     "BridgeRuntimeConfig",
     "ConfigError",
@@ -38,14 +45,19 @@ __all__ = [
     "HermesSessionFileConfig",
     "LoadedBridgeConfig",
     "MabridConfig",
+    "ProcessFileConfig",
     "RuntimeConfiguration",
+    "RuntimeTopologyCandidate",
     "RuntimeAgentHostConfig",
     "RuntimeHermesAgentConfig",
     "RuntimeHermesSessionConfig",
     "RuntimeUpstreamConfig",
     "StorageConfig",
+    "TopologyFileConfig",
     "UpstreamFileConfig",
     "build_advertised_mcp_url",
     "load_bridge_config",
+    "load_runtime_topology",
+    "read_process_signature",
     "resolve_runtime_configuration",
 ]

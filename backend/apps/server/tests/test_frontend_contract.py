@@ -162,6 +162,8 @@ def test_offline_frontend_contract_is_deterministic_and_partitions_routes() -> N
         "/api/v1/host/sessions/{session_id}/runs/{run_id}/reconcile",
         "/api/v1/capabilities",
         "/api/v1/gateway/status",
+        "/api/v1/gateway/configuration",
+        "/api/v1/gateway/configuration/apply",
         "/api/v1/gateway/topology",
         "/api/v1/gateway/sessions",
         "/api/v1/gateway/sessions/{session_id}",
@@ -176,7 +178,7 @@ def test_offline_frontend_contract_is_deterministic_and_partitions_routes() -> N
     for status in ("404", "409", "422", "500", "502", "503"):
         assert set(run["responses"][status]["content"]) == {"application/json"}
     assert all(
-        set(operation) == {"get"}
+        set(operation) == ({"post"} if path == "/api/v1/gateway/configuration/apply" else {"get"})
         for path, operation in paths.items()
         if path.startswith(("/api/v1/gateway", "/api/v1/agent-host"))
     )

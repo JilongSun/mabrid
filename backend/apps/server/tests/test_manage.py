@@ -253,9 +253,17 @@ def test_compose_keeps_secrets_runtime_only() -> None:
     assert configuration["read_only"]
 
 
-def test_root_example_matches_current_configuration_contract() -> None:
+def test_root_example_matches_current_configuration_contract(tmp_path: Path) -> None:
     from mabrid.server.config import load_bridge_config
 
-    loaded = load_bridge_config(str(ROOT / "mabrid.yaml.example"))
+    config = tmp_path / "mabrid.yaml"
+    config.write_bytes((ROOT / "mabrid.yaml.example").read_bytes())
+    loaded = load_bridge_config(str(config))
     assert loaded.config.bridge.api_port == 8765
     assert loaded.config.storage.sqlite_path == Path("backend/var/mabrid.db")
+    (tmp_path / "mabrid.runtime.yaml").write_bytes(
+        (ROOT / "mabrid.runtime.yaml.example").read_bytes()
+    )
+    split = load_bridge_config(str(config))
+    assert split.config.upstreams == loaded.config.upstreams
+    assert split.config.endpoints == loaded.config.endpoints

@@ -1,33 +1,20 @@
 """Compose the managed Gateway application with SQLite and bridge-core adapters.
 
-This module is the single boundary that converts resolved deployment topology into application
-seed contracts and injects infrastructure ports. Runtime behavior remains in lower packages.
+This module injects infrastructure ports and composes the running Gateway.
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
-from mabrid.bridge import EndpointMode
 from mabrid.application.gateway.inspection import SessionInspectionReader
 from mabrid.application.gateway.sessions import (
     GatewaySessionCoordinator,
     SessionHistoryReader,
 )
-from mabrid.application.gateway.topology import (
-    EndpointBinding,
-    EndpointDefinition,
-    SseConnection,
-    StdioConnection,
-    StreamableHttpConnection,
-    TopologySnapshotReader,
-    UpstreamConnection,
-    UpstreamServerDefinition,
-)
-from pydantic import AnyHttpUrl, TypeAdapter
+from mabrid.application.gateway.topology import TopologySnapshotReader
 
-from mabrid.server.config import RuntimeConfiguration, RuntimeUpstreamConfig
+from mabrid.server.config import RuntimeConfiguration
 from mabrid.server.logging import get_logger
 from mabrid.server.persistence import SqliteDatabase, SqliteReadinessProbe
 from mabrid.server.persistence.sessions import (
@@ -40,18 +27,18 @@ from mabrid.server.persistence.sessions import (
 from mabrid.server.persistence.topology import (
     SqlAlchemyTopologyReader,
     SqlAlchemyTopologySnapshotReader,
-    seed_topology_if_empty,
 )
 
+from .configuration import GatewayConfigurationManager
+
 logger = get_logger(__name__)
-HTTP_URL_ADAPTER = TypeAdapter(AnyHttpUrl)
 
 
 @dataclass(frozen=True)
 class GatewayManagementComposition:
     """Bundle typed management reads and local readiness evidence for HTTP adapters.
 
-    Readers are structural port implementations built by [compose_gateway](gateway.py:78).
+    Readers are structural port implementations built by [compose_gateway](gateway.py:73).
     The async bound `is_ready` method supplies the readiness callback; no reader
     exposes SQLAlchemy, YAML, or lifecycle mutation to the API layer.
     """
@@ -62,9 +49,17 @@ class GatewayManagementComposition:
     readiness_probe: SqliteReadinessProbe
     advertised_base_url: str | None
     published_endpoint_slugs: tuple[str, ...]
+    configuration: GatewayConfigurationManager | None = None
 
     async def is_ready(self) -> bool:
-        return bool(self.published_endpoint_slugs) and await self.readiness_probe.is_ready()
+        return (
+            bool(self.current_published_endpoint_slugs()) and await self.readiness_probe.is_ready()
+        )
+
+    def current_published_endpoint_slugs(self) -> tuple[str, ...]:
+        if self.configuration is not None:
+            return self.configuration.published_endpoint_slugs
+        return self.published_endpoint_slugs
 
 
 @dataclass(frozen=True)
@@ -79,20 +74,13 @@ async def compose_gateway(
     configuration: RuntimeConfiguration,
     database: SqliteDatabase,
 ) -> GatewayComposition:
-    """Seed once, recover lifecycle history, and inject SQL adapters into application ports.
+    """Reconcile topology, recover lifecycle history, and inject application ports.
 
-    [GatewaySessionCoordinator](../../../../../../packages/application/src/mabrid/application/gateway/sessions/service.py:51)
+    [GatewaySessionCoordinator](../../../../../../packages/application/src/mabrid/application/gateway/sessions/service.py:52)
     receives runtime readers/stores; management receives distinct all-heads and
     paginated reader views. This function owns construction, not their use cases.
     """
 
-    upstreams, endpoints = _build_topology_seed(configuration)
-    logger.info(
-        "Composing Gateway: %d upstream(s), %d endpoint(s)",
-        len(upstreams),
-        len(endpoints),
-    )
-    await seed_topology_if_empty(database.session_factory, upstreams, endpoints)
     await mark_interrupted_sessions_failed(database.session_factory)
     topology_reader = SqlAlchemyTopologyReader(database.session_factory)
     session_repository = SqlAlchemyBridgeSessionRepository(database.session_factory)
@@ -102,7 +90,8 @@ async def compose_gateway(
         session_repository,
         session_store_factory,
     )
-    await coordinator.load_published_endpoints()
+    configuration_manager = GatewayConfigurationManager(configuration, database, coordinator)
+    await configuration_manager.initialize()
     return GatewayComposition(
         runtime=coordinator,
         management=GatewayManagementComposition(
@@ -114,95 +103,6 @@ async def compose_gateway(
             published_endpoint_slugs=tuple(
                 endpoint.revision.slug for endpoint in coordinator.published_endpoints
             ),
+            configuration=configuration_manager,
         ),
     )
-
-
-def _build_topology_seed(
-    configuration: RuntimeConfiguration,
-) -> tuple[list[UpstreamServerDefinition], list[EndpointDefinition]]:
-    upstreams: dict[str, UpstreamServerDefinition] = {}
-    for name, upstream in configuration.upstreams.items():
-        definition = UpstreamServerDefinition(
-            slug=_normalize_slug(name),
-            display_name=name,
-            connection=_to_application_connection(upstream),
-        )
-        upstreams[name] = definition
-        logger.info(
-            "Upstream server: name=%s slug=%s transport=%s",
-            name,
-            definition.slug,
-            upstream.transport,
-        )
-
-    if configuration.diagnostic_upstream is not None:
-        selected = upstreams[configuration.diagnostic_upstream]
-        return list(upstreams.values()), [
-            EndpointDefinition(
-                slug=selected.slug,
-                display_name=configuration.bridge.proxy_name or selected.display_name,
-                bindings=[EndpointBinding(upstream_server_id=selected.server_id)],
-            )
-        ]
-
-    endpoints = [
-        EndpointDefinition(
-            slug=_normalize_slug(name),
-            display_name=endpoint.display_name or name,
-            mode=EndpointMode(endpoint.mode),
-            bindings=[
-                EndpointBinding(
-                    upstream_server_id=upstreams[binding.upstream].server_id,
-                    namespace=binding.namespace,
-                    priority=binding.priority,
-                    enabled=binding.enabled,
-                )
-                for binding in endpoint.bindings
-            ],
-            enabled=endpoint.enabled,
-        )
-        for name, endpoint in configuration.endpoints.items()
-    ]
-    for endpoint in endpoints:
-        logger.info(
-            "Published topology seed: slug=%s mode=%s bindings=%d enabled=%s",
-            endpoint.slug,
-            endpoint.mode.value,
-            len(endpoint.bindings),
-            endpoint.enabled,
-        )
-    return list(upstreams.values()), endpoints
-
-
-def _to_application_connection(upstream: RuntimeUpstreamConfig) -> UpstreamConnection:
-    if upstream.transport == "streamable-http":
-        if upstream.url is None:
-            raise ValueError("streamable-http upstream requires a URL")
-        return StreamableHttpConnection(
-            url=HTTP_URL_ADAPTER.validate_python(upstream.url),
-            headers=upstream.headers,
-            timeout_seconds=upstream.httpx_timeout_seconds or 30.0,
-        )
-    if upstream.transport == "sse":
-        if upstream.url is None:
-            raise ValueError("SSE upstream requires a URL")
-        return SseConnection(
-            url=HTTP_URL_ADAPTER.validate_python(upstream.url),
-            headers=upstream.headers,
-        )
-    if upstream.command is None:
-        raise ValueError("stdio upstream requires a command")
-    return StdioConnection(
-        command=upstream.command,
-        args=upstream.args,
-        cwd=upstream.cwd,
-        env=upstream.env,
-    )
-
-
-def _normalize_slug(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9-]+", "-", value.lower()).strip("-")
-    if not slug or not slug[0].isalpha():
-        return f"server-{slug}" if slug else "server"
-    return slug

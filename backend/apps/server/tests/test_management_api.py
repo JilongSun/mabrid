@@ -243,7 +243,7 @@ async def test_gateway_status_and_topology_contracts_hide_secret_values() -> Non
     assert status.json() == {
         "version": "0.1.0",
         "lifecycle_state": "running",
-        "topology_mode": "frozen_seeded",
+        "topology_mode": "generation_applied",
         "advertised_base_url": "http://mabrid.test:8765",
         "published_endpoint_count": 1,
         "published_endpoint_slugs": ["fixture-endpoint"],

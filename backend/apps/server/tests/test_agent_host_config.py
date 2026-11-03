@@ -238,7 +238,7 @@ upstreams:
         resolve_runtime_configuration(str(config_path))
 
 
-def test_configuration_requires_explicit_endpoints(tmp_path: Path) -> None:
+def test_configuration_allows_an_unconfigured_gateway(tmp_path: Path) -> None:
     config_path = tmp_path / "fixture.yaml"
     config_path.write_text(
         """
@@ -250,8 +250,59 @@ upstreams:
         encoding="utf-8",
     )
 
-    with pytest.raises(ConfigError, match="endpoints"):
-        resolve_runtime_configuration(str(config_path))
+    configuration = resolve_runtime_configuration(str(config_path))
+    assert list(configuration.upstreams) == ["fixture"]
+    assert configuration.endpoints == {}
+
+
+def test_runtime_topology_file_takes_precedence_without_merging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "mabrid.yaml"
+    _write_config(config_path)
+    monkeypatch.setenv("FIXTURE_HERMES_KEY", "fixture-secret")
+    (tmp_path / "mabrid.runtime.yaml").write_text(
+        """
+upstreams:
+  other:
+    transport: stdio
+    command: other-server
+endpoints:
+  other:
+    bindings: [{upstream: other}]
+""",
+        encoding="utf-8",
+    )
+
+    configuration = resolve_runtime_configuration(str(config_path))
+
+    assert configuration.topology_source == "runtime_file"
+    assert configuration.topology_error is None
+    assert list(configuration.upstreams) == ["other"]
+    assert list(configuration.endpoints) == ["other"]
+    assert configuration.agent_host.target_id == "fixture-target"
+
+
+def test_invalid_runtime_topology_is_reported_without_exposing_file_contents(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "mabrid.yaml"
+    _write_config(config_path)
+    monkeypatch.setenv("FIXTURE_HERMES_KEY", "fixture-secret")
+    (tmp_path / "mabrid.runtime.yaml").write_text(
+        "upstreams: [invalid, fixture-secret\n", encoding="utf-8"
+    )
+
+    configuration = resolve_runtime_configuration(str(config_path))
+
+    assert configuration.topology_source == "runtime_file"
+    assert configuration.topology_hash is not None
+    assert configuration.topology_error is not None
+    assert "fixture-secret" not in configuration.topology_error
+    assert configuration.upstreams == {}
+    assert configuration.agent_host.target_id == "fixture-target"
 
 
 def test_enabled_agent_host_requires_advertised_base_url(

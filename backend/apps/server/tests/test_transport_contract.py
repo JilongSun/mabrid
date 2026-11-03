@@ -17,6 +17,7 @@ from mabrid.bridge import (
     ReadResourceResult,
     ResourceContent,
     ResourceDescriptor,
+    StdioUpstreamConfig,
     ToolCallResult,
     ToolDescriptor,
     UpstreamConfig,
@@ -48,6 +49,7 @@ from mabrid.server.config import (
     RuntimeHermesAgentConfig,
     RuntimeUpstreamConfig,
     StorageConfig,
+    resolve_runtime_configuration,
 )
 import mabrid.server.composition.agent_host as agent_host_composition
 import mabrid.server.composition.gateway as gateway_composition
@@ -107,6 +109,15 @@ class SingleTopologyReader:
 
     async def get_revision(self, revision_id: UUID) -> EndpointTopologyRevision | None:
         return self.revision if revision_id == self.revision.revision_id else None
+
+
+class MutableTopologyReader(SingleTopologyReader):
+    def __init__(self, revision: EndpointTopologyRevision) -> None:
+        super().__init__(revision)
+        self.current = [revision]
+
+    async def list_current_revisions(self) -> list[EndpointTopologyRevision]:
+        return self.current
 
 
 class MemorySessionRepository:
@@ -266,6 +277,206 @@ async def test_composed_server_supports_mcp_2025_streamable_http_contract() -> N
 
     [record] = await sessions.list()
     assert record.status is BridgeSessionStatus.CLOSED
+
+
+async def test_removed_endpoint_keeps_existing_streamable_session() -> None:
+    upstream = UpstreamRevision(
+        server_id=uuid4(),
+        slug="fixture",
+        display_name="Fixture MCP",
+        connection=StdioConnection(command="fixture-server"),
+    )
+    revision = EndpointTopologyRevision(
+        endpoint_id=uuid4(),
+        slug="fixture",
+        display_name="Fixture MCP",
+        bindings=(EndpointBindingRevision(upstream=upstream),),
+    )
+    reader = MutableTopologyReader(revision)
+    coordinator = GatewaySessionCoordinator(
+        reader,
+        MemorySessionRepository(),
+        cast(BridgeSessionStoreFactory, MemoryStoreFactory()),
+        upstream_client_factory=FixtureClientFactory(),
+    )
+    await coordinator.load_published_endpoints()
+    app = create_app(coordinator)
+    headers = {
+        "accept": "application/json, text/event-stream",
+        "content-type": "application/json",
+    }
+    initialize = rpc_request(
+        "initialize",
+        request_id=1,
+        params={
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "contract-test", "version": "1.0.0"},
+        },
+    )
+
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.post("/mcp/fixture", headers=headers, json=initialize)
+            assert response.status_code == 200
+            session_headers = {**headers, "mcp-session-id": response.headers["mcp-session-id"]}
+            notification = await client.post(
+                "/mcp/fixture",
+                headers=session_headers,
+                json=rpc_request("notifications/initialized"),
+            )
+            assert notification.status_code == 202
+
+            reader.current = []
+            await coordinator.load_published_endpoints()
+
+            existing = await client.post(
+                "/mcp/fixture",
+                headers=session_headers,
+                json=rpc_request("tools/list", request_id=2, params={}),
+            )
+            assert existing.status_code == 200
+            assert response_payload(existing)["result"]["tools"][0]["name"] == "echo"
+            assert (
+                await client.post("/mcp/fixture", headers=headers, json=initialize)
+            ).status_code == 404
+            assert (
+                await client.post(
+                    "/mcp/other",
+                    headers=session_headers,
+                    json=rpc_request("tools/list", request_id=3, params={}),
+                )
+            ).status_code == 404
+            assert (await client.delete("/mcp/fixture", headers=session_headers)).status_code == 200
+
+
+async def test_file_application_keeps_old_sessions_and_routes_new_sessions_to_new_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class TrackingFactory(FixtureClientFactory):
+        def __init__(self) -> None:
+            self.commands: list[str] = []
+
+        def create(self, config: UpstreamConfig) -> FixtureClient:
+            assert isinstance(config, StdioUpstreamConfig)
+            self.commands.append(config.command)
+            return super().create(config)
+
+    factory = TrackingFactory()
+    monkeypatch.setattr(
+        gateway_composition,
+        "GatewaySessionCoordinator",
+        partial(GatewaySessionCoordinator, upstream_client_factory=factory),
+    )
+    config_path = tmp_path / "mabrid.yaml"
+    runtime_path = tmp_path / "mabrid.runtime.yaml"
+    config_path.write_text(
+        """
+storage: {sqlitePath: gateway.db}
+upstreams: {fixture: {transport: stdio, command: old-fixture}}
+endpoints:
+  fixture:
+    bindings: [{upstream: fixture}]
+""",
+        encoding="utf-8",
+    )
+    result = await bootstrap_server(resolve_runtime_configuration(str(config_path)))
+    app = create_app(result.gateway, gateway_management=result.gateway_management)
+    headers = {
+        "accept": "application/json, text/event-stream",
+        "content-type": "application/json",
+    }
+    initialize = rpc_request(
+        "initialize",
+        request_id=1,
+        params={
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "generation-test", "version": "1.0.0"},
+        },
+    )
+
+    try:
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                first_revision = str(result.gateway.published_endpoints[0].revision.revision_id)
+                first = await client.post("/mcp/fixture", headers=headers, json=initialize)
+                assert first.status_code == 200
+                first_headers = {**headers, "mcp-session-id": first.headers["mcp-session-id"]}
+                assert (
+                    await client.post(
+                        "/mcp/fixture",
+                        headers=first_headers,
+                        json=rpc_request("notifications/initialized"),
+                    )
+                ).status_code == 202
+
+                runtime_path.write_text(
+                    """
+upstreams: {fixture: {transport: stdio, command: new-fixture}}
+endpoints:
+  fixture:
+    bindings: [{upstream: fixture}]
+""",
+                    encoding="utf-8",
+                )
+                candidate = await client.get("/api/v1/gateway/configuration")
+                applied = await client.post(
+                    "/api/v1/gateway/configuration/apply",
+                    json={"expected_hash": candidate.json()["desired_hash"]},
+                )
+                assert applied.status_code == 200 and applied.json()["generation"] == 2
+                second_revision = str(result.gateway.published_endpoints[0].revision.revision_id)
+                assert first_revision != second_revision
+                second = await client.post("/mcp/fixture", headers=headers, json=initialize)
+                assert second.status_code == 200
+                second_headers = {**headers, "mcp-session-id": second.headers["mcp-session-id"]}
+                assert (
+                    await client.post(
+                        "/mcp/fixture",
+                        headers=second_headers,
+                        json=rpc_request("notifications/initialized"),
+                    )
+                ).status_code == 202
+                assert factory.commands == ["old-fixture", "new-fixture"]
+                history = await client.get("/api/v1/gateway/sessions")
+                assert {item["endpoint_revision_id"] for item in history.json()["items"]} == {
+                    first_revision,
+                    second_revision,
+                }
+
+                runtime_path.write_text("{}\n", encoding="utf-8")
+                empty = await client.get("/api/v1/gateway/configuration")
+                assert (
+                    await client.post(
+                        "/api/v1/gateway/configuration/apply",
+                        json={"expected_hash": empty.json()["desired_hash"]},
+                    )
+                ).status_code == 200
+                assert (await client.get("/ready")).status_code == 503
+                assert (await client.get("/api/v1/gateway/status")).json()[
+                    "published_endpoint_slugs"
+                ] == []
+                assert (
+                    await client.post("/mcp/fixture", headers=headers, json=initialize)
+                ).status_code == 404
+                for session_headers in (first_headers, second_headers):
+                    existing = await client.post(
+                        "/mcp/fixture",
+                        headers=session_headers,
+                        json=rpc_request("tools/list", request_id=2, params={}),
+                    )
+                    assert response_payload(existing)["result"]["tools"][0]["name"] == "echo"
+                    assert (
+                        await client.delete("/mcp/fixture", headers=session_headers)
+                    ).status_code == 200
+    finally:
+        await result.database.close()
 
 
 async def test_streamed_agent_run_projects_real_mcp_tool_into_host_widget(
