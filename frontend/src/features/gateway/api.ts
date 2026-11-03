@@ -55,8 +55,8 @@ const publicationSchema = z.object({
   published_endpoint_slugs: z.array(z.string()),
 })
 
-const appliedConfigurationSource = z.enum(['runtime_file', 'legacy_file', 'unconfigured', 'provided', 'ledger'])
-const desiredConfigurationSource = z.enum(['runtime_file', 'legacy_file', 'unconfigured', 'provided', 'unknown'])
+const appliedConfigurationSource = z.enum(['runtime_file', 'unconfigured', 'provided', 'ledger'])
+const desiredConfigurationSource = z.enum(['runtime_file', 'unconfigured', 'provided', 'unknown'])
 const configurationHash = z.string().regex(/^[a-f0-9]{64}$/).nullable()
 export const gatewayConfigurationSchema = z.object({
   generation: z.int().positive(),

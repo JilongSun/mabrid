@@ -46,6 +46,8 @@ describe('Gateway configuration application', () => {
     expect(gatewayConfigurationSchema.safeParse({ ...pending, desired_hash: 'invalid' }).success).toBe(false)
     expect(gatewayConfigurationSchema.safeParse({ ...pending, generation: 0 }).success).toBe(false)
     expect(gatewayConfigurationSchema.safeParse({ ...pending, host_unavailable: undefined }).success).toBe(false)
+    expect(gatewayConfigurationSchema.safeParse({ ...pending, desired_source: 'legacy_file' }).success).toBe(false)
+    expect(gatewayConfigurationSchema.safeParse({ ...pending, applied_source: 'legacy_file' }).success).toBe(false)
   })
 
   it('applies exactly the displayed file hash and refreshes the Gateway once', async () => {

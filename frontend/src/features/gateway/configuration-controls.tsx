@@ -9,7 +9,6 @@ import {
 
 const sourceNames: Record<GatewayConfiguration['applied_source'] | GatewayConfiguration['desired_source'], string> = {
   runtime_file: 'Runtime file',
-  legacy_file: 'Legacy single file',
   unconfigured: 'Unconfigured',
   provided: 'Provided configuration',
   ledger: 'Last-known-good ledger',
