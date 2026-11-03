@@ -106,12 +106,10 @@ make run   # 或：just run
 
 ## 使用前须知
 
-Mabrid 正在准备 **v0.1 开发者预览版**，适合在可信环境中自行部署和试用，
-不适合作为面向公众的多用户服务。
-
 - 请仅在可信网络中使用。管理 API 尚无身份验证，会话诊断信息可能包含工具输入和结果。
-- 网页界面只支持查看网关配置。MCP 服务器和端点配置会在首次启动时导入空数据库，
-  之后修改 YAML 不会更新数据库中已有的配置。
+- Runtime topology files can be applied locally from the Gateway; see the
+  [English configuration instructions](README.md#get-the-code-and-configure) for the current
+  file layout and container limitation.
 - MCP Apps 支持展示和交换工具数据。v0.1 不支持由 App 发起后续消息或工具调用。
 - 桌面客户端和多 worker 部署不在 v0.1 范围内。
 

@@ -46,6 +46,12 @@ The image does not contain local YAML or secrets. Compose mounts the selected `m
 read-only at `/var/lib/mabrid/mabrid.yaml`. The application reads its settings from YAML;
 the launcher does not override listener settings or parse product configuration.
 
+The current Compose workflow does **not** mount `mabrid.runtime.yaml`, so runtime-file
+application is not supported in this deployment. Keep the upstreams and endpoints used by
+Compose in `mabrid.yaml`. A runtime file in the host directory is invisible to the container.
+Do not remove the legacy topology from `mabrid.yaml` on the assumption that Compose reads it.
+Legacy topology is selected only when the database has not previously adopted a runtime file.
+
 The existing named volume `mabrid-data` is mounted at `/var/lib/mabrid`. Relative SQLite paths
 resolve from the mounted YAML's directory, so the root example's `./backend/var/mabrid.db`
 remains inside this volume without rewriting the configuration. Absolute paths must likewise
@@ -91,12 +97,12 @@ a leftover of the original development workflow.
 
 | Content | Owner | Reason |
 | --- | --- | --- |
-| Listener settings, upstream URLs, endpoint topology, timeouts, Agent Host enablement, and the *names* of secret variables (`apiKeyEnv`) | `mabrid.yaml` | Typed models reject unknown fields and invalid values at startup; the file can be reviewed and committed |
+| Listener settings, upstream URLs, endpoint topology, timeouts, Agent Host enablement, and the *names* of Agent Host secret variables (`apiKeyEnv`) | `mabrid.yaml` | Typed models validate the file at startup |
 | Secret *values* such as `API_SERVER_KEY` | `.env` | Kept out of images, the data volume, and Git; injected only at container creation |
 | Product and runtime state | Named volume | Written by the application and required across restarts |
 | Diagnostics | Standard error | Owned by the container runtime |
 
-YAML never stores a secret value; it stores the environment variable name to read:
+Agent Host configuration stores the environment variable name to read:
 
 ```yaml
 agentHost:
@@ -110,6 +116,10 @@ unrelated variable added to `.env` has no effect on the server. Environment inje
 structure, type validation, nesting, and review history, and changing it requires container
 recreation rather than a restart.
 
+Legacy upstream `headers` and `env` may contain literal values. Treat YAML, upstream URLs, and the
+SQLite revision ledger as sensitive if they contain credentials; this batch does not migrate those
+values to secret references.
+
 One exception deserves attention: when the configuration directory is the repository root, Compose
 also auto-loads that `.env` for `${...}` interpolation in `compose.yaml`. Variables such as
 `MABRID_PORT` therefore influence Compose itself, not only the application. Keep deployment choices
@@ -119,17 +129,18 @@ Secret inheritance is bounded. The MCP SDK spawns stdio upstream servers with a 
 inherited variables (`PATH`, `HOME`, and similar) plus the upstream's explicitly configured `env`,
 so injected secrets are not forwarded to third-party MCP subprocesses.
 
-## Changing Configuration at Runtime
+## Changing Container Configuration
 
 The two configuration inputs are applied at different times.
 
 | Changed file | Effect on the running container | Required action |
 | --- | --- | --- |
-| `mabrid.yaml` | The host change is visible inside the container immediately, but the process already loaded its configuration at startup | Restart the container process: `just stop` then `just run` |
+| `mabrid.yaml` | A single-file bind mount may not observe atomic replace-on-save edits | Recreate the container to remount the file and reconcile its topology |
+| `mabrid.runtime.yaml` | Not mounted and not read by the standard Compose deployment | Keep Compose topology in `mabrid.yaml` until runtime-file mounting is supported |
 | `.env` | No effect. Environment variables are fixed when the container is created | Recreate the container; a plain restart reuses the existing environment |
 
-`just stop` followed by `just run` starts the existing container again. Compose does not reliably
-detect changes to `env_file` contents, so an environment change requires explicit recreation:
+`just stop` followed by `just run` starts the existing container again. Recreate after editing
+`mabrid.yaml` or `.env` so a replaced file is remounted and environment values are refreshed:
 
 ```sh
 just recreate
@@ -139,8 +150,12 @@ just recreate
 verified graceful stop first, then replaces the container from the existing image. It never builds,
 pulls, or deletes the data volume.
 
-Neither input triggers a hot reload, and YAML topology changes still never overwrite a populated
-database.
+On startup, a valid legacy topology is reconciled with existing database heads without deleting
+historical revisions or Session references, provided that database has not adopted a runtime file.
+If it has, the missing runtime file selects an unconfigured topology instead of restoring the old
+legacy topology. Preserve the data volume and use a deployment that supplies the runtime file;
+do not reset the database to force a fallback. Container runtime-file hot application is deferred;
+the current single-file mount is not a supported hot-apply interface.
 
 ## Build, Run, and Stop
 
@@ -157,8 +172,8 @@ Recreate applies settings that Compose fixes when a container is created, such a
 stops a running container with the same verified shutdown check, then replaces the container from
 the existing image. The data volume is preserved, and no build or pull occurs.
 
-Existing topology behavior is unchanged: YAML seeds an empty database, but later YAML topology
-edits do not overwrite populated topology. No command resets the database or adds hot reload.
+No command resets the database. For databases that have not adopted a runtime file, changes to
+legacy topology take effect through reconciliation when the recreated container starts.
 
 Make retains `IMAGE`, `CONTAINER_NAME`, `PORT`, and `CONFIG_DIR`; just retains `image`, `name`,
 `port`, and `config_dir`. These select Docker resources, the host port, and the source directory,

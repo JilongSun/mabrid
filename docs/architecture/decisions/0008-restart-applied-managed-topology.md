@@ -1,6 +1,6 @@
 # ADR 0008: Restart-Applied Managed Topology
 
-- Status: Accepted; v0.1 scope amended by ADR 0014
+- Status: Accepted; v0.1 scope amended by ADR 0014; configuration application amended by ADR 0018
 - Date: 2026-08-21
 - Amends: ADR 0001, ADR 0002, ADR 0003, and ADR 0004
 
@@ -13,6 +13,10 @@ Agent Host/Target/runtime settings and records first-run setup, non-destructive 
 databases, and explicit YAML migration as pending requirements. `seed-if-empty` is not a permanent
 management write lock. Restart-applied topology remains the baseline; safe Agent Host configuration
 application needs a separate detailed contract and does not imply runtime hot reload.
+
+ADR 0018 subsequently amends the ownership and restart-applied publication clauses for the
+post-v0.1 configuration milestone. Dynamic configuration is intended to apply by generation;
+immutable revisions, dependent endpoint revisions, and existing Session ownership remain.
 
 ## Context
 

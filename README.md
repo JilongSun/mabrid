@@ -80,6 +80,15 @@ Edit the generated `mabrid.yaml` to point to your MCP servers. The sample
 addresses need to be replaced. To enable Agent Host, also configure its runtime
 connection.
 
+For local runtime topology changes, copy `mabrid.runtime.yaml.example` to
+`mabrid.runtime.yaml` beside `mabrid.yaml`. When present, the runtime file
+replaces the entire legacy topology in `mabrid.yaml`; the files are not merged.
+After editing it, use **Configuration application** in the Gateway to apply
+the changes without restarting. The web interface does not yet edit YAML.
+Listener and Agent Host settings still require a restart.
+Once a runtime file has been adopted, removing it selects an unconfigured
+topology rather than restoring the old legacy topology.
+
 Use the `.env` file beside `mabrid.yaml` for API keys. For example:
 
 ```dotenv
@@ -115,14 +124,15 @@ See the [container guide](docs/deployment/container.md) for more deployment opti
 
 ## Before you use it
 
-Mabrid is preparing for its **v0.1 developer preview**. It is intended for
-trusted, self-hosted use, not a public multi-user service.
+Mabrid is intended for trusted, self-hosted use, not a public multi-user service.
 
 - Keep it on a trusted network. Management APIs have no authentication, and
   session diagnostics may contain tool inputs and results.
-- Gateway configuration is read-only in the web interface. The MCP server and
-  endpoint configuration is imported into an empty database on first startup.
-  Later YAML edits do not update that stored configuration.
+- Gateway topology can be explicitly applied from the runtime file; general file
+  editing and authenticated management are not yet available.
+- The current Compose deployment does not mount the runtime file. For a database that has not
+  adopted one, keep its topology in `mabrid.yaml` and recreate the container to apply changes.
+  See the container guide before using a database that has adopted a runtime file.
 - MCP Apps can display and exchange tool data. App-triggered follow-up messages
   and tool calls are not supported in v0.1.
 - Desktop packaging and multi-worker deployments are outside v0.1.

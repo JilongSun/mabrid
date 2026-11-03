@@ -1,8 +1,8 @@
 # ADR 0018: File-Authoritative Configuration and Generation-Applied Runtime Configuration
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-02
-- Proposed amendments: ADR 0002 ([Configuration boundary](0002-sqlite-persistence-and-configuration-authority.md#configuration-boundary)),
+- Amends: ADR 0002 ([Configuration boundary](0002-sqlite-persistence-and-configuration-authority.md#configuration-boundary)),
   ADR 0008 ([Configuration ownership](0008-restart-applied-managed-topology.md#configuration-ownership),
   [Restart-applied publication](0008-restart-applied-managed-topology.md#restart-applied-publication),
   [Minimal management semantics](0008-restart-applied-managed-topology.md#minimal-management-semantics),
@@ -13,8 +13,9 @@
 - Related: ADR 0001, ADR 0003, ADR 0005, ADR 0011, ADR 0012, and ADR 0016
 - Review entry: [`managed-config-foundations`](../decision-log.md#managed-configuration-and-release-foundations)
 
-This record is a proposal under review. Until the owner accepts it, the amended clauses above remain
-authoritative and no implementation is authorized by this document.
+The owner accepted this direction and authorized the first Gateway configuration batch on
+2026-11-02. Acceptance of the architecture does not authorize all subsequent implementation
+batches or resolve their open security, migration, and Agent Host details.
 
 ## Context
 
@@ -54,13 +55,17 @@ Configuration is split by how it is applied:
 | Secret values | Credentials referenced by configuration | Configuration stores environment-variable references only; values come from the process environment fixed at startup |
 
 The static file remains `mabrid.yaml`. It is read-only to the management API. The dynamic settings
-move to a separate runtime configuration file that the management API may write. The exact file
-name, the way the static file locates it, and its schema are part of the first implementation
-batch. A missing or empty runtime file is a valid unconfigured installation: the process starts,
-publishes no endpoints, keeps Agent Host disabled, and reports Gateway readiness as not ready.
+move to `mabrid.runtime.yaml` in the same directory as the static file; no separate path setting is
+required for the initial design. A missing or empty runtime file is a valid unconfigured
+installation: the process starts, publishes no endpoints, keeps Agent Host disabled, and reports
+Gateway readiness as not ready. Existing single-file installations require a non-destructive
+transition rather than treating their existing product configuration as an empty installation.
 
 Secret rotation and values for environment variables not present at startup require a restart.
 A reloadable secret source is deferred. Management reads and errors never return secret values.
+The existing global `bridge.httpxTimeoutSeconds` remains unchanged and restart-applied in the first
+batch. Existing upstream header and process-environment values are a legacy compatibility concern;
+the first batch does not claim that their persisted values have already become secret references.
 
 ### Files are the configuration authority
 
@@ -97,10 +102,11 @@ Startup and every later apply use the same reconciliation against the ledger:
 5. Renaming a key means disabling the old identity and creating a new one. Explicit rename
    identifiers are deferred.
 
-Existing v0.1 databases need no reset or separate import: their slugs were derived from the same
-YAML keys, so the first reconciliation of an upgraded installation matches existing identities.
-Normal startup therefore applies the current file instead of ignoring it, which removes the
-populated-database freeze without merging state from two authorities.
+Existing v0.1 databases must not be reset. Reconciliation reuses matching stable slugs and preserves
+historical references, but matching cannot be assumed for changed or colliding source names.
+Transition and conflicting input must be handled explicitly rather than silently discarding
+existing state. Normal startup applies the selected configuration source instead of ignoring it,
+which removes the populated-database freeze without merging two independent authorities.
 
 ### Generation-applied runtime configuration
 
@@ -146,7 +152,11 @@ is deferred and, if added later, must use the same pipeline with change coalesci
 Management writes validate the complete candidate before writing. They use optimistic concurrency
 based on the runtime file's content hash, reject stale writes with a conflict, and replace the file
 atomically within its directory. A file that fails validation is never written by the API.
-Write access protection must be designed before write routes are enabled, as ADR 0014 requires.
+The owner deferred authentication design for the initial development-stage apply-only operation;
+it retains the existing unauthenticated access model and is not safe to expose to untrusted clients.
+General file-writing management routes still require a separately reviewed access and secret
+contract before they are enabled. The access boundary must be considered together with the MCP
+Gateway and deployment topology.
 
 Deployments that allow frontend editing mount a writable configuration directory rather than a
 single runtime file. The static file may remain read-only.
@@ -181,15 +191,15 @@ changes. This replaces the topology `restart_required` latch proposed by ADR 000
 ## Alternatives
 
 - SQLite as configuration authority edited by management APIs, as accepted in ADR 0014: not
-proposed because files remain directly reviewable and editable as the single
+selected because files remain directly reviewable and editable as the single
   declarative source, while the database retains its ledger and history roles.
-- Keep restart-applied topology: not proposed because the existing revision pinning already
+- Keep restart-applied topology: not selected because the existing revision pinning already
   provides the isolation needed for safe new-Session application.
-- One file with static and dynamic sections: not proposed because API writes would rewrite process
+- One file with static and dynamic sections: not selected because API writes would rewrite process
   settings and deployments could not separate read-only and writable mounts.
-- Fail startup on an invalid runtime file: not proposed because the ledger can provide a
+- Fail startup on an invalid runtime file: not selected because the ledger can provide a
   last-known-good configuration.
-- Close Sessions on removed endpoints after a grace period: not proposed; Sessions end naturally.
+- Close Sessions on removed endpoints after a grace period: not selected; Sessions end naturally.
 
 ## Consequences
 
@@ -203,5 +213,6 @@ proposed because files remain directly reviewable and editable as the single
 
 ## Implementation Status
 
-Proposed on 2026-11-02; not implemented. The proposed delivery order is recorded in the review
-entry and requires owner approval before implementation.
+Accepted on 2026-11-02. The first Gateway configuration batch is authorized but not yet verified.
+Agent Host live application, general file-writing management, and their outstanding access and
+secret contracts remain separate later batches.

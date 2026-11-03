@@ -82,8 +82,8 @@ belong to the product.
 
 ## Configuration and Execution Safety
 
-- Follow the accepted restart-applied baseline: saving configuration does not update the running
-	topology or silently switch active Sessions to another runtime deployment.
+- Follow ADR 0018's configuration boundary: static process settings require restart; dynamic
+	configuration applies through validated generations without silently switching existing Sessions.
 - Evolve released databases non-destructively. Preserve stable identities, historical revision
 	references, Session bindings, and unsettled Run ownership; pre-release reset permissions do not
 	authorize destructive updates of released user data.

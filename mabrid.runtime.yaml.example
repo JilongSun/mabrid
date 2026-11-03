@@ -1,0 +1,24 @@
+# Copy this file to mabrid.runtime.yaml beside mabrid.yaml for local use.
+# When present, it replaces all legacy upstreams and endpoints in mabrid.yaml.
+endpoints:
+  test-endpoint:
+    displayName: Test Endpoint
+    mode: aggregate
+    bindings:
+      - upstream: enterprise-ops-hub-http-1
+        namespace: ops-one
+        priority: 10
+      - upstream: enterprise-ops-hub-http-2
+        namespace: ops-two
+        priority: 20
+
+upstreams:
+  enterprise-ops-hub-http-1:
+    transport: streamable-http
+    url: http://localhost:8760/mcp
+    # headers: {}
+
+  enterprise-ops-hub-http-2:
+    transport: streamable-http
+    url: http://localhost:8759/mcp
+    # headers: {}

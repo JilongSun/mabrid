@@ -1,6 +1,6 @@
 # ADR 0002: SQLite Persistence and Configuration Authority
 
-- Status: Accepted; amended by ADR 0008, ADR 0013, and ADR 0014
+- Status: Accepted; amended by ADR 0008, ADR 0013, ADR 0014, and ADR 0018
 - Date: 2026-07-14
 - Amended: 2026-07-20
 
@@ -15,6 +15,10 @@ ADR 0014's 2026-10-10 clarification distinguishes bootstrap protection from mana
 future frontend-backed commands must edit existing managed state without a database reset, while
 normal startup still must not overwrite it from YAML. Agent Host configuration currently remains
 YAML-managed; its transition to authoritative managed storage is separate pending work.
+
+ADR 0018 amends the configuration-authority and seed-only clauses below: configuration files
+become the desired-state authority and SQLite retains applied revisions and Session history.
+The persistence, transaction, and non-destructive evolution requirements continue to apply.
 
 ## Context
 

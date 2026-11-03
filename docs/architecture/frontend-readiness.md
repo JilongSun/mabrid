@@ -8,6 +8,11 @@
 
 ## Frozen Contract
 
+The managed-configuration preview deliberately evolves the Gateway portion of this snapshot:
+`topology_mode` is now `generation_applied`, and the configuration status and explicit apply routes
+are included. The owner accepted this preview API compatibility change; the snapshot is updated
+with the current contract rather than preserving the obsolete constant.
+
 The reviewed v0.1 baseline consists of:
 
 - [The machine-readable contract](../contracts/v0.1/frontend-contract.json): first-party OpenAPI,
@@ -44,7 +49,7 @@ JavaScript SDK, an OpenAI wire replacement, or an MCP transport schema.
 | --- | --- |
 | Agent workspace | `/api/v1/host`: local Sessions, runtime-owned history, new-input SSE, cancel/reconcile; safe JSON errors before admission |
 | Product capability status | `/api/v1/capabilities`: local/deployment/remote/effective facts, not Run admission or a remote execution health test |
-| Gateway topology and inspection | `/api/v1/gateway`: read-only status/topology and Gateway Session pages/snapshots/events; RFC 9457 errors |
+| Gateway topology and inspection | `/api/v1/gateway`: status/topology, explicit file application, and Gateway Session pages/snapshots/events; RFC 9457 errors |
 | Target assignment | `/api/v1/agent-host/target`: read-only configured Target and endpoint assignment; not per-Run provider selection |
 | Compatibility | `/v1/models`, `/v1/chat/completions`: standard OpenAI shapes, no private tool/widget envelopes or simulated native continuity |
 | MCP | `/mcp/{endpoint_slug}` and its legacy SSE transport: protocol-owned Gateway ingress, independent of Agent Session history |

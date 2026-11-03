@@ -1,10 +1,14 @@
 # ADR 0014: Read-Only v0.1 Management Plane
 
-- Status: Accepted
+- Status: Accepted; post-v0.1 configuration ownership and application amended by ADR 0018
 - Date: 2026-09-11
 - Clarified: 2026-10-10; post-v0.1 product-configuration ownership
 - Amends: ADR 0001, ADR 0002, ADR 0003, ADR 0004, ADR 0008, ADR 0010, and ADR 0011 for
   v0.1 scope only; clarifies the future configuration surface described by ADR 0011 and ADR 0012
+
+ADR 0018 changes the post-v0.1 configuration authority and application direction, not the
+historical v0.1 read-only release. The requirements to preserve history, protect Session and Run
+ownership, and design access protection for general configuration writes continue to apply.
 
 ## Context
 
