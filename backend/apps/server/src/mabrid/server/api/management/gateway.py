@@ -75,6 +75,7 @@ def create_gateway_management_router(
             status_code = {
                 "configuration_invalid": 422,
                 "configuration_conflict": 409,
+                "configuration_restart_required": 409,
                 "configuration_ledger_error": 500,
                 "configuration_storage_error": 500,
             }[exc.code]

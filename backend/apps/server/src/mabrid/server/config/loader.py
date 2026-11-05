@@ -17,7 +17,7 @@ from .file import (
     BridgeRuntimeConfig,
     EndpointFileConfig,
     ProcessFileConfig,
-    TopologyFileConfig,
+    RuntimeFileConfig,
     UpstreamFileConfig,
 )
 from .runtime import (
@@ -48,20 +48,17 @@ class ConfigError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class LoadedTopology:
-    """Keep the selected topology file and its content identity together."""
+class RuntimeFileCandidate:
+    """Hold one resolved runtime-file candidate for validation and application.
 
-    config: TopologyFileConfig
-    source: Literal["runtime_file", "unconfigured"]
-    content_hash: str | None
-
-
-@dataclass(frozen=True)
-class RuntimeTopologyCandidate:
-    """Hold one resolved file candidate for validation and application."""
+    `agent_host_signature` identifies the whole restart-applied `agentHost` section, including
+    a disabled one, so any change to that section requires a restart.
+    """
 
     upstreams: dict[str, RuntimeUpstreamConfig]
     endpoints: dict[str, EndpointFileConfig]
+    agent_host: RuntimeAgentHostConfig
+    agent_host_signature: str | None
     source: Literal["runtime_file", "unconfigured", "provided"]
     content_hash: str | None
 
@@ -73,7 +70,8 @@ def resolve_runtime_configuration(config_path: str | None) -> RuntimeConfigurati
     """Resolve deployment settings from the configuration file and its adjacent dotenv file.
 
     Listener settings, proxy identity, diagnostic upstream selection, and transport timeout
-    are static-file values only. Gateway topology comes only from the adjacent runtime file.
+    are static-file values only. Gateway topology and Agent Host settings come only from the
+    adjacent runtime file; an invalid runtime file starts with no Host and an explicit error.
     """
     path = _resolve_config_path(config_path)
     raw, static_hash = _read_document(path)
@@ -82,19 +80,21 @@ def resolve_runtime_configuration(config_path: str | None) -> RuntimeConfigurati
     bridge = process.bridge.model_copy(
         update={"proxy_name": process.bridge.proxy_name or DEFAULT_PROXY_NAME}
     )
-    topology_error: str | None = None
+    runtime_error: str | None = None
     try:
-        topology = _load_topology(path, bridge.diagnostic_upstream)
+        candidate = _load_runtime_file(path, bridge, process.bridge.diagnostic_upstream)
     except ConfigError as exc:
         if exc.source != "runtime_file":
             raise
-        topology = LoadedTopology(
-            config=TopologyFileConfig(),
+        candidate = RuntimeFileCandidate(
+            upstreams={},
+            endpoints={},
+            agent_host=RuntimeAgentHostConfig(),
+            agent_host_signature=_agent_host_signature(AgentHostFileConfig()),
             source="runtime_file",
             content_hash=exc.content_hash,
         )
-        topology_error = str(exc)
-    candidate = _resolve_topology(topology, path.parent, bridge)
+        runtime_error = str(exc)
     sqlite_path = process.storage.sqlite_path
     if not sqlite_path.is_absolute():
         sqlite_path = (path.parent / sqlite_path).resolve()
@@ -105,20 +105,22 @@ def resolve_runtime_configuration(config_path: str | None) -> RuntimeConfigurati
         upstreams=candidate.upstreams,
         endpoints=candidate.endpoints,
         diagnostic_upstream=process.bridge.diagnostic_upstream,
-        agent_host=_resolve_agent_host_config(process.agent_host),
-        topology_source=topology.source,
-        topology_hash=topology.content_hash,
-        topology_error=topology_error,
+        agent_host=candidate.agent_host,
+        agent_host_signature=candidate.agent_host_signature,
+        runtime_source=candidate.source,
+        runtime_hash=candidate.content_hash,
+        runtime_error=runtime_error,
         static_signature=_process_signature(process),
     )
 
 
-def load_runtime_topology(configuration: RuntimeConfiguration) -> RuntimeTopologyCandidate:
-    """Read the selected topology without applying changed process or Host settings."""
+def load_runtime_candidate(configuration: RuntimeConfiguration) -> RuntimeFileCandidate:
+    """Read the selected runtime file without applying changed process settings."""
     raw, static_hash = _read_document(configuration.config_path)
     _validate_process(raw, static_hash)
-    topology = _load_topology(configuration.config_path, configuration.diagnostic_upstream)
-    return _resolve_topology(topology, configuration.config_path.parent, configuration.bridge)
+    return _load_runtime_file(
+        configuration.config_path, configuration.bridge, configuration.diagnostic_upstream
+    )
 
 
 def read_process_signature(path: Path) -> str:
@@ -129,6 +131,10 @@ def read_process_signature(path: Path) -> str:
 
 def _process_signature(process: ProcessFileConfig) -> str:
     return sha256(process.model_dump_json(by_alias=True).encode("utf-8")).hexdigest()
+
+
+def _agent_host_signature(config: AgentHostFileConfig) -> str:
+    return sha256(config.model_dump_json(by_alias=True).encode("utf-8")).hexdigest()
 
 
 def _read_document(path: Path) -> tuple[dict[str, object], str]:
@@ -161,25 +167,27 @@ def _validate_process(raw: dict[str, object], content_hash: str) -> ProcessFileC
         ) from exc
 
 
-def _load_topology(config_path: Path, diagnostic_upstream: str | None) -> LoadedTopology:
+def _load_runtime_file(
+    config_path: Path, bridge: BridgeRuntimeConfig, diagnostic_upstream: str | None
+) -> RuntimeFileCandidate:
     runtime_path = config_path.with_name(RUNTIME_CONFIG_FILE_NAME)
     if runtime_path.exists():
         try:
-            topology_raw, content_hash = _read_document(runtime_path)
+            runtime_raw, content_hash = _read_document(runtime_path)
         except ConfigError as exc:
             raise ConfigError(
                 str(exc), content_hash=exc.content_hash, source="runtime_file"
             ) from exc
         source: Literal["runtime_file", "unconfigured"] = "runtime_file"
     else:
-        topology_raw = {}
+        runtime_raw = {}
         content_hash = None
         source = "unconfigured"
     try:
-        config = TopologyFileConfig.model_validate(topology_raw)
+        config = RuntimeFileConfig.model_validate(runtime_raw)
     except ValidationError as exc:
         raise ConfigError(
-            f"Invalid topology configuration: {_validation_summary(exc)}",
+            f"Invalid runtime configuration: {_validation_summary(exc)}",
             content_hash=content_hash,
             source=source,
         ) from exc
@@ -189,27 +197,33 @@ def _load_topology(config_path: Path, diagnostic_upstream: str | None) -> Loaded
             content_hash=content_hash,
             source=source,
         )
-    return LoadedTopology(config=config, source=source, content_hash=content_hash)
+    if config.agent_host.enabled and bridge.advertised_base_url is None:
+        raise ConfigError(
+            "enabled Agent Host requires 'bridge.advertisedBaseUrl'",
+            content_hash=content_hash,
+            source=source,
+        )
+    try:
+        agent_host = _resolve_agent_host_config(config.agent_host)
+    except ConfigError as exc:
+        raise ConfigError(str(exc), content_hash=content_hash, source=source) from exc
+    return RuntimeFileCandidate(
+        upstreams={
+            name: _to_runtime_upstream_config(upstream, config_path.parent, bridge)
+            for name, upstream in config.upstreams.items()
+        },
+        endpoints=config.endpoints,
+        agent_host=agent_host,
+        agent_host_signature=_agent_host_signature(config.agent_host),
+        source=source,
+        content_hash=content_hash,
+    )
 
 
 def _validation_summary(error: ValidationError) -> str:
     return "; ".join(
         f"{'.'.join(str(part) for part in item['loc']) or 'configuration'}: {item['msg']}"
         for item in error.errors(include_input=False, include_context=False, include_url=False)
-    )
-
-
-def _resolve_topology(
-    topology: LoadedTopology, config_dir: Path, bridge: BridgeRuntimeConfig
-) -> RuntimeTopologyCandidate:
-    return RuntimeTopologyCandidate(
-        upstreams={
-            name: _to_runtime_upstream_config(upstream, config_dir, bridge)
-            for name, upstream in topology.config.upstreams.items()
-        },
-        endpoints=topology.config.endpoints,
-        source=topology.source,
-        content_hash=topology.content_hash,
     )
 
 

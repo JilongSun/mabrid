@@ -291,13 +291,13 @@ def test_root_example_matches_current_configuration_contract(tmp_path: Path) -> 
     loaded = resolve_runtime_configuration(str(config))
     assert loaded.bridge.api_port == 8765
     assert loaded.storage.sqlite_path == tmp_path / "backend/var/mabrid.db"
-    assert loaded.topology_source == "unconfigured"
+    assert loaded.runtime_source == "unconfigured"
     assert not loaded.upstreams and not loaded.endpoints
     (tmp_path / "mabrid.runtime.yaml").write_bytes(
         (ROOT / "mabrid.runtime.yaml.example").read_bytes()
     )
     split = resolve_runtime_configuration(str(config))
-    assert split.topology_source == "runtime_file"
-    assert split.topology_error is None
+    assert split.runtime_source == "runtime_file"
+    assert split.runtime_error is None
     assert set(split.upstreams) == {"enterprise-ops-hub-http-1", "enterprise-ops-hub-http-2"}
     assert set(split.endpoints) == {"test-endpoint"}

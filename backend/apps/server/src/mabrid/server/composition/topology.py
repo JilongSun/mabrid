@@ -18,7 +18,7 @@ from pydantic import AnyHttpUrl, TypeAdapter, ValidationError
 
 from mabrid.server.config import (
     RuntimeConfiguration,
-    RuntimeTopologyCandidate,
+    RuntimeFileCandidate,
     RuntimeUpstreamConfig,
 )
 
@@ -31,7 +31,7 @@ class TopologyConfigurationError(ValueError):
 
 def build_topology_definitions(
     configuration: RuntimeConfiguration,
-    candidate: RuntimeTopologyCandidate | None = None,
+    candidate: RuntimeFileCandidate | None = None,
     *,
     allow_unconfigured_host: bool = False,
 ) -> tuple[list[UpstreamServerDefinition], list[EndpointDefinition]]:
@@ -104,14 +104,15 @@ def build_topology_definitions(
                     f"Invalid bindings for endpoint '{name}'."
                 ) from exc
 
-    target_slug = configuration.agent_host.endpoint_slug
+    host = candidate.agent_host if candidate is not None else configuration.agent_host
+    target_slug = host.endpoint_slug
     if (
-        configuration.agent_host.enabled
+        host.enabled
         and not (allow_unconfigured_host and not upstreams and not endpoints)
         and not any(endpoint.slug == target_slug and endpoint.enabled for endpoint in endpoints)
     ):
         raise TopologyConfigurationError(
-            f"Agent Target '{configuration.agent_host.target_id}' references endpoint "
+            f"Agent Target '{host.target_id}' references endpoint "
             f"'{target_slug}', which is not published and enabled."
         )
     enabled_upstreams = {upstream.server_id for upstream in upstreams.values() if upstream.enabled}

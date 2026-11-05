@@ -59,7 +59,11 @@ class RuntimeUpstreamConfig(BaseModel):
 
 @dataclass(frozen=True)
 class RuntimeConfiguration:
-    """Typed startup settings and the selected file-backed Gateway topology."""
+    """Typed startup settings plus the runtime-file Gateway topology and Agent Host selection.
+
+    `agent_host` and `agent_host_signature` describe the Host settings this process started
+    with; changing them in the runtime file requires a restart.
+    """
 
     config_path: Path
     bridge: BridgeRuntimeConfig
@@ -68,7 +72,8 @@ class RuntimeConfiguration:
     endpoints: dict[str, EndpointFileConfig]
     diagnostic_upstream: str | None
     agent_host: RuntimeAgentHostConfig = field(default_factory=RuntimeAgentHostConfig)
-    topology_source: Literal["runtime_file", "unconfigured", "provided"] = "provided"
-    topology_hash: str | None = None
-    topology_error: str | None = None
+    agent_host_signature: str | None = None
+    runtime_source: Literal["runtime_file", "unconfigured", "provided"] = "provided"
+    runtime_hash: str | None = None
+    runtime_error: str | None = None
     static_signature: str | None = None

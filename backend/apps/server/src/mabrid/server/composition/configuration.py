@@ -13,8 +13,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from mabrid.server.config import (
     ConfigError,
     RuntimeConfiguration,
-    RuntimeTopologyCandidate,
-    load_runtime_topology,
+    RuntimeFileCandidate,
+    load_runtime_candidate,
     read_process_signature,
 )
 from mabrid.server.logging import get_logger
@@ -57,6 +57,7 @@ class ConfigurationApplyError(RuntimeError):
         code: Literal[
             "configuration_invalid",
             "configuration_conflict",
+            "configuration_restart_required",
             "configuration_ledger_error",
             "configuration_storage_error",
         ],
@@ -70,7 +71,8 @@ class GatewayConfigurationManager:
     """Serialize reconciliation, publication, and status for the current Gateway process.
 
     SQLite heads and the active publication move together under one apply lock. Existing
-    Sessions keep their captured plans; this service does not mutate Agent Host composition.
+    Sessions keep their captured plans; this service does not mutate Agent Host composition, so
+    a runtime file whose `agentHost` section differs from the startup section is rejected whole.
     """
 
     def __init__(
@@ -111,18 +113,20 @@ class GatewayConfigurationManager:
                 self._applied_source = state.applied_source
                 self._applied_at = state.applied_at.replace(tzinfo=timezone.utc)
 
-        error = self._configuration.topology_error
-        candidate = RuntimeTopologyCandidate(
+        error = self._configuration.runtime_error
+        candidate = RuntimeFileCandidate(
             upstreams=self._configuration.upstreams,
             endpoints=self._configuration.endpoints,
-            source=self._configuration.topology_source,
-            content_hash=self._configuration.topology_hash,
+            agent_host=self._configuration.agent_host,
+            agent_host_signature=self._configuration.agent_host_signature,
+            source=self._configuration.runtime_source,
+            content_hash=self._configuration.runtime_hash,
         )
         if error is None:
             try:
                 await self._reconcile_and_publish(candidate, allow_unconfigured_host=True)
             except TopologyConfigurationError as exc:
-                if self._configuration.topology_source != "runtime_file":
+                if self._configuration.runtime_source != "runtime_file":
                     raise
                 error = str(exc)
         if error is not None:
@@ -153,7 +157,7 @@ class GatewayConfigurationManager:
                         self._last_error or "The configuration ledger is unavailable.",
                     )
             try:
-                candidate = load_runtime_topology(self._configuration)
+                candidate = load_runtime_candidate(self._configuration)
             except ConfigError as exc:
                 self._last_error = str(exc)
                 raise ConfigurationApplyError("configuration_invalid", str(exc)) from exc
@@ -161,6 +165,11 @@ class GatewayConfigurationManager:
                 raise ConfigurationApplyError(
                     "configuration_conflict",
                     "The configuration file changed. Refresh its status before applying.",
+                )
+            if candidate.agent_host_signature != self._configuration.agent_host_signature:
+                raise ConfigurationApplyError(
+                    "configuration_restart_required",
+                    "Agent Host settings changed. Restart the process to apply this file.",
                 )
             try:
                 await self._reconcile_and_publish(
@@ -180,7 +189,7 @@ class GatewayConfigurationManager:
             return self._status()
 
     async def _reconcile_and_publish(
-        self, candidate: RuntimeTopologyCandidate, *, allow_unconfigured_host: bool = False
+        self, candidate: RuntimeFileCandidate, *, allow_unconfigured_host: bool = False
     ) -> bool:
         upstreams, endpoints = build_topology_definitions(
             self._configuration, candidate, allow_unconfigured_host=allow_unconfigured_host
@@ -275,10 +284,14 @@ class GatewayConfigurationManager:
         desired_source = "unknown"
         error: str | None = None
         valid = True
+        host_changed = False
         try:
-            candidate = load_runtime_topology(self._configuration)
+            candidate = load_runtime_candidate(self._configuration)
             desired_hash = candidate.content_hash
             desired_source = candidate.source
+            host_changed = (
+                candidate.agent_host_signature != self._configuration.agent_host_signature
+            )
             build_topology_definitions(
                 self._configuration, candidate, allow_unconfigured_host=self._host_unavailable
             )
@@ -291,10 +304,10 @@ class GatewayConfigurationManager:
             error = str(exc)
             valid = False
 
-        restart_required = False
+        restart_required = host_changed
         if self._configuration.static_signature is not None:
             try:
-                restart_required = (
+                restart_required |= (
                     read_process_signature(self._configuration.config_path)
                     != self._configuration.static_signature
                 )

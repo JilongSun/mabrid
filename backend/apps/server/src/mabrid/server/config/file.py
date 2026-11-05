@@ -68,7 +68,7 @@ class HermesSessionFileConfig(CamelModel):
 
 
 class HermesAgentRuntimeFileConfig(CamelModel):
-    """Transitional YAML runtime selection/connection settings with an environment-secret reference."""
+    """Hermes runtime selection and connection settings with an environment-secret reference."""
 
     integration: Literal["hermes"] = "hermes"
     interface: Literal["openai-chat-completions"] = "openai-chat-completions"
@@ -79,7 +79,7 @@ class HermesAgentRuntimeFileConfig(CamelModel):
 
 
 class AgentHostFileConfig(CamelModel):
-    """Transitional YAML Target, endpoint assignment, and Host feature selection."""
+    """Single Target, endpoint assignment, and Host feature selection from the runtime file."""
 
     enabled: bool = False
     mcp_apps_enabled: bool = False
@@ -138,27 +138,24 @@ class EndpointFileConfig(CamelModel):
 
 
 class ProcessFileConfig(CamelModel):
-    """Validate restart-applied process settings and transitional Agent Host settings."""
+    """Validate restart-applied process settings from the static configuration file."""
 
     bridge: BridgeRuntimeConfig = Field(default_factory=BridgeRuntimeConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
-    agent_host: AgentHostFileConfig = Field(default_factory=AgentHostFileConfig)
-
-    @model_validator(mode="after")
-    def validate_agent_host(self) -> ProcessFileConfig:
-        if self.agent_host.enabled and self.bridge.advertised_base_url is None:
-            raise ValueError("enabled Agent Host requires 'bridge.advertisedBaseUrl'")
-        return self
 
 
-class TopologyFileConfig(CamelModel):
-    """Validate the desired Gateway topology independently of process settings."""
+class RuntimeFileConfig(CamelModel):
+    """Validate the runtime file's Gateway topology and Agent Host settings as one candidate.
+
+    Cross-file rules, such as the Host's need for an advertised base URL, are checked by the loader.
+    """
 
     upstreams: dict[str, UpstreamFileConfig] = Field(default_factory=dict)
     endpoints: dict[str, EndpointFileConfig] = Field(default_factory=dict)
+    agent_host: AgentHostFileConfig = Field(default_factory=AgentHostFileConfig)
 
     @model_validator(mode="after")
-    def validate_upstream_references(self) -> TopologyFileConfig:
+    def validate_upstream_references(self) -> RuntimeFileConfig:
         for endpoint_name, endpoint in self.endpoints.items():
             for binding in endpoint.bindings:
                 if binding.upstream not in self.upstreams:

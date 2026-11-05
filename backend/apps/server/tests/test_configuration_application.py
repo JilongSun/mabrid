@@ -38,9 +38,7 @@ from mabrid.server.persistence.sessions import SqlAlchemyBridgeSessionRepository
 from mabrid.server.persistence.topology import reconcile_topology
 
 
-def _static(path: Path, *, host: bool = False) -> None:
-    agent_host = (
-        """
+HOST = """
 agentHost:
   enabled: true
   targetId: fixture-target
@@ -49,25 +47,25 @@ agentHost:
     baseUrl: http://fixture-agent.invalid/v1
     apiKeyEnv: FIXTURE_AGENT_KEY
 """
-        if host
-        else ""
-    )
+
+
+def _static(path: Path) -> None:
     path.write_text(
-        f"""
+        """
 bridge:
   apiPort: 8765
   advertisedBaseUrl: http://mabrid.test:8765
 storage:
   sqlitePath: gateway.db
-{agent_host}
 """,
         encoding="utf-8",
     )
 
 
-def _runtime(path: Path, url: str, *, endpoint: str = "fixture") -> None:
+def _runtime(path: Path, url: str, *, endpoint: str = "fixture", host: str | None = None) -> None:
     path.write_text(
-        f"""
+        (host or "")
+        + f"""
 upstreams:
   fixture:
     transport: streamable-http
@@ -463,13 +461,13 @@ async def test_missing_host_endpoint_rejects_apply_and_invalid_first_start_degra
 ) -> None:
     config_path = tmp_path / "mabrid.yaml"
     runtime_path = tmp_path / "mabrid.runtime.yaml"
-    _static(config_path, host=True)
+    _static(config_path)
     monkeypatch.setenv("FIXTURE_AGENT_KEY", "fixture-secret")
-    _runtime(runtime_path, "https://old.example.test/mcp")
+    _runtime(runtime_path, "https://old.example.test/mcp", host=HOST)
     async with _running(config_path) as result:
         manager = result.gateway_management.configuration
         assert manager is not None and result.agent_host is not None
-        _runtime(runtime_path, "https://new.example.test/mcp", endpoint="different")
+        _runtime(runtime_path, "https://new.example.test/mcp", endpoint="different", host=HOST)
         status = await manager.status()
         assert not status.file_valid
         with pytest.raises(ConfigurationApplyError, match="not published and enabled"):
@@ -478,8 +476,8 @@ async def test_missing_host_endpoint_rejects_apply_and_invalid_first_start_degra
 
     other = tmp_path / "first-start"
     other.mkdir()
-    _static(other / "mabrid.yaml", host=True)
-    (other / "mabrid.runtime.yaml").write_text("endpoints: [invalid\n", encoding="utf-8")
+    _static(other / "mabrid.yaml")
+    (other / "mabrid.runtime.yaml").write_text(HOST + "endpoints: [invalid\n", encoding="utf-8")
     async with _running(other / "mabrid.yaml") as result:
         manager = result.gateway_management.configuration
         assert manager is not None and manager.has_error
@@ -492,9 +490,9 @@ async def test_unconfigured_host_can_be_enabled_after_a_later_restart(
 ) -> None:
     config_path = tmp_path / "mabrid.yaml"
     runtime_path = tmp_path / "mabrid.runtime.yaml"
-    _static(config_path, host=True)
+    _static(config_path)
     monkeypatch.setenv("FIXTURE_AGENT_KEY", "fixture-secret")
-    runtime_path.write_text("{}\n", encoding="utf-8")
+    runtime_path.write_text(HOST, encoding="utf-8")
     async with _running(config_path) as result:
         manager = result.gateway_management.configuration
         assert manager is not None
@@ -503,7 +501,7 @@ async def test_unconfigured_host_can_be_enabled_after_a_later_restart(
         assert not unconfigured.restart_required
         assert result.agent_host is None
 
-        _runtime(runtime_path, "https://new.example.test/mcp")
+        _runtime(runtime_path, "https://new.example.test/mcp", host=HOST)
         status = await manager.status()
         applied = await manager.apply(status.desired_hash)
         assert applied.host_unavailable and applied.restart_required
@@ -514,6 +512,82 @@ async def test_unconfigured_host_can_be_enabled_after_a_later_restart(
         manager = result.gateway_management.configuration
         assert manager is not None and result.agent_host is not None
         assert not (await manager.status()).host_unavailable
+
+
+async def test_agent_host_changes_reject_apply_until_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "mabrid.yaml"
+    runtime_path = tmp_path / "mabrid.runtime.yaml"
+    _static(config_path)
+    monkeypatch.setenv("FIXTURE_AGENT_KEY", "fixture-secret")
+    _runtime(runtime_path, "https://old.example.test/mcp", host=HOST)
+    async with _running(config_path) as result:
+        manager = result.gateway_management.configuration
+        assert manager is not None and result.agent_host is not None
+        previous = result.gateway.published_endpoints[0]
+
+        _runtime(runtime_path, "https://new.example.test/mcp", host=HOST)
+        unchanged_host = await manager.status()
+        assert unchanged_host.file_valid and not unchanged_host.restart_required
+        _runtime(
+            runtime_path,
+            "https://new.example.test/mcp",
+            host=HOST.replace("fixture-agent.invalid", "other-agent.invalid"),
+        )
+        status = await manager.status()
+        assert status.file_valid and status.pending and status.restart_required
+        app = create_app(result.gateway, gateway_management=result.gateway_management)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            rejected = await client.post(
+                "/api/v1/gateway/configuration/apply",
+                json={"expected_hash": status.desired_hash},
+            )
+        assert rejected.status_code == 409
+        assert rejected.json()["code"] == "configuration_restart_required"
+        assert result.gateway.published_endpoints[0] is previous
+        assert (await manager.status()).generation == unchanged_host.generation
+
+        _runtime(runtime_path, "https://new.example.test/mcp", host=HOST)
+        applied = await manager.apply((await manager.status()).desired_hash)
+        assert not applied.pending and not applied.restart_required
+        assert result.gateway.published_endpoints[0] is not previous
+
+    _runtime(runtime_path, "https://new.example.test/mcp")
+    async with _running(config_path) as result:
+        assert result.agent_host is None
+
+
+async def test_disabled_agent_host_changes_also_reject_apply_until_restart(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "mabrid.yaml"
+    runtime_path = tmp_path / "mabrid.runtime.yaml"
+    _static(config_path)
+    _runtime(runtime_path, "https://old.example.test/mcp")
+    async with _running(config_path) as result:
+        manager = result.gateway_management.configuration
+        assert manager is not None and result.agent_host is None
+        previous = result.gateway.published_endpoints[0]
+
+        _runtime(
+            runtime_path,
+            "https://new.example.test/mcp",
+            host="agentHost:\n  enabled: false\n  targetId: draft-target\n",
+        )
+        status = await manager.status()
+        assert status.file_valid and status.pending and status.restart_required
+        with pytest.raises(ConfigurationApplyError) as failure:
+            await manager.apply(status.desired_hash)
+        assert failure.value.code == "configuration_restart_required"
+        assert result.gateway.published_endpoints[0] is previous
+
+        _runtime(runtime_path, "https://new.example.test/mcp", host="agentHost: {enabled: false}\n")
+        applied = await manager.apply((await manager.status()).desired_hash)
+        assert not applied.pending and not applied.restart_required
+        assert result.gateway.published_endpoints[0] is not previous
 
 
 async def test_static_setting_changes_are_reported_but_not_hot_applied(tmp_path: Path) -> None:
