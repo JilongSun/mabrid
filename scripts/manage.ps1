@@ -91,7 +91,7 @@ try {
             [IO.File]::WriteAllText($envTarget, $envContent + "`n")
             Write-Output "Created $envTarget"
         }
-        Write-Output 'Configure process settings in mabrid.yaml and Gateway topology in mabrid.runtime.yaml.'
+        Write-Output 'Configure process settings in mabrid.yaml, and Gateway topology and Agent Host settings in mabrid.runtime.yaml.'
         exit 0
     }
     if (-not (Test-Path -LiteralPath $ConfigDir -PathType Container)) {

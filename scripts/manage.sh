@@ -54,7 +54,7 @@ if [ "$action" = setup ]; then
             '# API_SERVER_KEY=' >"$env_target"
         printf 'Created %s\n' "$env_target"
     fi
-    printf '%s\n' 'Configure process settings in mabrid.yaml and Gateway topology in mabrid.runtime.yaml.'
+    printf '%s\n' 'Configure process settings in mabrid.yaml, and Gateway topology and Agent Host settings in mabrid.runtime.yaml.'
     exit 0
 fi
 

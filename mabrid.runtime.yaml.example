@@ -1,6 +1,8 @@
-# Gateway topology is loaded only from mabrid.runtime.yaml beside mabrid.yaml.
-# Edit this file, then apply it from the Gateway configuration panel.
-# Missing or empty runtime configuration publishes no endpoints.
+# Gateway topology and Agent Host settings are loaded only from mabrid.runtime.yaml beside
+# mabrid.yaml. Edit this file, then apply it from the Gateway configuration panel.
+# Missing or empty runtime configuration publishes no endpoints and keeps Agent Host disabled.
+# Agent Host changes are restart-applied for now: applying a file whose enabled agentHost
+# section differs from the running Host is rejected until the process restarts.
 endpoints:
   test-endpoint:
     displayName: Test Endpoint
@@ -23,3 +25,18 @@ upstreams:
     transport: streamable-http
     url: http://localhost:8759/mcp
     # headers: {}
+
+# agentHost:
+#   enabled: true
+#   mcpAppsEnabled: true
+#   targetId: hermes-agent
+#   endpointSlug: test-endpoint
+#   runtime:
+#     integration: hermes
+#     interface: openai-chat-completions
+#     baseUrl: http://127.0.0.1:8642/v1
+#     apiKeyEnv: API_SERVER_KEY  # Read from the environment or the adjacent .env at startup.
+#     timeoutSeconds: 120
+#     sessions:
+#       apiRoot: http://127.0.0.1:8642
+#       bindingId: local-hermes

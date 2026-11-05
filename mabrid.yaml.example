@@ -10,5 +10,5 @@ storage:
   sqlitePath: ./backend/var/mabrid.db
   autoMigrate: true
 
-# Gateway upstreams and endpoints belong only in the adjacent mabrid.runtime.yaml.
-# Agent Host settings remain restart-applied in this file.
+# Gateway upstreams, endpoints, and Agent Host settings belong only in the adjacent
+# mabrid.runtime.yaml.
