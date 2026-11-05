@@ -59,7 +59,11 @@ installation: the process starts, publishes no endpoints, keeps Agent Host disab
 Gateway readiness as not ready. Gateway topology is accepted only from the runtime file;
 `upstreams` and `endpoints` in the static file are errors. There is no single-file import or fallback.
 The developer preview does not promise old-format or old-database upgrade compatibility.
-Agent Host settings remain static until the separate Host application batch.
+Agent Host settings are accepted only from the runtime file; `agentHost` in the static file is an
+error. Until the separate Host application batch, they remain restart-applied: an apply whose
+`agentHost` section differs from the one the process started with, including a disabled section, is
+rejected as a whole and reported as restart required, never partially applied. Without a Host
+ledger, an invalid runtime file at startup leaves the Host disabled and reports the error.
 
 Secret rotation and values for environment variables not present at startup require a restart.
 A reloadable secret source is deferred. Management reads and errors never return secret values.
@@ -222,7 +226,9 @@ selected because files remain directly reviewable and editable as the single
 ## Implementation Status
 
 The first Gateway configuration batch has controlled test and isolated browser evidence in the
-decision log. Runtime-only cleanup was approved on 2026-11-03. Agent Host live application,
+decision log. Runtime-only cleanup was approved on 2026-11-03. On 2026-11-04 Agent Host settings
+moved to the runtime file with unchanged fields and restart-applied behavior. Agent Host live
+application, Host last-known-good persistence,
 general file-writing management, and their outstanding access and secret contracts remain
 separate later batches. Compose integration is deferred and is not evidence of runtime-only
 deployment support.

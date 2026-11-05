@@ -131,7 +131,8 @@ per-Run presentation through typed ports. Both native and compatibility services
 coordinator. Server composition retains configuration, secrets, concrete adapters, repository
 construction, migrations, and cleanup; there is no dynamic registry or generic event bus.
 
-Native ports are selected by an optional `agentHost.runtime.sessions` mapping:
+Native ports are selected by an optional `agentHost.runtime.sessions` mapping in
+`mabrid.runtime.yaml`:
 
 ```yaml
 agentHost:

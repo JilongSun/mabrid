@@ -21,6 +21,9 @@ APIs, persisted separately from Agent Sessions. Process/deployment settings and 
 resolution retain their boundaries. Migration and safe runtime application remain pending; this
 does not add a write API, runtime hot reload, or management of Hermes's internal configuration.
 
+Preview amendment (2026-11-04): under ADR 0018 the `agentHost` section below lives in
+`mabrid.runtime.yaml`, not the static file. Its fields and restart-applied behavior are unchanged.
+
 ## Context
 
 ADR 0011 established one Agent Target for v0.1 and selected Hermes over non-streaming OpenAI Chat

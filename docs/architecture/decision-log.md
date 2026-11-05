@@ -35,14 +35,44 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 
 - Review identifier: `managed-config-foundations`.
 - Workstream: `feat/managed-config-and-recovery`.
-- Review state: **Approved for runtime-only Gateway cleanup**. The owner accepted
+- Review state: **Approved for the Agent Host runtime-file location batch**. The owner accepted
 	[ADR 0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md)
-	and authorized the bounded batch below; later batches and unresolved details require review.
-- Delivery: the first Gateway configuration skeleton and runtime-only cleanup are implemented.
-	The first batch has controlled tests and an isolated frontend smoke check; cleanup verification
-	is recorded below. Agent Host generation application and runtime-file editing are not included.
-- Next eligible work: review and approve the Agent Host configuration/application batch.
-	Deployment integration and the other remaining batches require their own scope review.
+	and authorized the bounded batches below; later batches and unresolved details require review.
+- Delivery: the first Gateway configuration skeleton, runtime-only cleanup, and the Agent Host
+	runtime-file location are implemented; verification is recorded below. Agent Host generation
+	application and runtime-file editing are not included.
+- Next eligible work: the frontend configuration entry and runtime-file editing design.
+	Agent Host live application, deployment integration, and the other remaining batches require
+	their own scope review.
+
+#### Agent Host Runtime-File Location (2026-11-04)
+
+The owner kept the Agent Host product position, fields, and behavior unchanged and approved only
+moving its settings into the runtime file:
+
+- `agentHost` is accepted only in `mabrid.runtime.yaml` and validated with the Gateway topology as
+	one candidate. The static file rejects it; there is no fallback or import.
+- Host settings stay restart-applied. An apply whose `agentHost` section differs from the one the
+	process started with, including changes to a disabled Host, is rejected as a whole with
+	`configuration_restart_required` and status reports restart required.
+- An invalid runtime file at startup, including a missing Host API-key variable or advertised base
+	URL, starts with the Host disabled and reports the runtime-file error. Host last-known-good
+	persistence remains part of the later Host application batch.
+- Deployment identity, single-runtime address derivation, cross-Session behavior, and remote
+	capability expression are deferred to later discussion, not this workstream.
+
+Verification on 2026-11-04:
+
+- `uv run --all-packages pytest -q --tb=short`: 416 tests passed, including static rejection of
+	`agentHost`, runtime-file Host resolution and errors, a whole-section Host signature, and
+	rejection of changed enabled or disabled Host settings without changing the publication or
+	generation.
+- `uv run pyright`, `uv run ruff check`, and `uv run ruff format --check`: passed. The frontend
+	contract check reports no drift.
+- `pnpm test src/features/gateway`: 62 tests passed, including the restart-required message.
+	`pnpm typecheck` and `pnpm lint` passed.
+- No live Agent/MCP operations or container acceptance were performed. Deployment documentation
+	and Compose artifacts still describe the earlier layout until a delivery review.
 
 #### Runtime-Only Preview Cleanup (2026-11-03)
 
@@ -56,7 +86,7 @@ The owner approved a breaking simplification rather than an old-format migration
 - Setup creates the static and runtime examples independently and never overwrites existing files.
 - The preview configuration-state schema may change in place; no upgrade from the earlier
 	adoption-marker schema is supported. Startup must not automatically reset an existing database.
-- Agent Host stays in the static configuration until its separate configuration/application batch.
+- Agent Host stayed in the static configuration in this batch; it moved on 2026-11-04 (above).
 	Compose integration is deferred; the existing deployment artifacts do not establish support for
 	this runtime-only layout. Container acceptance is outside this batch.
 - ADR 0018 replaces all of ADR 0008, including its surviving revision, Session, management-routing,
