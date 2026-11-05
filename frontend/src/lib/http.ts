@@ -7,11 +7,13 @@ const problemSchema = z.object({
 /** Preserve HTTP status separately from human-readable diagnostic messages. */
 export class HttpError extends Error {
   readonly status: number
+  readonly code: string | null
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code: string | null = null) {
     super(message)
     this.name = 'HttpError'
     this.status = status
+    this.code = code
   }
 }
 
@@ -54,7 +56,7 @@ async function requestJson<T>(path: string, schema: z.ZodType<T>, signal: AbortS
     const problem = problemSchema.safeParse(body)
     throw new HttpError(problem.success
       ? `${problem.data.detail} (${problem.data.code}, HTTP ${response.status})`
-      : `The ${service} request failed (HTTP ${response.status}).`, response.status)
+      : `The ${service} request failed (HTTP ${response.status}).`, response.status, problem.success ? problem.data.code : null)
   }
   const parsed = schema.safeParse(body)
   if (!parsed.success) throw new Error(`The ${service} response does not match the expected contract.`)

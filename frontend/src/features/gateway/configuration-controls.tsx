@@ -65,7 +65,9 @@ export function GatewayConfigurationControls({ revision, onApplied }: { revision
       }
     } catch (failure) {
       if (!controller.signal.aborted) {
-        if (failure instanceof GatewayHttpError && failure.status === 409) {
+        if (failure instanceof GatewayHttpError && failure.code === 'configuration_restart_required') {
+          setError('Agent Host settings in the runtime file changed. Restart the process to apply this file.')
+        } else if (failure instanceof GatewayHttpError && failure.status === 409) {
           setError('The configuration file changed. Refresh its status and review it before applying.')
         } else if (failure instanceof GatewayHttpError) {
           setError(failure.message)
@@ -96,7 +98,7 @@ export function GatewayConfigurationControls({ revision, onApplied }: { revision
       {status.error && <p role="alert" className="mt-3 text-sm text-destructive">{status.error}</p>}
       {status.recovery_required && <p className="mt-3 text-sm">Gateway publication is unavailable until configuration recovery succeeds.</p>}
       {status.host_unavailable && <p className="mt-3 text-sm">Agent Host is unavailable because its assigned endpoint was not available at startup.</p>}
-      {status.restart_required && <p className="mt-3 text-sm">A process restart is required to apply process settings or start the unavailable Agent Host.</p>}
+      {status.restart_required && <p className="mt-3 text-sm">A process restart is required to apply process or Agent Host settings, or to start the unavailable Agent Host.</p>}
       <div className="mt-4 flex flex-wrap gap-2">
         <Button onClick={() => void apply()} disabled={loading || applying || mustRefresh || !status.file_valid || (!status.pending && !status.error)}>
           {applying ? 'Applying...' : 'Apply file changes'}

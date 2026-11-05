@@ -99,17 +99,32 @@ describe('Gateway configuration application', () => {
     ])
   })
 
+  it('explains that changed Agent Host settings require a restart', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockImplementation(async (_input, options) => options?.method === 'POST'
+      ? json(problem(409, 'configuration_restart_required', 'Agent Host settings changed.'), 409)
+      : json({ ...pending, restart_required: true }))
+    const onApplied = vi.fn()
+    render(<GatewayConfigurationControls revision={0} onApplied={onApplied} />)
+
+    await screen.findByText('Changes pending')
+    await user.click(screen.getByRole('button', { name: 'Apply file changes' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('Restart the process')
+    expect(screen.getByRole('button', { name: 'Apply file changes' }).hasAttribute('disabled')).toBe(true)
+    expect(onApplied).not.toHaveBeenCalled()
+  })
+
   it('reports an invalid file, unavailable Host and restart requirement without applying', async () => {
     fetchMock.mockResolvedValue(json({
       ...pending,
       file_valid: false,
-      error: 'Invalid topology configuration.',
+      error: 'Invalid runtime configuration.',
       host_unavailable: true,
       restart_required: true,
     }))
     render(<GatewayConfigurationControls revision={0} onApplied={vi.fn()} />)
     expect(await screen.findByText('Invalid')).toBeDefined()
-    expect(screen.getByRole('alert').textContent).toContain('Invalid topology')
+    expect(screen.getByRole('alert').textContent).toContain('Invalid runtime')
     expect(screen.getByText(/Agent Host is unavailable/)).toBeDefined()
     expect(screen.getByText(/process restart is required/)).toBeDefined()
     expect(screen.getByRole('button', { name: 'Apply file changes' }).hasAttribute('disabled')).toBe(true)

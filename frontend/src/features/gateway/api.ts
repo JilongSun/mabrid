@@ -85,8 +85,8 @@ export type GatewaySnapshot = {
 
 /** Preserve the Gateway error identity used by existing management consumers. */
 export class GatewayHttpError extends HttpError {
-  constructor(message: string, status: number) {
-    super(message, status)
+  constructor(message: string, status: number, code: string | null = null) {
+    super(message, status, code)
     this.name = 'GatewayHttpError'
   }
 }
@@ -99,7 +99,7 @@ export async function readGateway<T>(
   try {
     return await readJson(`/api/v1/gateway/${path}`, schema, signal, 'Gateway')
   } catch (error) {
-    if (error instanceof HttpError) throw new GatewayHttpError(error.message, error.status)
+    if (error instanceof HttpError) throw new GatewayHttpError(error.message, error.status, error.code)
     throw error
   }
 }
@@ -137,7 +137,7 @@ export async function applyGatewayConfiguration(expectedHash: string | null, sig
       'Gateway',
     )
   } catch (error) {
-    if (error instanceof HttpError) throw new GatewayHttpError(error.message, error.status)
+    if (error instanceof HttpError) throw new GatewayHttpError(error.message, error.status, error.code)
     throw error
   }
 }
