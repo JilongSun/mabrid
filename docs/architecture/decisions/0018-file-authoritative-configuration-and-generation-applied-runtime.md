@@ -3,11 +3,14 @@
 - Status: Accepted
 - Date: 2026-11-02
 - Amended: 2026-11-03; runtime-only developer-preview configuration
+- Amended: 2026-11-10; bounded Gateway file editing, literal header operations, and deferred access hardening
 - Supersedes: ADR 0008, including its surviving constraints recorded below
 - Amends: ADR 0002 ([Configuration boundary](0002-sqlite-persistence-and-configuration-authority.md#configuration-boundary)),
   ADR 0014 ([Post-v0.1 product-configuration ownership](0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership),
   [Existing-database evolution and first-run setup](0014-read-only-v0-1-management-plane.md#existing-database-evolution-and-first-run-setup),
-  [Saved configuration and runtime application](0014-read-only-v0-1-management-plane.md#saved-configuration-and-runtime-application))
+  [Saved configuration and runtime application](0014-read-only-v0-1-management-plane.md#saved-configuration-and-runtime-application),
+  [Read-only management scope](0014-read-only-v0-1-management-plane.md#read-only-management-scope)
+  for post-v0.1 Gateway editing and its pre-write access/secret design gate)
 - Related: ADR 0001, ADR 0003, ADR 0005, ADR 0011, ADR 0012, and ADR 0016
 - Review entry: [`managed-config-foundations`](../decision-log.md#managed-configuration-and-release-foundations)
 
@@ -50,7 +53,7 @@ Configuration is split by how it is applied:
 | --- | --- | --- |
 | Static process configuration | Listener host and port, advertised base URL, storage path and migration policy, logging, diagnostic upstream selection, and future extension loading | Loaded at process start; a later change is reported as restart required and never partially applied |
 | Dynamic runtime configuration | Upstreams and transport connection settings, endpoints and endpoint-owned bindings, Agent Host enablement, Target, endpoint assignment, runtime integration, interface, connection, and deployment binding settings, and future UI preferences | Applied by a validated configuration generation without restarting the process |
-| Secret values | Credentials referenced by configuration | Configuration stores environment-variable references only; values come from the process environment fixed at startup |
+| Secret values | Host credentials and upstream connection values | Host credentials use startup environment-variable references; upstream headers and subprocess environment values may remain literal values in the runtime file, never returned by management reads |
 
 The static file remains `mabrid.yaml`. It is read-only to the management API. The dynamic settings
 move to `mabrid.runtime.yaml` in the same directory as the static file; no separate path setting is
@@ -65,11 +68,13 @@ error. Until the separate Host application batch, they remain restart-applied: a
 rejected as a whole and reported as restart required, never partially applied. Without a Host
 ledger, an invalid runtime file at startup leaves the Host disabled and reports the error.
 
-Secret rotation and values for environment variables not present at startup require a restart.
+Rotation of startup environment values, including variables not present at startup, requires a restart.
 A reloadable secret source is deferred. Management reads and errors never return secret values.
 The existing global `bridge.httpxTimeoutSeconds` remains unchanged and restart-applied in the first
-batch. Existing upstream header and process-environment values are a legacy compatibility concern;
-the first batch does not claim that their persisted values have already become secret references.
+batch. The 2026-11-10 editing amendment explicitly retains literal upstream values; management
+writes distinguish preserving, replacing, and removing values without returning their originals.
+Literal upstream header changes follow explicit Gateway apply for new Sessions, rather than the
+earlier blanket secret-rotation restart rule; existing Sessions retain their captured revisions.
 
 ### Files are the configuration authority
 
@@ -159,11 +164,16 @@ based on the runtime file's content hash, reject stale writes with a conflict, a
 atomically within its directory. A file that fails validation is never written by the API.
 The eventual first-party settings surface supports creating, inspecting, revising, enabling, and
 disabling upstreams and endpoints, including their bindings, without destructive history deletion.
-The owner deferred authentication design for the initial development-stage apply-only operation;
-it retains the existing unauthenticated access model and is not safe to expose to untrusted clients.
-General file-writing management routes still require a separately reviewed access and secret
-contract before they are enabled. The access boundary must be considered together with the MCP
-Gateway and deployment topology.
+On 2026-11-10 the owner approved the Gateway editing batch with the existing unauthenticated access
+model, explicitly deferring access-control changes. This amends the earlier pre-write access-design
+gate; these operations are not safe to expose to untrusted clients. Access control still requires
+joint review with the MCP Gateway and deployment topology. The runtime file contains sensitive
+values and requires operator-managed access protection.
+
+The editor uses typed whole-document Gateway writes and preserves the untouched Agent Host section
+and YAML comments. HTTP header values are write-only with preserve/replace/remove operations.
+Existing stdio entries only permit enablement changes; command, arguments, working directory, and
+environment remain file-managed. Agent Host editing and live application are outside this batch.
 
 Deployments that allow frontend editing mount a writable configuration directory rather than a
 single runtime file. The static file may remain read-only.
@@ -172,8 +182,9 @@ single runtime file. The static file may remain read-only.
 
 Management reads distinguish the active generation, including its number, applied file hash, and
 time, from the current file state, including its hash, validity, latest error, and whether it
-differs from the active generation. Restart required is reported only for static configuration
-changes. This replaces the topology `restart_required` latch proposed by ADR 0008.
+differs from the active generation. Restart required is reported for static configuration changes
+and, until Host generation application is delivered, changes to the complete Agent Host section.
+This replaces the topology `restart_required` latch proposed by ADR 0008.
 
 ### Preserved constraints
 
@@ -221,14 +232,16 @@ selected because files remain directly reviewable and editable as the single
 - Agent Host applied settings need ledger persistence for last-known-good startup.
 - Compose deployment changes from a single read-only file mount to a configuration directory for
   writable installations.
-- Secret changes remain restart-applied until a separate decision.
+- Startup environment-secret changes remain restart-applied; literal upstream header changes use
+  explicit Gateway apply under the 2026-11-10 amendment.
 
 ## Implementation Status
 
 The first Gateway configuration batch has controlled test and isolated browser evidence in the
 decision log. Runtime-only cleanup was approved on 2026-11-03. On 2026-11-04 Agent Host settings
 moved to the runtime file with unchanged fields and restart-applied behavior. Agent Host live
-application, Host last-known-good persistence,
-general file-writing management, and their outstanding access and secret contracts remain
-separate later batches. Compose integration is deferred and is not evidence of runtime-only
-deployment support.
+application and Host last-known-good persistence remain separate later batches. On 2026-11-10 the
+bounded Gateway runtime-file editor was implemented with controlled file/API/frontend tests and
+isolated browser evidence recorded in the decision log. Host editing, broader secret-reference
+contracts, and access hardening remain deferred. Compose integration is deferred and is not
+evidence of runtime-only deployment support.

@@ -1,8 +1,9 @@
 # Gateway topology and Agent Host settings are loaded only from mabrid.runtime.yaml beside
-# mabrid.yaml. Edit this file, then apply it from the Gateway configuration panel.
+# mabrid.yaml. Gateway Settings edits the desired topology; saving and applying are separate.
 # Missing or empty runtime configuration publishes no endpoints and keeps Agent Host disabled.
-# Agent Host changes are restart-applied for now: applying a file whose enabled agentHost
-# section differs from the running Host is rejected until the process restarts.
+# Any change to the agentHost section requires a process restart, even when Host is disabled.
+# Agent Host and stdio launch settings remain file-managed; stdio enablement is editable.
+# Header and subprocess environment values may contain secrets. Protect this file's access.
 endpoints:
   test-endpoint:
     displayName: Test Endpoint

@@ -1,6 +1,6 @@
 # ADR 0014: Read-Only v0.1 Management Plane
 
-- Status: Accepted; post-v0.1 configuration ownership and application amended by ADR 0018
+- Status: Accepted; post-v0.1 configuration ownership, application, and Gateway writes amended by ADR 0018
 - Date: 2026-09-11
 - Clarified: 2026-10-10; post-v0.1 product-configuration ownership
 - Amends: ADR 0001, ADR 0002, ADR 0003, ADR 0004, ADR 0008, ADR 0010, and ADR 0011 for
@@ -12,6 +12,12 @@ ownership, and design access protection for general configuration writes continu
 ADR 0018's 2026-11-03 developer-preview amendment removes old-database upgrade and YAML import
 compatibility. Current-schema history and Session/Run ownership remain protected. Read contracts
 remain useful validation boundaries, not promises of stable developer-preview interfaces.
+
+ADR 0018's owner-approved 2026-11-10 amendment permits bounded Gateway runtime-file editing with
+write-only literal header operations and explicitly defers authentication, RBAC, and durable
+secret-reference design beyond that batch. This is a scoped exception to the pre-write design gate
+below, not approval for untrusted deployment or general Host editing. Runtime-file edit payloads
+reuse file-shaped endpoint fields; the historical v0.1 read contracts remain unchanged.
 
 ## Context
 

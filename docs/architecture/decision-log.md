@@ -35,15 +35,60 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 
 - Review identifier: `managed-config-foundations`.
 - Workstream: `feat/managed-config-and-recovery`.
-- Review state: **Approved for the Agent Host runtime-file location batch**. The owner accepted
+- Review state: **Approved for the Gateway runtime-file editing batch**. The owner accepted
 	[ADR 0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md)
 	and authorized the bounded batches below; later batches and unresolved details require review.
 - Delivery: the first Gateway configuration skeleton, runtime-only cleanup, and the Agent Host
-	runtime-file location are implemented; verification is recorded below. Agent Host generation
-	application and runtime-file editing are not included.
-- Next eligible work: the frontend configuration entry and runtime-file editing design.
-	Agent Host live application, deployment integration, and the other remaining batches require
-	their own scope review.
+	runtime-file location are implemented, together with the Gateway runtime-file editor assessed
+	on 2026-11-10; verification is recorded below. Agent Host generation application is not included.
+- Next eligible work: review the next bounded batch before implementation. Agent Host live
+	application, deployment integration, CI/version handling, and other remaining batches require
+	their own scope review; this delivery does not authorize them.
+
+#### Gateway Runtime-File Editing (2026-11-10)
+
+The owner approved structured Gateway configuration reads and whole-document writes with
+file-hash concurrency, complete candidate validation, and atomic replacement. Saving changes the
+desired file only; a separate apply uses the returned hash. The frontend also offers save-and-apply
+without implying a transaction across file persistence and runtime publication.
+
+- Preserve YAML comments and untouched nodes using `ruamel.yaml`; review example comments for
+	consistency with the editor and setup. Do not expose raw YAML or secret values in management reads.
+- HTTP upstream header values use explicit preserve/replace/remove semantics and remain literal
+	values in the protected runtime file. Their replacements follow explicit Gateway apply for new
+	Sessions; Agent Host credentials retain startup environment references and restart behavior.
+- Existing stdio entries may only change enablement; their launch configuration stays file-managed.
+	Endpoint-owned bindings remain editable. Do not create stdio commands through this editor.
+- Agent Host configuration is read-only and preserved on writes, with unchanged restart behavior.
+- Object keys cannot be renamed in place. Removing editable objects preserves applied history;
+	immutable revisions and existing Session ownership are unchanged.
+- Access-control changes are explicitly deferred from this batch. The editor retains the existing
+	unauthenticated access model, is restricted operationally to trusted deployments, and is not safe
+	to expose to untrusted clients. This amends the earlier pre-write access-design gates in ADRs
+	0014 and 0018; it does not establish an authentication or browser-origin security boundary.
+- No README, Docker/Compose integration, Host hot application, file watching, CI, or release work.
+
+Required verification: controlled file/API tests for stale hashes, redaction and secret operations,
+complete validation, stdio/Host preservation, comment retention, failed replacement, and first-run
+creation; frontend tests for edits, save/apply separation, conflicts, and unknown outcomes.
+
+Delivery assessment on 2026-11-10: **Implemented for the approved Gateway editor scope**.
+
+- `uv run --all-packages pytest -q --tb=short`: 428 tests passed, including desired-file saves
+	without ledger/publication mutation, explicit application, full topology validation, stale hashes,
+	first-run creation, redacted errors, header operations, stdio/Host retention, replacement failure,
+	and setup-example comments and Host templates surviving edits.
+- `uv run ruff check`, `uv run pyright`, and the frontend contract `--check`: passed. Changed
+	Python files are Ruff-formatted. The preview contract adds GET/PUT runtime-file routes and edit
+	models; existing route and schema definitions are structurally unchanged.
+- `pnpm test`: 181 frontend tests passed; typecheck, lint, and production build passed. The build
+	reports a large-chunk warning; bundle optimization is outside this batch.
+- Controlled Chromium checks at 1280x900 and 390x844 verified Settings navigation, retained drafts,
+	write-only headers, stdio restrictions, save/apply hash ordering, conflict/reload, and unknown
+	outcomes without retry. Screenshots and control bounds showed no horizontal overflow or overlap.
+	All API traffic used synthetic intercepted responses, not a live deployment.
+- No real Agent/MCP operations or container acceptance were performed. Access hardening, Host
+	editing/live application, and deployment integration remain outside this assessment.
 
 #### Agent Host Runtime-File Location (2026-11-04)
 
@@ -125,7 +170,7 @@ land as an independently verified slice without making it a separate product obj
 
 | Concern | Existing authority to preserve | Required reconciliation before the affected batch |
 | --- | --- | --- |
-| Configuration authority and write scope | [0002](decisions/0002-sqlite-persistence-and-configuration-authority.md), [0014](decisions/0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership), [0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md) | YAML is the desired-state authority and SQLite retains applied revisions; first-run setup, general write protection, and secret handling remain to be designed without destructive database updates |
+| Configuration authority and write scope | [0002](decisions/0002-sqlite-persistence-and-configuration-authority.md), [0014](decisions/0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership), [0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md) | YAML is the desired-state authority and SQLite retains applied revisions; Gateway file writes and literal header operations are approved above, access hardening is explicitly deferred, and Host editing needs its own review without destructive database updates |
 | Revision writes and runtime application | [0014](decisions/0014-read-only-v0-1-management-plane.md#saved-configuration-and-runtime-application), [0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md) | Apply dynamic configuration through immutable generations while preserving dependent endpoint revisions and active Session ownership; process settings remain restart-applied |
 | Runtime configuration and durable ownership | [0011](decisions/0011-single-agent-target-and-endpoint-assignment.md), [0012](decisions/0012-agent-runtime-profiles-and-integration-composition.md), [0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md) | Reconcile Target assignment, integration/interface selection, deployment identity, active/unknown Runs, and old Session bindings before changing configuration ownership |
 | Fault handling required by configuration delivery | [0003](decisions/0003-mcp-apps-gateway-and-optional-agent-host.md), [0005](decisions/0005-upstream-transport-task-ownership.md), [0013](decisions/0013-backend-semantic-boundaries-and-mabrid-code-identity.md) | Preserve degradation and worker ownership; identify the actually necessary timeout/recovery slice, if any, rather than approving a general recovery system |
@@ -133,7 +178,8 @@ land as an independently verified slice without making it a separate product obj
 
 ADR 0014 narrowed v0.1 delivery, not the permanent configuration goal. The preview cleanup removes
 upgrade compatibility, not the requirement to retain history during normal configuration changes.
-Automatic database reset remains unsupported. The new API/secret contracts still need design.
+Automatic database reset remains unsupported. Host editing and broader secret-reference contracts
+still need design beyond the approved Gateway editor.
 
 #### Accepted Configuration Direction
 
@@ -146,7 +192,7 @@ and generation-applied topology and Agent Host runtime configuration:
 | File layout | Read-only static `mabrid.yaml` plus a writable dynamic runtime file in a mounted directory |
 | Object identity | Configuration keys normalized to slugs; a rename disables the old identity and creates a new one |
 | Removed or disabled endpoint | Existing bridge Sessions continue until they close naturally |
-| Secret value changes | Restart-applied for now |
+| Secret value changes | Startup environment values remain restart-applied; the 2026-11-10 amendment applies literal upstream headers through explicit Gateway apply |
 | Apply trigger | Explicit management apply and startup; file watching deferred |
 
 Accepted amendments and replacement:
@@ -166,9 +212,8 @@ Remaining design items for their affected batches:
 	in the first batch.
 - Runtime address changes under an unchanged deployment binding (local issue LOCAL-002).
 - Management and MCP Gateway access boundaries, and secret-reference set/preserve/replace/clear
-	semantics. The owner deferred authentication for the development-stage apply-only operation;
-	this does not approve unprotected general file-writing management or untrusted deployment.
-- Comment and formatting preservation when the API rewrites the runtime file.
+	semantics beyond literal upstream headers. The owner explicitly deferred access-control changes
+	for the Gateway editor above; no untrusted deployment or general Host writer is approved.
 
 Delivery order:
 
@@ -179,15 +224,17 @@ Delivery order:
 	 states. Preserve existing Agent Host startup behavior until its separate batch.
 2. **Agent Host generation application**: snapshot capture by Session and Run operations, deferred
 	 client release, unsettled-Run guards, ledger persistence, and the deployment-identity decision.
-3. **Management writes and frontend settings**: write protection, validated atomic file writes with
-	 hash-based conflicts, secret-reference semantics, and settings pages.
+3. **Management writes and frontend settings**: Gateway editing is delivered above with validated
+	 atomic writes, hash-based conflicts, and write-only literal header operations. Host editing,
+	 broader secret-reference contracts, and access hardening require separate review.
 4. **First-run setup** and optional coalesced file watching.
 
 Later batches require their own approval.
 
 #### Questions For Subsequent Reviews
 
-1. What write-access trust boundary and secret set/preserve/replace/clear contract apply? Which
+1. What future access hardening and broader secret-reference contract apply beyond the approved
+	 trusted-deployment Gateway editor? Which
 	 runtime address/deployment-binding changes can be accepted while execution is active or unknown?
 2. What is the complete Host configuration transaction and application contract,
 	 including dependent revisions, conflict responses, and preserved Session ownership?
