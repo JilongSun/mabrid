@@ -183,6 +183,20 @@ def _load_runtime_file(
         runtime_raw = {}
         content_hash = None
         source = "unconfigured"
+    return resolve_runtime_document(
+        runtime_raw, config_path, bridge, diagnostic_upstream, content_hash, source
+    )
+
+
+def resolve_runtime_document(
+    runtime_raw: dict[str, object],
+    config_path: Path,
+    bridge: BridgeRuntimeConfig,
+    diagnostic_upstream: str | None,
+    content_hash: str | None,
+    source: Literal["runtime_file", "unconfigured"] = "runtime_file",
+) -> RuntimeFileCandidate:
+    """Resolve a complete candidate identically for file loading and validated editing."""
     try:
         config = RuntimeFileConfig.model_validate(runtime_raw)
     except ValidationError as exc:

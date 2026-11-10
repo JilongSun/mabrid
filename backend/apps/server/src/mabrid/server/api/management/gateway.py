@@ -14,6 +14,8 @@ from mabrid.server.composition.configuration import (
     ConfigurationApplyError,
     GatewayConfigurationManager,
 )
+from mabrid.server.composition.topology import TopologyConfigurationError
+from mabrid.server.config.editor import ConfigurationEditError, RuntimeEditRequest, RuntimeEditView
 from mabrid.server.logging import get_logger
 
 from .cursors import decode_session_cursor, encode_session_cursor
@@ -31,6 +33,24 @@ from .dto import (
 from .errors import ManagementProblem, problem, problem_responses
 
 logger = get_logger(__name__)
+
+
+def _editing_problem(error: ConfigurationEditError) -> ManagementProblem:
+    status = (
+        409
+        if error.code == "configuration_conflict"
+        else 503
+        if error.code == "configuration_file_error"
+        else 422
+    )
+    return ManagementProblem(
+        problem(
+            code=error.code,
+            title="Runtime configuration editing failed",
+            status=status,
+            detail=str(error),
+        )
+    )
 
 
 def create_gateway_management_router(
@@ -60,6 +80,32 @@ def create_gateway_management_router(
     async def get_configuration() -> GatewayConfigurationResponse:
         status = await _configuration_manager(management).status()
         return GatewayConfigurationResponse.model_validate(status, from_attributes=True)
+
+    @router.get(
+        "/configuration/runtime",
+        response_model=RuntimeEditView,
+        responses=problem_responses(422, 503),
+    )
+    async def read_runtime() -> RuntimeEditView:
+        try:
+            return await _configuration_manager(management).read_runtime()
+        except ConfigurationEditError as exc:
+            raise _editing_problem(exc) from exc
+
+    @router.put(
+        "/configuration/runtime",
+        response_model=RuntimeEditView,
+        responses=problem_responses(409, 422, 503),
+    )
+    async def save_runtime(request: RuntimeEditRequest) -> RuntimeEditView:
+        try:
+            return await _configuration_manager(management).save_runtime(request)
+        except ConfigurationEditError as exc:
+            raise _editing_problem(exc) from exc
+        except TopologyConfigurationError as exc:
+            raise _editing_problem(
+                ConfigurationEditError("configuration_invalid", str(exc))
+            ) from exc
 
     @router.post(
         "/configuration/apply",

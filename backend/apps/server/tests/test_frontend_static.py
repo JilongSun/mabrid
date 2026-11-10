@@ -45,6 +45,7 @@ def application() -> FastAPI:
     [
         "/",
         "/gateway/topology",
+        "/gateway/settings",
         "/gateway/endpoints/example",
         "/agent-host",
         "/agent-host/sessions/example",

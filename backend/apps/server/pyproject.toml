@@ -19,6 +19,7 @@ dependencies = [
   "starlette>=0.27.0",
   "uvicorn>=0.30.0",
   "sse-starlette>=3,<4",
+  "ruamel-yaml>=0.18,<0.19",
 ]
 
 [project.scripts]

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Literal
 
 import anyio
+from anyio.to_thread import run_sync
 from mabrid.application.gateway.sessions import GatewaySessionCoordinator
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -18,6 +19,7 @@ from mabrid.server.config import (
     read_process_signature,
 )
 from mabrid.server.logging import get_logger
+from mabrid.server.config.editor import RuntimeEditRequest, RuntimeEditView, RuntimeFileEditor
 from mabrid.server.persistence import SqliteDatabase
 from mabrid.server.persistence.schema import GatewayConfigurationStateRow
 from mabrid.server.persistence.topology import TopologyLedgerError, reconcile_topology
@@ -145,6 +147,23 @@ class GatewayConfigurationManager:
             if self._recovery_required:
                 await self._recover_after_storage_error()
             return self._status()
+
+    async def read_runtime(self) -> RuntimeEditView:
+        """Read the desired file, not the applied database heads."""
+        async with self._lock:
+            return await run_sync(RuntimeFileEditor(self._configuration).read)
+
+    async def save_runtime(self, request: RuntimeEditRequest) -> RuntimeEditView:
+        """Validate and save without changing the generation or persistent heads."""
+
+        def save() -> RuntimeEditView:
+            editor = RuntimeFileEditor(self._configuration)
+            content, candidate = editor.prepare(request)
+            build_topology_definitions(self._configuration, candidate)
+            return editor.write(content, request.expected_hash)
+
+        async with self._lock:
+            return await run_sync(save)
 
     async def apply(self, expected_hash: str | None) -> GatewayConfigurationStatus:
         """Apply exactly the file version the caller inspected, without restarting."""
