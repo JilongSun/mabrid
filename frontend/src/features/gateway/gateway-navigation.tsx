@@ -1,7 +1,7 @@
 import { useLayoutEffect, useEffect, useRef, type RefObject } from 'react'
 import { matchRoutes, useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom'
 
-export type GatewayView = 'endpoints' | 'upstreams' | 'topology'
+export type GatewayView = 'endpoints' | 'upstreams' | 'topology' | 'settings'
 export type GatewaySelection = { kind: 'endpoint' | 'upstream' | 'binding'; id: string }
 export type NavigateGateway = (view: GatewayView, selection: GatewaySelection) => void
 
@@ -13,6 +13,7 @@ const routes: { path: string; handle: { view: GatewayView; kind?: 'endpoint' | '
   { path: '/gateway/endpoints/:id', handle: { view: 'endpoints', kind: 'endpoint' } },
   { path: '/gateway/upstreams', handle: { view: 'upstreams' } },
   { path: '/gateway/upstreams/:id', handle: { view: 'upstreams', kind: 'upstream' } },
+  { path: '/gateway/settings', handle: { view: 'settings' } },
 ]
 
 export function gatewayObjectPath(kind: 'endpoint' | 'upstream', id: string) {
@@ -72,7 +73,7 @@ export function useGatewayNavigation(heading: RefObject<HTMLHeadingElement | nul
     ? { kind: selected, id: objectId } : null
   const configuration = params.get('configuration')
   const savedPaths = useRef<Record<GatewayView, string>>({
-    topology: '/gateway/topology', endpoints: '/gateway/endpoints', upstreams: '/gateway/upstreams',
+    topology: '/gateway/topology', endpoints: '/gateway/endpoints', upstreams: '/gateway/upstreams', settings: '/gateway/settings',
   })
   useGatewayPagePosition(heading, ready, found, Boolean(kind))
 

@@ -27,8 +27,20 @@ describe('workspace navigation', () => {
     expect(screen.getByRole('heading', { name: 'Gateway' })).toBeDefined()
     expect(screen.getByRole('tab', { name: 'Topology' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
-      'Topology', 'Endpoints', 'Upstreams',
+      'Topology', 'Endpoints', 'Upstreams', 'Settings',
     ])
+  })
+
+  it('opens the Settings deep link independently of applied topology', async () => {
+    window.history.replaceState(null, '', '/gateway/settings')
+    const original = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input, options) => String(input).endsWith('/configuration/runtime')
+      ? Promise.resolve(new Response(JSON.stringify({ content_hash: null, upstreams: {}, endpoints: {}, agent_host: { enabled: false, target_id: null, endpoint_slug: null } }), { headers: { 'content-type': 'application/json' } }))
+      : original(input, options))
+    render(<App />)
+    expect(screen.getByRole('tab', { name: 'Settings' }).getAttribute('aria-selected')).toBe('true')
+    expect(await screen.findByRole('button', { name: 'Add upstream' })).toBeDefined()
+    expect(screen.getByRole('region', { name: 'Runtime file editor' })).toBeDefined()
   })
 
   it('preserves the selected Gateway view when switching workspaces', async () => {

@@ -17,7 +17,7 @@ export class HttpError extends Error {
   }
 }
 
-type JsonRequest = { method: 'GET' } | { method: 'POST'; body: unknown }
+type JsonRequest = { method: 'GET' } | { method: 'POST' | 'PUT'; body: unknown }
 
 async function requestJson<T>(path: string, schema: z.ZodType<T>, signal: AbortSignal, service: string, request: JsonRequest, errorFromBody?: (body: unknown, status: number) => Error): Promise<T> {
   const timeout = AbortSignal.timeout(10_000)
@@ -25,10 +25,10 @@ async function requestJson<T>(path: string, schema: z.ZodType<T>, signal: AbortS
   try {
     response = await fetch(path, {
       signal: AbortSignal.any([signal, timeout]),
-      ...(request.method === 'POST' ? { method: 'POST', body: JSON.stringify(request.body) } : {}),
+      ...(request.method !== 'GET' ? { method: request.method, body: JSON.stringify(request.body) } : {}),
       headers: {
         Accept: 'application/json, application/problem+json',
-        ...(request.method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+        ...(request.method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
       },
       cache: 'no-store',
     })
@@ -69,4 +69,8 @@ export function readJson<T>(path: string, schema: z.ZodType<T>, signal: AbortSig
 
 export function postJson<T>(path: string, body: unknown, schema: z.ZodType<T>, signal: AbortSignal, service: string): Promise<T> {
   return requestJson(path, schema, signal, service, { method: 'POST', body })
+}
+
+export function putJson<T>(path: string, body: unknown, schema: z.ZodType<T>, signal: AbortSignal, service: string): Promise<T> {
+  return requestJson(path, schema, signal, service, { method: 'PUT', body })
 }

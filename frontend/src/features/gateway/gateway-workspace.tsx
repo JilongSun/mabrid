@@ -8,10 +8,11 @@ import { UpstreamsView } from './upstreams-view'
 import { TopologyView } from './topology-view'
 import { EndpointDetails, UpstreamDetails } from './gateway-details'
 import { GatewayConfigurationControls } from './configuration-controls'
+import { RuntimeConfigurationEditor } from './runtime-editor'
 import { useGatewayNavigation, type GatewayView } from './gateway-navigation'
 export type { GatewayView, GatewaySelection, NavigateGateway } from './gateway-navigation'
 
-const views = { topology: 'Topology', endpoints: 'Endpoints', upstreams: 'Upstreams' } as const
+const views = { topology: 'Topology', endpoints: 'Endpoints', upstreams: 'Upstreams', settings: 'Settings' } as const
 /** Owns the shared configuration reads, refresh lifecycle, and cross-view selection. */
 export function GatewayWorkspace({ onSnapshot }: { onSnapshot?: (snapshot: GatewaySnapshot) => void }) {
   const [revision, setRevision] = useState(0)
@@ -72,7 +73,8 @@ export function GatewayWorkspace({ onSnapshot }: { onSnapshot?: (snapshot: Gatew
           </div>
         </div>
         {showConfiguration && <GatewayConfigurationControls revision={revision} onApplied={refresh} />}
-        {navigation.found && !kind && view !== 'topology' && <div className="mt-5 flex flex-wrap gap-3">
+        <RuntimeConfigurationEditor active={navigation.found && view === 'settings'} onSaved={refresh} onApplied={refresh} />
+        {navigation.found && !kind && (view === 'endpoints' || view === 'upstreams') && <div className="mt-5 flex flex-wrap gap-3">
           <input id={`gateway-search-${view}`} type="search" aria-label={`Search ${view}`} placeholder={`Search ${view}`} value={query} className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm sm:max-w-sm" onChange={(event) => navigation.changeFilter('q', event.target.value)} />
           <select id={`gateway-configuration-${view}`} aria-label="Configuration filter" value={configuration} className="h-9 max-w-full rounded-md border bg-background px-3 text-sm" onChange={(event) => navigation.changeFilter('configuration', event.target.value)}>
             <option value="all">All configurations</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option>

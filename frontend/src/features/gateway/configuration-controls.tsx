@@ -84,7 +84,6 @@ export function GatewayConfigurationControls({ revision, onApplied }: { revision
 
   return <section id="gateway-configuration-controls" aria-labelledby="gateway-configuration-title" className="mt-5 rounded-lg border p-4">
     <h3 id="gateway-configuration-title" className="font-semibold">Configuration application</h3>
-    <p className="mt-2 text-sm text-muted-foreground">Edit the runtime file outside Mabrid, then apply it here. This does not edit the file or restart the process.</p>
     {loading && <p role="status" className="mt-3 text-sm">Loading configuration status...</p>}
     {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
     {status && <>
