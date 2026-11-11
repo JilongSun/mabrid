@@ -35,15 +35,55 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 
 - Review identifier: `managed-config-foundations`.
 - Workstream: `feat/managed-config-and-recovery`.
-- Review state: **Approved for the Gateway runtime-file editing batch**. The owner accepted
+- Review state: **Approved for the bounded Host reconfiguration policy below**. The owner accepted
 	[ADR 0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md)
-	and authorized the bounded batches below; later batches and unresolved details require review.
+	and the dated amendments below; the Host implementation contract still requires the focused
+	review identified below. Policy approval does not resolve its remaining transaction details.
 - Delivery: the first Gateway configuration skeleton, runtime-only cleanup, and the Agent Host
 	runtime-file location are implemented, together with the Gateway runtime-file editor assessed
 	on 2026-11-10; verification is recorded below. Agent Host generation application is not included.
-- Next eligible work: review the next bounded batch before implementation. Agent Host live
-	application, deployment integration, CI/version handling, and other remaining batches require
-	their own scope review; this delivery does not authorize them.
+- Next eligible work: finish the bounded Host reconfiguration contract review, then identify its
+	implementation batch and supporting frontend together. Deployment integration, CI/version
+	handling, and unrelated Agent Host capabilities remain separately scoped.
+
+#### Agent Host Reconfiguration Policy (2026-11-11)
+
+The owner approved a bounded simplification of Host reconfiguration instead of treating Gateway
+revision snapshots and last-known-good startup as mandatory Host mechanisms. This amends ADR 0018's
+Host snapshot, client-retirement, and configuration-ledger requirements; Gateway revisions, pinned
+bridge Sessions, and Gateway last-known-good startup are unchanged.
+
+- A Host's logical identity includes its declared `targetId` and runtime `integration`. Changing
+	either selects a new logical Host; existing Sessions must not silently acquire that identity.
+	The current Hermes implementation remains the supported template; this does not add integrations.
+- The native `bindingId` separately identifies a remote deployment. Changing it does not migrate
+	old Sessions or unresolved Runs. A URL change may update the same Host's connection when the
+	operator explicitly declares that the deployment is unchanged; neither equal nor different URLs
+	prove deployment identity. Machine-verifiable deployment identity is not part of this approval.
+- Apply Host changes only when there are no in-flight Host operations and no active or unsettled
+	Run. Serialize admission and reconfiguration so a new operation cannot start between the idle
+	check and replacement. Do not retain multiple executable Host generations or permanently pin
+	Agent Sessions to configuration revisions. Running operations keep a stable client until done.
+- Keep process-wide single-Target Run ownership, durable unresolved-Run claims, Session deployment
+	bindings, and tool/App attribution intact. Client replacement must not reset those safety facts.
+- Do not add a Host configuration revision ledger or Host last-known-good startup restoration.
+	Invalid Host startup configuration leaves the Host unavailable with an explicit error. A failed
+	runtime application leaves the current Host in place and the desired change unapplied; that is
+	not permission to restore historical Host configuration at startup.
+- Preserve secret redaction, startup environment-secret behavior, and external process-restart
+	ownership. No real Agent/MCP operations, database reset, or automatic business-operation retry
+	is authorized by this policy.
+
+Still to review before product implementation: interface and native-Session enablement transitions;
+the Gateway/Host publication transaction and status when only one component changes or can apply;
+the management write/access contract for Host settings; and the minimal state needed to explain
+applied versus desired Host configuration without making it a recovery source. The existing
+whole-file save hash is a concurrency token, not proof that every component has applied its content.
+
+Delivery: **Pending**. Current code still uses restart-applied Host composition and rejects an apply
+whose Host section differs from startup. This entry records accepted policy, not implementation or
+live acceptance. The next review must identify affected contracts, focused checks, and a coherent
+backend/frontend batch before changing that behavior.
 
 #### Gateway Runtime-File Editing (2026-11-10)
 
@@ -171,15 +211,15 @@ land as an independently verified slice without making it a separate product obj
 | Concern | Existing authority to preserve | Required reconciliation before the affected batch |
 | --- | --- | --- |
 | Configuration authority and write scope | [0002](decisions/0002-sqlite-persistence-and-configuration-authority.md), [0014](decisions/0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership), [0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md) | YAML is the desired-state authority and SQLite retains applied revisions; Gateway file writes and literal header operations are approved above, access hardening is explicitly deferred, and Host editing needs its own review without destructive database updates |
-| Revision writes and runtime application | [0014](decisions/0014-read-only-v0-1-management-plane.md#saved-configuration-and-runtime-application), [0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md) | Apply dynamic configuration through immutable generations while preserving dependent endpoint revisions and active Session ownership; process settings remain restart-applied |
-| Runtime configuration and durable ownership | [0011](decisions/0011-single-agent-target-and-endpoint-assignment.md), [0012](decisions/0012-agent-runtime-profiles-and-integration-composition.md), [0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md) | Reconcile Target assignment, integration/interface selection, deployment identity, active/unknown Runs, and old Session bindings before changing configuration ownership |
+| Revision writes and runtime application | [0014](decisions/0014-read-only-v0-1-management-plane.md#saved-configuration-and-runtime-application), [0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md) | Keep immutable Gateway generations and dependent endpoint revisions; Host changes use the idle-only policy above rather than revision-pinned Agent Sessions or Host last-known-good recovery; review the joint publication contract |
+| Runtime configuration and durable ownership | [0011](decisions/0011-single-agent-target-and-endpoint-assignment.md), [0012](decisions/0012-agent-runtime-profiles-and-integration-composition.md), [0016](decisions/0016-session-oriented-host-and-frontend-contract-readiness.md) | Preserve single-Target execution, durable unresolved ownership, and old Session bindings; distinguish logical Target/integration identity from deployment binding and finish interface-transition rules |
 | Fault handling required by configuration delivery | [0003](decisions/0003-mcp-apps-gateway-and-optional-agent-host.md), [0005](decisions/0005-upstream-transport-task-ownership.md), [0013](decisions/0013-backend-semantic-boundaries-and-mabrid-code-identity.md) | Preserve degradation and worker ownership; identify the actually necessary timeout/recovery slice, if any, rather than approving a general recovery system |
 | CI, versions, and release artifacts | [0004](decisions/0004-first-release-scope-and-distribution.md), existing OCI/native workflow, owner-approved workstream goal | Select source-version ownership, lockfile/build behavior, tag mapping, and CI permissions together; managed YAML removal does not require build-time secrets or user configuration |
 
 ADR 0014 narrowed v0.1 delivery, not the permanent configuration goal. The preview cleanup removes
 upgrade compatibility, not the requirement to retain history during normal configuration changes.
-Automatic database reset remains unsupported. Host editing and broader secret-reference contracts
-still need design beyond the approved Gateway editor.
+Automatic database reset remains unsupported. The Host policy above does not by itself complete
+Host editing, joint application, or broader secret-reference contracts.
 
 #### Accepted Configuration Direction
 
@@ -188,7 +228,7 @@ and generation-applied topology and Agent Host runtime configuration:
 
 | Choice | Selected direction |
 | --- | --- |
-| Database role | Applied-configuration revision ledger and last-known-good startup source |
+| Database role | Gateway applied-revision ledger and last-known-good source; Host Session/Run ownership persists, without a Host configuration recovery ledger under the 2026-11-11 amendment |
 | File layout | Read-only static `mabrid.yaml` plus a writable dynamic runtime file in a mounted directory |
 | Object identity | Configuration keys normalized to slugs; a rename disables the old identity and creates a new one |
 | Removed or disabled endpoint | Existing bridge Sessions continue until they close naturally |
@@ -207,7 +247,8 @@ Accepted amendments and replacement:
 
 Remaining design items for their affected batches:
 
-- Ledger representation of applied Agent Host settings for last-known-good startup.
+- Minimal Host applied/desired status and the Gateway/Host publication contract, without Host
+	configuration restoration at startup.
 - Any later optimization of the existing global upstream HTTP timeout; retain its current behavior
 	in the first batch.
 - Runtime address changes under an unchanged deployment binding (local issue LOCAL-002).
@@ -222,8 +263,9 @@ Delivery order:
 	 snapshot with generation numbers and atomic published-endpoint replacement; add explicit Gateway
 	 topology apply, management reads of active generation and file state, and their supporting frontend
 	 states. Preserve existing Agent Host startup behavior until its separate batch.
-2. **Agent Host generation application**: snapshot capture by Session and Run operations, deferred
-	 client release, unsettled-Run guards, ledger persistence, and the deployment-identity decision.
+2. **Agent Host idle-only reconfiguration**: the policy above replaces the earlier multi-generation
+	 Host snapshot and last-known-good proposal. Finish admission, identity, interface transitions,
+	 and joint application contracts before the backend/frontend implementation batch.
 3. **Management writes and frontend settings**: Gateway editing is delivered above with validated
 	 atomic writes, hash-based conflicts, and write-only literal header operations. Host editing,
 	 broader secret-reference contracts, and access hardening require separate review.

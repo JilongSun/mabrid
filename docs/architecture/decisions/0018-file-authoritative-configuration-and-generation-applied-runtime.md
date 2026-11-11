@@ -4,6 +4,7 @@
 - Date: 2026-11-02
 - Amended: 2026-11-03; runtime-only developer-preview configuration
 - Amended: 2026-11-10; bounded Gateway file editing, literal header operations, and deferred access hardening
+- Amended: 2026-11-11; Host identity, idle-only reconfiguration, and no Host last-known-good restoration
 - Supersedes: ADR 0008, including its surviving constraints recorded below
 - Amends: ADR 0002 ([Configuration boundary](0002-sqlite-persistence-and-configuration-authority.md#configuration-boundary)),
   ADR 0014 ([Post-v0.1 product-configuration ownership](0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership),
@@ -65,8 +66,10 @@ The developer preview does not promise old-format or old-database upgrade compat
 Agent Host settings are accepted only from the runtime file; `agentHost` in the static file is an
 error. Until the separate Host application batch, they remain restart-applied: an apply whose
 `agentHost` section differs from the one the process started with, including a disabled section, is
-rejected as a whole and reported as restart required, never partially applied. Without a Host
-ledger, an invalid runtime file at startup leaves the Host disabled and reports the error.
+rejected as a whole and reported as restart required, never partially applied. This describes the
+current delivery, not a requirement for the idle-only Host policy accepted on 2026-11-11 below.
+Invalid Host configuration at startup leaves the Host unavailable and reports the error; a Host
+configuration recovery ledger is not required by the amended policy.
 
 Rotation of startup environment values, including variables not present at startup, requires a restart.
 A reloadable secret source is deferred. Management reads and errors never return secret values.
@@ -93,9 +96,11 @@ SQLite stops being the configuration authority and becomes the applied-configura
   process starts from the ledger heads and reports the configuration error rather than refusing to
   start. Without a ledger, it starts unconfigured.
 
-Agent Host settings that the ledger must restore are recorded as applied revisions with secret
-references, not secret values. Persisting Agent Sessions still does not persist Target
-configuration by itself.
+These configuration-ledger and last-known-good requirements apply to Gateway topology. The
+2026-11-11 amendment removes the proposed Host configuration-revision and startup-restoration
+requirements. Agent Session identity, deployment bindings, and unresolved Run ownership remain
+durable independently of configuration history. Any later Host application record is diagnostic
+state, not an alternative configuration authority or an automatic recovery source.
 
 ### Reconciliation replaces seed-if-empty
 
@@ -120,17 +125,19 @@ Session, or unsettled-Run preservation during normal application.
 
 ### Generation-applied runtime configuration
 
-The running process serves one immutable active configuration snapshot with a monotonically
-increasing, process-local generation number. A snapshot contains the published endpoint index and
-its executable plans, the effective Agent Host configuration, and future UI preferences.
+The Gateway serves one immutable active topology snapshot with a monotonically increasing,
+process-local generation number. It contains the published endpoint index and executable plans.
+The 2026-11-11 amendment does not require the Host to share this revision model or Agent Sessions
+to pin a configuration generation. The original shared Gateway/Host snapshot requirement is
+replaced by the Host policy below; their joint application/status contract still needs review.
 
-Applying a configuration is serialized and atomic:
+The delivered Gateway application pipeline is serialized and atomic:
 
 1. Read the runtime file and record its content hash.
 2. Parse and validate it, including cross-object checks such as binding cardinality, namespace
    uniqueness, and Agent Host endpoint assignment to an endpoint enabled in the same candidate.
 3. Resolve secret references and detect static-file changes, which only set restart required.
-4. Build the complete candidate snapshot, including executable plans.
+4. Build the candidate Gateway snapshot, including executable plans.
 5. Reconcile the ledger in one short database transaction.
 6. Replace the active snapshot reference and publish a generation-change event.
 7. Release the previous snapshot after its last captured user finishes.
@@ -139,20 +146,45 @@ Any failure before step 6 leaves the active generation unchanged and reports the
 file hash. Partial application is not allowed. A database commit followed by a failure to replace
 the in-memory reference is not an expected path; if it occurs, the ledger heads are reloaded.
 
-In-flight work is not interrupted:
+In-flight Gateway work is not interrupted:
 
 - A bridge Session captures its endpoint plan at creation and keeps it until it closes naturally.
   Existing Sessions are not migrated, closed, or notified with `list_changed` because of a new
   generation. New Sessions use the active generation; removed or disabled endpoints are not found
   for new Sessions.
-- Agent Host Session and Run operations capture the Agent Host snapshot when they start. New
-  runtime clients serve only later operations; old clients close after their last captured
-  operation finishes.
-- A generation that changes the Target identity or the runtime deployment binding is rejected as a
-  whole while that Target has an active or unknown Run. Such a change never reassigns existing Agent
-  Sessions to another remote deployment or releases an unsettled Run lease. Changing a runtime
-  address under an unchanged deployment binding requires the deployment-identity design tracked by
-  the review entry before it can be accepted.
+
+### Host identity and idle-only reconfiguration
+
+On 2026-11-11 the owner accepted a simpler Host policy rather than Gateway-style revision-pinned
+Sessions, multiple live client generations, or a Host last-known-good configuration ledger:
+
+- Logical Host identity includes `targetId` and runtime `integration`. Changing either selects a
+  new logical Host; old Agent Sessions must not silently acquire that identity. `targetId` is the
+  local product identity, not proof of a remote Agent's identity. This does not add integrations
+  beyond the currently supported Hermes template or permit multiple active Targets.
+- Native `bindingId` identifies the remote deployment separately from logical Host identity.
+  Changing it does not reassign existing Sessions or unresolved Runs. A connection URL may change
+  without selecting a new Host when the operator explicitly declares the same deployment binding;
+  a URL by itself does not prove deployment identity. Automatic deployment verification remains
+  outside this amendment. Interface/native-Session transition rules still require focused review.
+- Reconfiguration requires no in-flight Host operation and no active or unsettled Run. Operation
+  admission and replacement share a serialization boundary: an idle check followed by an unguarded
+  replacement is insufficient. Running operations use a stable client until completion; later
+  operations may use updated connection settings without permanently pinning their Agent Session
+  to the old configuration. There is no requirement to keep multiple executable Host generations.
+- Process-wide single-Target execution ownership, durable Run claims, and tool/App attribution
+  survive client replacement. Recomposition must not reset them or infer remote termination from
+  an absent local request. Gateway changes with an unchanged Host are not blocked merely by Host
+  activity; the transaction for a candidate that changes both remains to be reviewed.
+- Invalid Host startup configuration makes the Host unavailable with an explicit error. Do not
+  restore an earlier Host configuration from SQLite. A failed runtime application leaves the
+  current Host in place and reports the desired change as unapplied. Preserving that running
+  instance is distinct from restoring historical configuration after restart.
+
+Gateway revisions and last-known-good startup are unchanged. Static process settings and startup
+environment-secret rotation remain restart-applied. The focused review must settle joint
+Gateway/Host publication, component status, and management contracts before product implementation;
+a whole-file save hash alone cannot establish that both components applied the same content.
 
 ### Triggers and management writes
 
@@ -206,8 +238,8 @@ This replaces the topology `restart_required` latch proposed by ADR 0008.
 
 - Active-session topology migration or forced closure on configuration change.
 - File watching in the first delivery, reloadable secrets, and a process-restart API.
-- Durable draft/published workflows and rollback orchestration beyond keeping the previous
-  generation active on failure.
+- Durable draft/published workflows and rollback orchestration beyond keeping the current
+  runtime active on application failure; Host last-known-good startup restoration.
 - Shared or pooled upstream connections, multiple active Targets, and runtime registries.
 - Explicit object identifiers for renames.
 
@@ -220,16 +252,21 @@ selected because files remain directly reviewable and editable as the single
   provides the isolation needed for safe new-Session application.
 - One file with static and dynamic sections: not selected because API writes would rewrite process
   settings and deployments could not separate read-only and writable mounts.
-- Fail startup on an invalid runtime file: not selected because the ledger can provide a
-  last-known-good configuration.
+- Fail the entire process on an invalid runtime file: not selected because Gateway topology can
+  use its last-known-good ledger. Host configuration has no historical recovery under the
+  2026-11-11 amendment; it remains unavailable with a reported configuration error instead.
+- Pin Agent Sessions to Host configuration revisions and retain multiple executable Host
+  generations: not selected in the 2026-11-11 amendment. Idle-only replacement preserves stable
+  clients for operations without introducing that lifecycle or a Host recovery ledger.
 - Close Sessions on removed endpoints after a grace period: not selected; Sessions end naturally.
 
 ## Consequences
 
 - Editing the runtime file followed by an apply, or a restart, takes effect on populated databases.
 - The frontend and direct file edits share one validation and application path.
-- `PublishedTopology` and Agent Host composition need replaceable immutable snapshots.
-- Agent Host applied settings need ledger persistence for last-known-good startup.
+- Gateway publication retains immutable revision snapshots; Host composition needs safe idle-only
+  replacement with admission control, not a matching configuration-revision model.
+- Host Session/Run ownership persists without requiring a Host configuration recovery ledger.
 - Compose deployment changes from a single read-only file mount to a configuration directory for
   writable installations.
 - Startup environment-secret changes remain restart-applied; literal upstream header changes use
@@ -239,9 +276,11 @@ selected because files remain directly reviewable and editable as the single
 
 The first Gateway configuration batch has controlled test and isolated browser evidence in the
 decision log. Runtime-only cleanup was approved on 2026-11-03. On 2026-11-04 Agent Host settings
-moved to the runtime file with unchanged fields and restart-applied behavior. Agent Host live
-application and Host last-known-good persistence remain separate later batches. On 2026-11-10 the
+moved to the runtime file with unchanged fields and restart-applied behavior. On 2026-11-10 the
 bounded Gateway runtime-file editor was implemented with controlled file/API/frontend tests and
-isolated browser evidence recorded in the decision log. Host editing, broader secret-reference
-contracts, and access hardening remain deferred. Compose integration is deferred and is not
-evidence of runtime-only deployment support.
+isolated browser evidence recorded in the decision log. The 2026-11-11 Host policy is accepted but
+not implemented: current code still uses startup composition and whole-file rejection for Host
+changes. Its remaining transaction and management contracts require review; Host last-known-good
+restoration is excluded rather than pending delivery. Broader secret-reference contracts and
+access hardening remain deferred. Compose integration is deferred and is not evidence of
+runtime-only deployment support.
