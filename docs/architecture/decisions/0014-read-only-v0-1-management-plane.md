@@ -1,6 +1,6 @@
 # ADR 0014: Read-Only v0.1 Management Plane
 
-- Status: Accepted; post-v0.1 configuration ownership, application, and Gateway writes amended by ADR 0018
+- Status: Accepted; post-v0.1 configuration ownership, application, and bounded Gateway/Host writes amended by ADR 0018
 - Date: 2026-09-11
 - Clarified: 2026-10-10; post-v0.1 product-configuration ownership
 - Amends: ADR 0001, ADR 0002, ADR 0003, ADR 0004, ADR 0008, ADR 0010, and ADR 0011 for
@@ -18,6 +18,11 @@ write-only literal header operations and explicitly defers authentication, RBAC,
 secret-reference design beyond that batch. This is a scoped exception to the pre-write design gate
 below, not approval for untrusted deployment or general Host editing. Runtime-file edit payloads
 reuse file-shaped endpoint fields; the historical v0.1 read contracts remain unchanged.
+
+The owner-approved 2026-11-11 amendment explicitly extends that access-hardening deferral to bounded
+Host settings reads, writes, and application. Host writes retain environment-secret references and
+modify only the Host section; Gateway and Host application are separate. This does not authorize
+untrusted management access, new integrations, or general remote runtime administration.
 
 ## Context
 

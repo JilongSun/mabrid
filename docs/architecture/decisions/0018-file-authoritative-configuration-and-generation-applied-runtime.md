@@ -4,7 +4,7 @@
 - Date: 2026-11-02
 - Amended: 2026-11-03; runtime-only developer-preview configuration
 - Amended: 2026-11-10; bounded Gateway file editing, literal header operations, and deferred access hardening
-- Amended: 2026-11-11; Host identity, idle-only reconfiguration, and no Host last-known-good restoration
+- Amended: 2026-11-11; Host identity, idle-only replacement, component-scoped application/settings, and no Host last-known-good restoration
 - Supersedes: ADR 0008, including its surviving constraints recorded below
 - Amends: ADR 0002 ([Configuration boundary](0002-sqlite-persistence-and-configuration-authority.md#configuration-boundary)),
   ADR 0014 ([Post-v0.1 product-configuration ownership](0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership),
@@ -129,7 +129,8 @@ The Gateway serves one immutable active topology snapshot with a monotonically i
 process-local generation number. It contains the published endpoint index and executable plans.
 The 2026-11-11 amendment does not require the Host to share this revision model or Agent Sessions
 to pin a configuration generation. The original shared Gateway/Host snapshot requirement is
-replaced by the Host policy below; their joint application/status contract still needs review.
+replaced by the Host and component-scoped application contracts below. There is no cross-component
+atomic apply in the bounded Host batch.
 
 The delivered Gateway application pipeline is serialized and atomic:
 
@@ -166,7 +167,8 @@ Sessions, multiple live client generations, or a Host last-known-good configurat
   Changing it does not reassign existing Sessions or unresolved Runs. A connection URL may change
   without selecting a new Host when the operator explicitly declares the same deployment binding;
   a URL by itself does not prove deployment identity. Automatic deployment verification remains
-  outside this amendment. Interface/native-Session transition rules still require focused review.
+  outside this amendment. The supported Hermes compatibility interface remains unchanged; native
+  Session support is additive and follows the capability transition rules below.
 - Reconfiguration requires no in-flight Host operation and no active or unsettled Run. Operation
   admission and replacement share a serialization boundary: an idle check followed by an unguarded
   replacement is insufficient. Running operations use a stable client until completion; later
@@ -175,16 +177,38 @@ Sessions, multiple live client generations, or a Host last-known-good configurat
 - Process-wide single-Target execution ownership, durable Run claims, and tool/App attribution
   survive client replacement. Recomposition must not reset them or infer remote termination from
   an absent local request. Gateway changes with an unchanged Host are not blocked merely by Host
-  activity; the transaction for a candidate that changes both remains to be reviewed.
+  activity. A file changing both components requires their separate apply operations; applying one
+  component does not publish or mark the other component applied.
 - Invalid Host startup configuration makes the Host unavailable with an explicit error. Do not
   restore an earlier Host configuration from SQLite. A failed runtime application leaves the
   current Host in place and reports the desired change as unapplied. Preserving that running
   instance is distinct from restoring historical configuration after restart.
 
 Gateway revisions and last-known-good startup are unchanged. Static process settings and startup
-environment-secret rotation remain restart-applied. The focused review must settle joint
-Gateway/Host publication, component status, and management contracts before product implementation;
-a whole-file save hash alone cannot establish that both components applied the same content.
+environment-secret rotation remain restart-applied. A whole-file save hash alone cannot establish
+that both components applied the same content.
+
+### Component-scoped application and capability transitions
+
+The owner selected separate Gateway and Host application on 2026-11-11. Each apply validates and
+publishes only its own component; no endpoint or Settings action implicitly applies the other.
+Gateway topology retains its atomic revision/publication pipeline. Host replacement is atomic
+within its idle-only lifecycle boundary. Neither component promises a transaction spanning both.
+
+Cross-component dependency validation belongs to server composition, not Gateway core. Host apply
+checks its assignment against the currently published Gateway endpoints. Gateway apply checks the
+running Host assignment rather than a pending Host configuration. A pending or busy Host does not
+unconditionally block Gateway application. Endpoint migration therefore requires publishing the
+new endpoint while retaining the old, applying the Host assignment, then removing the old endpoint;
+the owner accepted this staged workflow instead of cross-component atomic application.
+
+Hermes `interface` stays `openai-chat-completions`. The optional native Session configuration adds
+capabilities rather than selecting a different compatibility interface. Under the same idle guard,
+native Session support can be enabled or disabled without deleting persisted Session records.
+Disabled native support does not perform remote Session operations or provide offline runtime
+history. Re-enabling the same logical Host and deployment binding permits existing Session access;
+different identities or bindings do not adopt those Sessions. No new integration/interface is
+implemented by this contract.
 
 ### Triggers and management writes
 
@@ -205,7 +229,20 @@ values and requires operator-managed access protection.
 The editor uses typed whole-document Gateway writes and preserves the untouched Agent Host section
 and YAML comments. HTTP header values are write-only with preserve/replace/remove operations.
 Existing stdio entries only permit enablement changes; command, arguments, working directory, and
-environment remain file-managed. Agent Host editing and live application are outside this batch.
+environment remain file-managed. Host editing and live application were outside the 2026-11-10
+Gateway batch; the separate 2026-11-11 contract now permits bounded Host editing and application.
+
+The Host writer exposes existing Hermes settings and environment-variable reference names, never
+resolved credentials. It writes only the Host section while preserving Gateway configuration and
+comments. Both section writers share serialization and the complete file's expected-hash check;
+saving does not switch either runtime and need not wait for Host idleness. Static process settings
+are never written by these APIs.
+
+The owner explicitly extended the trusted-deployment access-hardening deferral to Host management
+reads, writes, and application on 2026-11-11. This amends ADR 0014's earlier pre-write gate for that
+bounded surface; it does not authorize untrusted access or broader remote runtime administration.
+Changing runtime addresses or credential-reference names can change where credentials are sent.
+No authentication or origin-security boundary is established by CORS or this deferral.
 
 Deployments that allow frontend editing mount a writable configuration directory rather than a
 single runtime file. The static file may remain read-only.
@@ -217,6 +254,13 @@ time, from the current file state, including its hash, validity, latest error, a
 differs from the active generation. Restart required is reported for static configuration changes
 and, until Host generation application is delivered, changes to the complete Agent Host section.
 This replaces the topology `restart_required` latch proposed by ADR 0008.
+
+After component-scoped application is implemented, applied/desired and pending/error status belong
+to each component. Changes or comments in one section do not imply that the other needs application.
+The complete file hash remains an optimistic concurrency token and must not imply global application
+success. Host application status may remain in process; startup resolves the file rather than
+restoring status as configuration. This creates no durable Host configuration history/recovery
+table and does not weaken persistent Session/Run ownership.
 
 ### Preserved constraints
 
@@ -242,6 +286,8 @@ This replaces the topology `restart_required` latch proposed by ADR 0008.
   runtime active on application failure; Host last-known-good startup restoration.
 - Shared or pooled upstream connections, multiple active Targets, and runtime registries.
 - Explicit object identifiers for renames.
+- Cross-component atomic apply, new integrations/interfaces, and offline Agent history in the
+  bounded Host reconfiguration and Settings batch.
 
 ## Alternatives
 
@@ -280,7 +326,8 @@ moved to the runtime file with unchanged fields and restart-applied behavior. On
 bounded Gateway runtime-file editor was implemented with controlled file/API/frontend tests and
 isolated browser evidence recorded in the decision log. The 2026-11-11 Host policy is accepted but
 not implemented: current code still uses startup composition and whole-file rejection for Host
-changes. Its remaining transaction and management contracts require review; Host last-known-good
-restoration is excluded rather than pending delivery. Broader secret-reference contracts and
-access hardening remain deferred. Compose integration is deferred and is not evidence of
-runtime-only deployment support.
+changes. The focused contract review selected separate application, additive native capabilities,
+and bounded Host writes with explicit access-hardening deferral; its backend/frontend delivery is
+pending. Host last-known-good restoration is excluded rather than pending delivery. Broader
+secret-reference contracts and access hardening remain deferred. Compose integration is deferred
+and is not evidence of runtime-only deployment support.
