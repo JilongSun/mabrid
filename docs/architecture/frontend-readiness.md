@@ -8,10 +8,12 @@
 
 ## Frozen Contract
 
-The managed-configuration preview deliberately evolves the Gateway portion of this snapshot:
-`topology_mode` is now `generation_applied`, and the configuration status and explicit apply routes
-are included. The owner accepted this preview API compatibility change; the snapshot is updated
-with the current contract rather than preserving the obsolete constant.
+The managed-configuration preview deliberately evolves this snapshot: `topology_mode` is now
+`generation_applied`; Gateway and Host configuration reads, writes, status, and explicit component
+apply routes are included. Component `applied_hash` and `desired_hash` identify effective settings;
+`file_hash` and editor `content_hash` identify the complete file used for concurrency checks, not
+cross-component application. The owner accepted these preview API compatibility changes; the
+snapshot reflects the current contract rather than preserving obsolete constants or restart gates.
 
 The reviewed v0.1 baseline consists of:
 
@@ -51,6 +53,7 @@ JavaScript SDK, an OpenAI wire replacement, or an MCP transport schema.
 | Product capability status | `/api/v1/capabilities`: local/deployment/remote/effective facts, not Run admission or a remote execution health test |
 | Gateway topology and inspection | `/api/v1/gateway`: status/topology, explicit file application, and Gateway Session pages/snapshots/events; RFC 9457 errors |
 | Target assignment | `/api/v1/agent-host/target`: read-only configured Target and endpoint assignment; not per-Run provider selection |
+| Host configuration | `/api/v1/agent-host/configuration`: trusted-only status, Host-only runtime-file read/write, and separate idle-only apply; RFC 9457 errors |
 | Compatibility | `/v1/models`, `/v1/chat/completions`: standard OpenAI shapes, no private tool/widget envelopes or simulated native continuity |
 | MCP | `/mcp/{endpoint_slug}` and its legacy SSE transport: protocol-owned Gateway ingress, independent of Agent Session history |
 | Local status | `/health`, `/ready`: local process/persistence/publication status; remote Host outages do not make Gateway unready |
@@ -59,6 +62,14 @@ Gateway Session IDs and Agent Session IDs are different identities. Gateway even
 Host SSE replay. Diagnostic inspection remains intentionally separate from model-visible MCP
 descriptions and public Host presentation. Management errors use `application/problem+json`; Host
 errors use `application/json`; successful Host Run delivery uses `text/event-stream`.
+
+Saving Host settings does not require idle and does not apply either component. Host application
+rejects in-flight operations and active or unsettled Runs; it does not apply pending Gateway
+settings. Endpoint migration publishes the new Gateway endpoint while retaining the old one,
+applies the Host assignment, then removes the old endpoint. Host management exposes environment
+reference names, never resolved credentials. This surface retains the explicitly deferred access
+hardening boundary and must not be exposed to untrusted clients. The scoped delivery evidence is
+recorded in the [active decision review](decision-log.md#managed-configuration-and-release-foundations).
 
 ## Contract Readiness Evidence
 

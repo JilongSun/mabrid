@@ -110,6 +110,12 @@ persists only Agent Session bindings and unresolved Run ownership. The additive
 does not reset existing topology or copy remote transcripts. Effective remote references are
 verified through the catalog and updated by compare-and-set within the same deployment binding.
 
+Session ownership includes `targetId` and runtime `integration`, separately from the native
+deployment `bindingId`. The additive [integration identity migration](../../backend/apps/server/migrations/versions/0004_agent_session_integration.py)
+records Hermes for existing Sessions without resetting their IDs, references, or Run claims.
+Changing logical identity or deployment binding never adopts existing Sessions. URL changes do
+not establish deployment identity; keeping a binding is an explicit operator declaration.
+
 Every native Run claims the shared Target coordinator and a durable unresolved record before
 submission. Its remote handle is recorded on `run.started`. Normal completion or confirmed
 early-close settlement releases ownership only after the consumer finishes the Run generator.
@@ -152,6 +158,14 @@ endpoint, and the API key environment variable. `apiRoot` is not inferred from `
 keep it stable across Mabrid restarts and change it when replacing the runtime deployment. Do not
 reuse a binding to silently migrate conversations to a different runtime. Omitting `sessions`
 keeps compatibility-only behavior; it does not erase existing durable unresolved ownership.
+
+Host Settings can enable or disable native Sessions under the idle-only application guard while
+retaining compatibility service and local records. Re-enabling the same logical Host and deployment
+binding permits access to those Sessions again; disabling native service does not provide offline
+history. Host application rejects in-flight reads, probes, streams, and active or unsettled Runs,
+including durable claims from another logical identity. Gateway application is separate and checks
+the running Host assignment. This adds neither Host configuration generations nor last-known-good
+startup restoration; static process settings and environment-secret rotation still require restart.
 
 Bootstrap restores unresolved Target ownership before either ingress can invoke the runtime,
 without a remote probe and even if native configuration is absent or changed. Normal shutdown and

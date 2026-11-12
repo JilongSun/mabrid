@@ -41,10 +41,10 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 	interface boundary, and the explicit deferral of Host management access hardening.
 - Delivery: the first Gateway configuration skeleton, runtime-only cleanup, and the Agent Host
 	runtime-file location are implemented, together with the Gateway runtime-file editor assessed
-	on 2026-11-10; verification is recorded below. Agent Host generation application is not included.
-- Next eligible work: the bounded Host reconfiguration and Hermes Settings batch defined below,
-	with backend and supporting frontend delivered together. Deployment integration, CI/version
-	handling, and unrelated Agent Host capabilities remain separately scoped.
+	on 2026-11-10 and the bounded idle-only Host application and Hermes Settings batch assessed
+	on 2026-11-11. Controlled verification is recorded below, separately from live acceptance.
+- Further work: deployment integration, CI/version handling, and unrelated Agent Host capabilities
+	remain separately scoped; delivery of this batch does not authorize their implementation.
 
 #### Agent Host Reconfiguration Policy (2026-11-11)
 
@@ -78,16 +78,16 @@ The focused contract review below resolves interface transitions, component appl
 writes/access, and minimal status within this scope. The whole-file save hash remains a concurrency
 token, not proof that every component has applied its content.
 
-Delivery: **Pending**. Current code still uses restart-applied Host composition and rejects an apply
-whose Host section differs from startup. This entry records accepted policy, not implementation or
-live acceptance. The following entry defines the bounded backend/frontend batch and its checks.
+Delivery assessment on 2026-11-11: **Implemented within the bounded application and settings
+batch below**. The following entry records its controlled verification; policy acceptance and
+implementation evidence do not establish live acceptance.
 
 #### Agent Host Application And Settings Contract (2026-11-11)
 
 The owner selected all three reviewed choices: apply Gateway and Host separately, retain the current
 Hermes compatibility interface with optional native Sessions, and explicitly extend the trusted-only
-management access model to bounded Host reads, writes, and application. This completes the contract
-review for the implementation batch below, not its delivery.
+management access model to bounded Host reads, writes, and application. These selections completed
+the contract review; the separate delivery assessment below records implementation evidence.
 
 - Application is component-scoped. Gateway apply changes Gateway topology only; Host apply changes
 	the Host only. A pending or busy Host is not an unconditional Gateway apply blocker. This batch
@@ -137,8 +137,39 @@ pending/error states; stale hashes across both editors; comments, redaction, fai
 replacement; frontend flows and the updated preview contract. No real Agent/MCP calls, container
 acceptance, database reset, new integrations, joint apply, or Host last-known-good restoration.
 
-Delivery: **Pending**. No runtime, persistence schema, HTTP contract, or frontend behavior was changed
-by this review. Acceptance of the contract is not test evidence or release acceptance.
+Delivery assessment on 2026-11-11: **Implemented for the approved Host application and settings
+scope**.
+
+- The server owns a stable Host lifecycle boundary. HTTP reads, probes, streams, and observation
+	callbacks retain operation leases; admission, idle checking, preparation, publication, and client
+	retirement serialize. Gateway observers retain per-Host projection state and seed tool metadata
+	after replacement without replaying business operations. Gateway core remains Host-independent.
+- Session persistence includes logical integration identity. The additive Hermes migration retains
+	existing records, IDs, and deployment bindings. Runtime replacement checks all durable unsettled
+	claims, not only the requested Target; startup cannot bypass another identity's claim.
+- Gateway and Host parse, apply, and report component state independently. Component fingerprints
+	identify applied/desired settings; the complete-file hash remains the shared save/apply concurrency
+	token. Runtime Host preparation failure keeps the current Host; invalid startup Host configuration
+	leaves it unavailable. No Host configuration ledger or last-known-good restoration was added.
+- Host-only management reads/writes and Hermes Settings preserve Gateway settings, comments, and
+	secret-reference names. Save and Apply Host remain separate. The UI retains drafts on conflicts,
+	refreshes capabilities after application, and requires explicit reload after unknown outcomes.
+- `uv run --directory backend --all-packages pytest -q --tb=short`: 445 tests passed. Coverage
+	includes disabled startup enablement, native off/on with retained records, identity/binding
+	isolation, URL changes, operation and durable ownership guards, admission races, independent
+	Gateway application, staged endpoint migration, failed preparation, shared hashes, and comments.
+- Pyright, Ruff, and formatting checks passed. The approved preview contract was regenerated and
+	its offline drift check passed; all 31 contract tests passed again after documenting the Host
+	configuration-unavailable 503 response and verifying its safe HTTP shape.
+- `pnpm --dir frontend test`: 189 tests passed. Frontend typecheck, lint, and production build
+	passed. The existing large-chunk warning remains; bundle optimization is outside this batch.
+- Controlled Chromium checks at 1280x900 and 390x844 verified Host-only reference writes, separate
+	save/apply, refreshed native capabilities, retained conflict drafts, explicit reload, and unknown
+	outcomes without retry. Screenshots and control bounds showed no horizontal overflow or overlap.
+	All business requests used synthetic intercepted responses, not a live Agent/MCP deployment.
+- No real Agent/MCP operations, container acceptance, database reset, release, or CI changes were
+	performed. Management access hardening remains explicitly deferred to trusted deployments only;
+	this assessment does not establish hardened access or live deployment acceptance.
 
 #### Gateway Runtime-File Editing (2026-11-10)
 
