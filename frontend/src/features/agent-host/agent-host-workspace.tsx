@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, MessageSquare, Plus, RefreshCw } from 'lucide-react'
+import { ArrowLeft, ArrowRight, MessageSquare, Plus, RefreshCw, Settings } from 'lucide-react'
 import { Link, matchPath, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { useHostRead } from './use-host-read'
 import { runControlKey, useHostRun } from './use-host-run'
 import { RunPanel } from './run-panel'
 import { RunControls } from './run-controls'
+import { HostSettings } from './settings'
 
 const capabilityRead = (_key: string, signal: AbortSignal) => loadCapabilities(signal)
 const sessionPageRead = (key: string, signal: AbortSignal) => loadHostSessions(Number(key), signal)
@@ -120,9 +121,11 @@ export function AgentHostWorkspace({ active }: { active: boolean }) {
     else next.set(name, value)
     return next
   })
-  if (!active) return null
-  return <section aria-labelledby="host-title" className="flex h-[calc(100svh-4rem)] min-h-[30rem] min-w-0 flex-col overflow-clip md:h-svh">
-    <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-5 py-3"><h1 id="host-title" ref={heading} tabIndex={-1} className="flex items-center gap-3 text-lg font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"><MessageSquare aria-hidden="true" className="size-5" />Agent Host</h1><Button id="host-capabilities-refresh" variant="ghost" size="icon" title="Refresh capabilities" aria-label="Refresh capabilities" disabled={capabilities.pending} onClick={capabilities.refresh}><RefreshCw aria-hidden="true" /></Button></header>
+  const settingsOpen = location.pathname === '/agent-host/settings'
+  return <>
+    <div hidden={!active || !settingsOpen}><HostSettings active={active && settingsOpen} runPending={Boolean(execution.pending || execution.controlPending || creation.pending)} onApplied={() => { capabilities.refresh(); sessions.refresh(); metadata.refresh(); history.refresh() }} /></div>
+    {active && !settingsOpen && <section aria-labelledby="host-title" className="flex h-[calc(100svh-4rem)] min-h-[30rem] min-w-0 flex-col overflow-clip md:h-svh">
+    <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-5 py-3"><h1 id="host-title" ref={heading} tabIndex={-1} className="flex items-center gap-3 text-lg font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"><MessageSquare aria-hidden="true" className="size-5" />Agent Host</h1><div className="flex items-center gap-2"><Button variant="ghost" size="icon" title="Host Settings" aria-label="Host Settings" asChild><Link to="/agent-host/settings"><Settings aria-hidden="true" /></Link></Button><Button id="host-capabilities-refresh" variant="ghost" size="icon" title="Refresh capabilities" aria-label="Refresh capabilities" disabled={capabilities.pending} onClick={capabilities.refresh}><RefreshCw aria-hidden="true" /></Button></div></header>
     <div className="shrink-0 px-5"><ReadFeedback state={capabilities} label="Host capabilities" compact />
     {capabilities.data && !capabilities.data.agent_host.enabled && <p className="mt-5 text-sm">Agent Host disabled</p>}
     {targetRun && <section aria-label="Target Run" role="status" className="mt-5 border-y py-4 text-sm"><p className="font-medium">Target Run {targetRun.state}</p><p className="mt-2 break-all font-mono text-xs">Run: {targetRun.run_id}</p><Link id="host-target-run-session" className="mt-2 inline-block break-all underline-offset-4 hover:underline" to={`/agent-host/sessions/${targetRun.session_id}`}>Session: {targetRun.session_id}</Link></section>}
@@ -160,5 +163,6 @@ export function AgentHostWorkspace({ active }: { active: boolean }) {
         </RunPanel>
       </section>
     </div>
-  </section>
+  </section>}
+  </>
 }

@@ -161,7 +161,7 @@ describe('Endpoints view', () => {
         : String(input).endsWith('/configuration') ? {
           generation: 1, applied_at: '2026-10-27T12:00:00Z',
           applied_hash: hash, applied_source: 'runtime_file',
-          desired_hash: hash, desired_source: 'runtime_file',
+          desired_hash: hash, file_hash: hash, desired_source: 'runtime_file',
           file_valid: true, pending: false, error: null, restart_required: false, host_unavailable: false, recovery_required: false,
         } : publication,
     ))

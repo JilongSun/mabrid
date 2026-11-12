@@ -12,6 +12,7 @@ const pending = {
   applied_hash: 'c'.repeat(64),
   applied_source: 'runtime_file',
   desired_hash: desiredHash,
+  file_hash: desiredHash,
   desired_source: 'runtime_file',
   file_valid: true,
   pending: true,
@@ -76,10 +77,10 @@ describe('Gateway configuration application', () => {
         writes += 1
         return writes === 1
           ? json(problem(409, 'configuration_conflict', 'File changed.'), 409)
-          : json({ ...pending, desired_hash: nextHash, applied_hash: nextHash, pending: false })
+          : json({ ...pending, desired_hash: nextHash, file_hash: nextHash, applied_hash: nextHash, pending: false })
       }
       reads += 1
-      return json(reads === 1 ? pending : { ...pending, desired_hash: nextHash })
+      return json(reads === 1 ? pending : { ...pending, desired_hash: nextHash, file_hash: nextHash })
     })
     const onApplied = vi.fn()
     render(<GatewayConfigurationControls revision={0} onApplied={onApplied} />)
@@ -99,19 +100,18 @@ describe('Gateway configuration application', () => {
     ])
   })
 
-  it('explains that changed Agent Host settings require a restart', async () => {
+  it('reports static restart needs without blocking Gateway application', async () => {
     const user = userEvent.setup()
     fetchMock.mockImplementation(async (_input, options) => options?.method === 'POST'
-      ? json(problem(409, 'configuration_restart_required', 'Agent Host settings changed.'), 409)
+      ? json({ ...pending, pending: false, restart_required: true })
       : json({ ...pending, restart_required: true }))
     const onApplied = vi.fn()
     render(<GatewayConfigurationControls revision={0} onApplied={onApplied} />)
 
     await screen.findByText('Changes pending')
     await user.click(screen.getByRole('button', { name: 'Apply file changes' }))
-    expect((await screen.findByRole('alert')).textContent).toContain('Restart the process')
-    expect(screen.getByRole('button', { name: 'Apply file changes' }).hasAttribute('disabled')).toBe(true)
-    expect(onApplied).not.toHaveBeenCalled()
+    await waitFor(() => expect(onApplied).toHaveBeenCalledOnce())
+    expect(screen.getByText('A process restart is required to apply static process settings.')).toBeDefined()
   })
 
   it('reports an invalid file, unavailable Host and restart requirement without applying', async () => {

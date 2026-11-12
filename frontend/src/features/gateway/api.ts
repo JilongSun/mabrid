@@ -64,6 +64,7 @@ export const gatewayConfigurationSchema = z.object({
   applied_hash: configurationHash,
   applied_source: appliedConfigurationSource,
   desired_hash: configurationHash,
+  file_hash: configurationHash,
   desired_source: desiredConfigurationSource,
   file_valid: z.boolean(),
   pending: z.boolean(),

@@ -86,8 +86,7 @@ export function RuntimeConfigurationEditor({ active, onSaved, onApplied }: { act
     } catch (failure) {
       if (controller.signal.aborted) return
       if (failure instanceof GatewayHttpError) {
-        const message = failure.code === 'configuration_restart_required' ? 'Restart the process to apply changed Agent Host settings.' : failure.message
-        setError(`${saved ? 'File saved. Application failed: ' : ''}${message}`)
+        setError(`${saved ? 'File saved. Application failed: ' : ''}${failure.message}`)
         if (failure.status === 409 || failure.status >= 500) setBlocked(true)
       } else {
         setError(`${saved ? 'File saved. Application' : 'Save'} outcome unknown. Reload the file and check application status before trying again. The request was not retried.`)

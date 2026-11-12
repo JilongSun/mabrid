@@ -12,7 +12,7 @@ import { AgentHostWorkspace } from '@/features/agent-host/agent-host-workspace'
 function Application() {
   const location = useLocation()
   const navigate = useNavigate()
-  const workspace: Workspace = matchPath('/agent-host', location.pathname) || matchPath('/agent-host/sessions/:id', location.pathname) ? 'agent-host' : location.pathname === '/status' ? 'status' : 'gateway'
+  const workspace: Workspace = matchPath('/agent-host', location.pathname) || matchPath('/agent-host/settings', location.pathname) || matchPath('/agent-host/sessions/:id', location.pathname) ? 'agent-host' : location.pathname === '/status' ? 'status' : 'gateway'
   const diagnosticsOpen = Boolean(matchPath('/gateway/sessions', location.pathname) || matchPath('/gateway/sessions/:id', location.pathname))
   const [gatewaySnapshot, setGatewaySnapshot] = useState<GatewaySnapshot | null>(null)
   const gatewayLocation = useRef(workspace === 'gateway' ? location : {

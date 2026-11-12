@@ -9,6 +9,8 @@ import { RunPanel } from './run-panel'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { z } from 'zod'
+import { HostSettings } from './settings'
+import { hostSettingsDraft, hostSettingsRequest, type HostSettingsFile, type HostSettingsStatus } from './settings-api'
 
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
 const session = { session_id: id(1), target_id: 'primary', title: 'Inspection', created_at: '2026-10-15T00:00:00Z', binding_state: 'unknown', target_run: null }
@@ -25,6 +27,126 @@ const capabilities = { gateway: { topology_read: true, session_inspection: true 
 const responseFor = (input: RequestInfo | URL) => json(String(input).endsWith('/capabilities') ? capabilities : String(input).includes('/history?') ? history : String(input).includes('/sessions?') ? { sessions: [session], limit: 20, offset: 0, has_more: false } : session)
 beforeEach(() => { fetchMock.mockReset(); fetchMock.mockImplementation(async (input) => responseFor(input)); vi.stubGlobal('fetch', fetchMock); vi.stubGlobal('scrollTo', vi.fn()) })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+
+describe('Host Settings', () => {
+  const path = '/api/v1/agent-host/configuration'
+  const file: HostSettingsFile = {
+    content_hash: 'a'.repeat(64), published_endpoints: ['entry'],
+    agent_host: {
+      enabled: true, mcpAppsEnabled: false, targetId: 'primary', endpointSlug: 'entry',
+      runtime: { integration: 'hermes', interface: 'openai-chat-completions', baseUrl: 'https://hermes.test/v1', apiKeyEnv: 'FIXTURE_KEY', timeoutSeconds: 120, sessions: null },
+    },
+  }
+  const status: HostSettingsStatus = { applied_hash: 'c'.repeat(64), desired_hash: 'd'.repeat(64), file_hash: file.content_hash, applied_at: null, enabled: true, file_valid: true, pending: true, busy: false, error: null }
+  function responses() {
+    let currentFile = file
+    let currentStatus = status
+    fetchMock.mockImplementation(async (input, options) => {
+      if (options?.method === 'PUT') {
+        currentFile = { ...file, content_hash: 'b'.repeat(64), agent_host: JSON.parse(String(options.body)).agent_host }
+        currentStatus = { ...status, file_hash: currentFile.content_hash }
+        return json(currentFile)
+      }
+      if (options?.method === 'POST') return json({ ...currentStatus, pending: false })
+      return String(input).endsWith('/configuration/runtime') ? json(currentFile) : String(input).endsWith('/configuration') ? json(currentStatus) : responseFor(input)
+    })
+  }
+  it('preserves exact logical/deployment identity and credential reference names', () => {
+    const draft = { ...hostSettingsDraft(file), targetId: ' Target ', apiKeyEnv: ' KEY ', native: true, apiRoot: 'https://native.test/', bindingId: ' deployment ' }
+    const request = hostSettingsRequest(draft, file.content_hash)
+    expect(request.agent_host.targetId).toBe(' Target ')
+    expect(request.agent_host.runtime.apiKeyEnv).toBe(' KEY ')
+    expect(request.agent_host.runtime.sessions?.bindingId).toBe(' deployment ')
+  })
+  it('saves only Host fields and credential names without implicitly applying', async () => {
+    const user = userEvent.setup()
+    responses()
+    render(<MemoryRouter><HostSettings active runPending={false} onApplied={vi.fn()} /></MemoryRouter>)
+    const input = await screen.findByLabelText('API key environment variable')
+    await user.clear(input); await user.type(input, 'NEXT_KEY')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByText('Host settings saved. Not yet applied.')
+    const writes = fetchMock.mock.calls.filter(([, options]) => options?.method === 'PUT')
+    expect(writes).toHaveLength(1)
+    const body = JSON.parse(String(writes[0][1]?.body))
+    expect(body.expected_hash).toBe(file.content_hash)
+    expect(Object.keys(body).sort()).toEqual(['agent_host', 'expected_hash'])
+    expect(body.agent_host.runtime.apiKeyEnv).toBe('NEXT_KEY')
+    expect(body.agent_host.runtime.api_key).toBeUndefined()
+    expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  })
+  it('applies only the inspected Host file and refreshes capabilities once', async () => {
+    const user = userEvent.setup()
+    const onApplied = vi.fn()
+    responses()
+    render(<MemoryRouter><HostSettings active runPending={false} onApplied={onApplied} /></MemoryRouter>)
+    await screen.findByLabelText('Target ID')
+    await user.click(screen.getByRole('button', { name: 'Apply Host' }))
+    await screen.findByText('Host configuration applied.')
+    const posts = fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')
+    expect(posts).toHaveLength(1)
+    expect(posts[0][0]).toBe(`${path}/apply`)
+    expect(JSON.parse(String(posts[0][1]?.body))).toEqual({ expected_hash: file.content_hash })
+    expect(onApplied).toHaveBeenCalledOnce()
+  })
+  it('allows saving while Host is busy and blocks application', async () => {
+    const user = userEvent.setup()
+    responses()
+    fetchMock.mockImplementation(async (input) => String(input).endsWith('/runtime') ? json(file) : json({ ...status, busy: true }))
+    render(<MemoryRouter><HostSettings active runPending={false} onApplied={vi.fn()} /></MemoryRouter>)
+    const target = await screen.findByLabelText('Target ID')
+    expect((screen.getByRole('button', { name: 'Apply Host' }) as HTMLButtonElement).disabled).toBe(true)
+    await user.type(target, '-next')
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByText(/Different Target identity/)).toBeDefined()
+  })
+  it('does not retry unknown save outcomes or submit application', async () => {
+    const user = userEvent.setup()
+    responses()
+    fetchMock.mockImplementation(async (input, options) => {
+      if (options?.method === 'PUT') throw new TypeError('fixture disconnect')
+      return String(input).endsWith('/runtime') ? json(file) : json(status)
+    })
+    render(<MemoryRouter><HostSettings active runPending={false} onApplied={vi.fn()} /></MemoryRouter>)
+    await user.type(await screen.findByLabelText('Target ID'), '-next')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('Save outcome unknown')
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(1)
+    expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+  it('does not retry unknown application outcomes', async () => {
+    const user = userEvent.setup()
+    responses()
+    fetchMock.mockImplementation(async (input, options) => {
+      if (options?.method === 'POST') throw new TypeError('fixture disconnect')
+      return String(input).endsWith('/runtime') ? json(file) : json(status)
+    })
+    render(<MemoryRouter><HostSettings active runPending={false} onApplied={vi.fn()} /></MemoryRouter>)
+    await screen.findByLabelText('Target ID')
+    await user.click(screen.getByRole('button', { name: 'Apply Host' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('Application outcome unknown')
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1)
+    expect((screen.getByRole('button', { name: 'Apply Host' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+  it('never claims application when status could not be loaded', async () => {
+    fetchMock.mockRejectedValue(new TypeError('fixture offline'))
+    render(<MemoryRouter><HostSettings active runPending={false} onApplied={vi.fn()} /></MemoryRouter>)
+    await screen.findByRole('alert')
+    expect(screen.getByText('Host application status unavailable')).toBeDefined()
+    expect(screen.queryByText('Host configuration applied')).toBeNull()
+  })
+  it('retains the Host settings draft across Session navigation', async () => {
+    const user = userEvent.setup()
+    responses()
+    render(<MemoryRouter initialEntries={['/agent-host/settings']}><AgentHostWorkspace active /></MemoryRouter>)
+    await user.type(await screen.findByLabelText('Target ID'), '-draft')
+    await user.click(screen.getByRole('link', { name: 'Sessions' }))
+    await user.click(screen.getByRole('link', { name: 'Host Settings' }))
+    expect((screen.getByLabelText('Target ID') as HTMLInputElement).value).toBe('primary-draft')
+    expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'PUT')).toBe(false)
+  })
+})
 
 describe('Host Session data boundary', () => {
   it('creates with only an optional title and requires a public 201 Session response', async () => {

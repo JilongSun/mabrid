@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const problem = (code: string, detail: string) => ({ type: 'urn:fixture', title: 'Fixture', status: 409, code, detail })
 const applied = {
   generation: 2, applied_at: '2026-11-10T00:00:00Z', applied_hash: 'b'.repeat(64), applied_source: 'runtime_file',
-  desired_hash: 'b'.repeat(64), desired_source: 'runtime_file', file_valid: true, pending: false, error: null,
+  desired_hash: 'b'.repeat(64), file_hash: 'b'.repeat(64), desired_source: 'runtime_file', file_valid: true, pending: false, error: null,
   restart_required: false, host_unavailable: false, recovery_required: false,
 }
 
@@ -100,14 +100,14 @@ describe('Runtime file editor', () => {
     expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
 
-  it('reports a saved file separately when application requires restart', async () => {
+  it('reports a saved file separately when application conflicts', async () => {
     const user = userEvent.setup()
-    fetchMock.mockImplementation(async (_path, options) => options?.method === 'POST' ? json(problem('configuration_restart_required', 'Restart required.'), 409) : json(file))
+    fetchMock.mockImplementation(async (_path, options) => options?.method === 'POST' ? json(problem('configuration_conflict', 'File changed.'), 409) : json(file))
     renderEditor()
     await screen.findByLabelText('Upstream key')
     await user.type(screen.getByLabelText('URL'), '/draft')
     await user.click(screen.getByRole('button', { name: 'Save and apply' }))
-    expect((await screen.findByRole('alert')).textContent).toContain('File saved. Application failed: Restart the process')
+    expect((await screen.findByRole('alert')).textContent).toContain('File saved. Application failed: File changed.')
     expect(screen.queryByText('Unsaved changes')).toBeNull()
   })
 
