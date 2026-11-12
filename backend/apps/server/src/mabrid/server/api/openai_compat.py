@@ -21,6 +21,7 @@ from mabrid.application.agent_host import (
     StartRunCommand,
 )
 from mabrid.application.host import HostAgentEvent, HostEventStream
+from mabrid.server.composition.host_runtime import AgentHostRuntime
 from openai.pagination import AsyncPage
 from openai.types import Model
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
@@ -36,14 +37,29 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 
 def create_openai_compatibility_router(
-    agent_host: AgentHostService,
+    agent_host: AgentHostService | None,
     host_events: HostEventStream | None = None,
+    *,
+    runtime: AgentHostRuntime | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/v1")
-    event_stream = host_events or HostEventStream(agent_host)
+
+    def services() -> tuple[AgentHostService | None, HostEventStream | None]:
+        if runtime is not None:
+            current = runtime.current
+            return (
+                current.service if current is not None else None,
+                current.capabilities.events if current is not None else None,
+            )
+        return agent_host, host_events or (HostEventStream(agent_host) if agent_host else None)
 
     @router.get("/models")
     async def list_models() -> JSONResponse:
+        agent_host, _ = services()
+        if agent_host is None:
+            return _error_response(
+                "Agent Host is unavailable.", status_code=503, error_type="api_error"
+            )
         models = await agent_host.list_models()
         response = AsyncPage[Model](
             object="list",
@@ -67,7 +83,7 @@ def create_openai_compatibility_router(
                 "basic": {
                     "summary": "Basic text completion",
                     "value": {
-                        "model": agent_host.target.target_id,
+                        "model": agent_host.target.target_id if agent_host is not None else "agent",
                         "messages": [{"role": "user", "content": "Hello"}],
                         "stream": False,
                     },
@@ -75,6 +91,11 @@ def create_openai_compatibility_router(
             },
         ),
     ) -> Response:
+        agent_host, event_stream = services()
+        if agent_host is None or event_stream is None:
+            return _error_response(
+                "Agent Host is unavailable.", status_code=503, error_type="api_error"
+            )
         try:
             command = _to_start_run_command(payload)
         except (TypeError, ValueError) as exc:

@@ -428,7 +428,7 @@ endpoints:
                 candidate = await client.get("/api/v1/gateway/configuration")
                 applied = await client.post(
                     "/api/v1/gateway/configuration/apply",
-                    json={"expected_hash": candidate.json()["desired_hash"]},
+                    json={"expected_hash": candidate.json()["file_hash"]},
                 )
                 assert applied.status_code == 200 and applied.json()["generation"] == 2
                 second_revision = str(result.gateway.published_endpoints[0].revision.revision_id)
@@ -455,7 +455,7 @@ endpoints:
                 assert (
                     await client.post(
                         "/api/v1/gateway/configuration/apply",
-                        json={"expected_hash": empty.json()["desired_hash"]},
+                        json={"expected_hash": empty.json()["file_hash"]},
                     )
                 ).status_code == 200
                 assert (await client.get("/ready")).status_code == 503

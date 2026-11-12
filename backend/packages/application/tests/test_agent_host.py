@@ -182,6 +182,7 @@ async def test_capability_probes_are_bounded_joined_and_not_cached() -> None:
 def test_session_contract_separates_binding_history_and_new_input() -> None:
     session = AgentSessionRecord(
         target_id="fixture-target",
+        integration_kind="fixture",
         runtime_session=RuntimeSessionReference(
             runtime_binding_id="fixture-deployment",
             remote_session_id="api_remote-session",

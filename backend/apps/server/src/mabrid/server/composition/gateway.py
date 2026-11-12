@@ -29,7 +29,7 @@ from mabrid.server.persistence.topology import (
     SqlAlchemyTopologySnapshotReader,
 )
 
-from .configuration import GatewayConfigurationManager
+from .configuration import RuntimeConfigurationManager
 
 logger = get_logger(__name__)
 
@@ -49,7 +49,7 @@ class GatewayManagementComposition:
     readiness_probe: SqliteReadinessProbe
     advertised_base_url: str | None
     published_endpoint_slugs: tuple[str, ...]
-    configuration: GatewayConfigurationManager | None = None
+    configuration: RuntimeConfigurationManager | None = None
 
     async def is_ready(self) -> bool:
         return (
@@ -90,7 +90,7 @@ async def compose_gateway(
         session_repository,
         session_store_factory,
     )
-    configuration_manager = GatewayConfigurationManager(configuration, database, coordinator)
+    configuration_manager = RuntimeConfigurationManager(configuration, database, coordinator)
     await configuration_manager.initialize()
     return GatewayComposition(
         runtime=coordinator,

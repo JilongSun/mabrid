@@ -171,6 +171,9 @@ def test_offline_frontend_contract_is_deterministic_and_partitions_routes() -> N
         "/api/v1/gateway/sessions/{session_id}/snapshot",
         "/api/v1/gateway/sessions/{session_id}/events",
         "/api/v1/agent-host/target",
+        "/api/v1/agent-host/configuration",
+        "/api/v1/agent-host/configuration/runtime",
+        "/api/v1/agent-host/configuration/apply",
         "/health",
         "/ready",
     }
@@ -182,9 +185,9 @@ def test_offline_frontend_contract_is_deterministic_and_partitions_routes() -> N
         set(operation)
         == (
             {"post"}
-            if path == "/api/v1/gateway/configuration/apply"
+            if path.endswith("/configuration/apply")
             else {"get", "put"}
-            if path == "/api/v1/gateway/configuration/runtime"
+            if path.endswith("/configuration/runtime")
             else {"get"}
         )
         for path, operation in paths.items()
@@ -212,9 +215,11 @@ def test_offline_frontend_contract_is_deterministic_and_partitions_routes() -> N
 
 
 async def test_management_errors_match_the_frozen_media_type_and_safe_validation() -> None:
+    from types import SimpleNamespace
+
     app = create_app(
         cast(GatewaySessionCoordinator, object()),
-        gateway_management=cast(GatewayManagementComposition, object()),
+        gateway_management=cast(GatewayManagementComposition, SimpleNamespace(configuration=None)),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://fixture.test"
@@ -222,6 +227,8 @@ async def test_management_errors_match_the_frozen_media_type_and_safe_validation
         for path, status, code in (
             ("/api/v1/gateway/sessions?limit=0", 422, "invalid_request"),
             ("/api/v1/agent-host/target", 404, "agent_host_disabled"),
+            ("/api/v1/agent-host/configuration", 503, "configuration_unavailable"),
+            ("/api/v1/agent-host/configuration/runtime", 503, "configuration_unavailable"),
         ):
             response = await client.get(path)
             assert response.status_code == status

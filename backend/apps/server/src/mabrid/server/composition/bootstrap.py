@@ -18,8 +18,9 @@ from mabrid.server.config import RuntimeConfiguration
 from mabrid.server.logging import get_logger
 from mabrid.server.persistence import SqliteDatabase
 
-from .agent_host import AgentHostComposition, compose_agent_host
+from .agent_host import AgentHostComposition, HostConfigurationError, compose_agent_host
 from .gateway import GatewayManagementComposition, compose_gateway
+from .host_runtime import ActiveHostObserverFactory, AgentHostRuntime
 
 logger = get_logger(__name__)
 
@@ -31,9 +32,21 @@ class BootstrapResult:
     gateway: GatewaySessionCoordinator
     gateway_management: GatewayManagementComposition
     database: SqliteDatabase
-    agent_host: AgentHostComposition | None
-    mcp_apps: McpAppsComposition | None
-    host_events: HostEventStream | None
+    host_runtime: AgentHostRuntime
+
+    @property
+    def agent_host(self) -> AgentHostComposition | None:
+        return self.host_runtime.current
+
+    @property
+    def mcp_apps(self) -> McpAppsComposition | None:
+        current = self.agent_host
+        return current.capabilities.mcp_apps if current is not None else None
+
+    @property
+    def host_events(self) -> HostEventStream | None:
+        current = self.agent_host
+        return current.capabilities.events if current is not None else None
 
 
 async def bootstrap_server(configuration: RuntimeConfiguration) -> BootstrapResult:
@@ -46,8 +59,6 @@ async def bootstrap_server(configuration: RuntimeConfiguration) -> BootstrapResu
     database = SqliteDatabase(configuration.storage.sqlite_path)
     logger.info("SQLite database opened: %s", configuration.storage.sqlite_path)
     agent_host: AgentHostComposition | None = None
-    mcp_apps: McpAppsComposition | None = None
-    host_events: HostEventStream | None = None
     try:
         if configuration.storage.auto_migrate:
             logger.info("Running database migrations")
@@ -55,7 +66,11 @@ async def bootstrap_server(configuration: RuntimeConfiguration) -> BootstrapResu
         gateway = await compose_gateway(configuration, database)
         manager = gateway.management.configuration
         target_slug = configuration.agent_host.endpoint_slug
-        if (
+        if configuration.host_error is not None:
+            logger.error("Agent Host not started: %s", configuration.host_error)
+            if manager is not None:
+                manager.mark_host_unavailable()
+        elif (
             manager is not None
             and configuration.agent_host.enabled
             and (
@@ -66,11 +81,16 @@ async def bootstrap_server(configuration: RuntimeConfiguration) -> BootstrapResu
             logger.error("Agent Host not started: its assigned endpoint is unavailable.")
             manager.mark_host_unavailable()
         else:
-            agent_host = await compose_agent_host(configuration, gateway.runtime, database)
-        if agent_host is not None:
-            mcp_apps = agent_host.capabilities.mcp_apps
-            host_events = agent_host.capabilities.events
-            gateway.runtime.configure_session_observer_factory(agent_host.bridge_observer_factory)
+            try:
+                agent_host = await compose_agent_host(configuration, gateway.runtime, database)
+            except HostConfigurationError as exc:
+                logger.error("Agent Host not started: %s", exc)
+                if manager is not None:
+                    manager.mark_host_unavailable(str(exc))
+        host_runtime = AgentHostRuntime(agent_host)
+        if manager is not None:
+            manager.bind_host_runtime(host_runtime)
+        gateway.runtime.configure_session_observer_factory(ActiveHostObserverFactory(host_runtime))
     except BaseException:
         logger.exception("Bootstrap failed - closing composed resources")
         with anyio.CancelScope(shield=True):
@@ -84,7 +104,5 @@ async def bootstrap_server(configuration: RuntimeConfiguration) -> BootstrapResu
         gateway=gateway.runtime,
         gateway_management=gateway.management,
         database=database,
-        agent_host=agent_host,
-        mcp_apps=mcp_apps,
-        host_events=host_events,
+        host_runtime=host_runtime,
     )

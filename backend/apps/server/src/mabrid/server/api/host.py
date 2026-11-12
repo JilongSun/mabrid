@@ -25,6 +25,7 @@ from mabrid.application.agent_host import (
     AgentSessionRunStatus,
 )
 from mabrid.application.host import HostSessionEventStream, HostAgentEvent, HostEvent
+from mabrid.server.composition.host_runtime import AgentHostRuntime
 
 from .host_contracts import (
     CreateHostSessionRequest,
@@ -154,8 +155,20 @@ class _HostRoute(APIRoute):
 
 
 def create_host_router(
-    sessions: AgentSessionService | None, presentation: HostSessionEventStream | None = None
+    sessions: AgentSessionService | None,
+    presentation: HostSessionEventStream | None = None,
+    *,
+    runtime: AgentHostRuntime | None = None,
 ) -> APIRouter:
+    def services() -> tuple[AgentSessionService | None, HostSessionEventStream | None]:
+        if runtime is None:
+            return sessions, presentation
+        current = runtime.current
+        return (
+            current.sessions if current is not None else None,
+            current.capabilities.session_events if current is not None else None,
+        )
+
     router = APIRouter(
         prefix="/api/v1/host",
         tags=["Host"],
@@ -167,6 +180,7 @@ def create_host_router(
 
     @router.post("/sessions", response_model=HostSessionResponse, status_code=201)
     async def create_session(payload: CreateHostSessionRequest):
+        sessions, _ = services()
         if sessions is None:
             return host_error_response("unsupported_operation")
         try:
@@ -181,6 +195,7 @@ def create_host_router(
     async def list_sessions(
         limit: Annotated[int, Query(ge=1, le=200)] = 20, offset: Annotated[int, Query(ge=0)] = 0
     ):
+        sessions, _ = services()
         if sessions is None:
             return host_error_response("unsupported_operation")
         lookahead_limit = limit + 1
@@ -198,6 +213,7 @@ def create_host_router(
 
     @router.get("/sessions/{session_id}", response_model=HostSessionResponse)
     async def get_session(session_id: UUID):
+        sessions, _ = services()
         if sessions is None:
             return host_error_response("unsupported_operation", session_id=session_id)
         try:
@@ -215,6 +231,7 @@ def create_host_router(
         offset: Annotated[int, Query(ge=0)] = 0,
         order: Annotated[str, Query(pattern="^(oldest|latest)$")] = "latest",
     ):
+        sessions, _ = services()
         if sessions is None:
             return host_error_response("unsupported_operation", session_id=session_id)
         try:
@@ -233,6 +250,7 @@ def create_host_router(
         responses={200: {"content": {"text/event-stream": {"schema": {"type": "string"}}}}},
     )
     async def start_run(session_id: UUID, payload: StartHostSessionRunRequest, request: Request):
+        sessions, presentation = services()
         if sessions is None or presentation is None:
             return host_error_response("unsupported_operation", session_id=session_id)
         if request.headers.get("last-event-id"):
@@ -270,6 +288,7 @@ def create_host_router(
         status_code=202,
     )
     async def cancel_run(session_id: UUID, run_id: UUID):
+        sessions, _ = services()
         if sessions is None:
             return host_error_response(
                 "unsupported_operation", session_id=session_id, run_id=run_id
@@ -284,6 +303,7 @@ def create_host_router(
         "/sessions/{session_id}/runs/{run_id}/reconcile", response_model=HostReconcileResponse
     )
     async def reconcile_run(session_id: UUID, run_id: UUID):
+        sessions, _ = services()
         if sessions is None:
             return host_error_response(
                 "unsupported_operation", session_id=session_id, run_id=run_id

@@ -22,6 +22,7 @@ class AgentSessionRow(Base):
 
     session_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     target_id: Mapped[str] = mapped_column(String(255))
+    integration_kind: Mapped[str] = mapped_column(String(255))
     runtime_binding_id: Mapped[str] = mapped_column(String(255))
     remote_session_id: Mapped[str] = mapped_column(Text)
     title: Mapped[str | None] = mapped_column(Text)

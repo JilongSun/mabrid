@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -51,8 +52,8 @@ class ConfigError(RuntimeError):
 class RuntimeFileCandidate:
     """Hold one resolved runtime-file candidate for validation and application.
 
-    `agent_host_signature` identifies the whole restart-applied `agentHost` section, including
-    a disabled one, so any change to that section requires a restart.
+    The file hash guards external edits. Component signatures identify effective settings,
+    independently of comments and changes to another section.
     """
 
     upstreams: dict[str, RuntimeUpstreamConfig]
@@ -61,6 +62,18 @@ class RuntimeFileCandidate:
     agent_host_signature: str | None
     source: Literal["runtime_file", "unconfigured", "provided"]
     content_hash: str | None
+
+    @property
+    def gateway_signature(self) -> str:
+        value = {
+            "upstreams": {
+                name: upstream.model_dump(mode="json") for name, upstream in self.upstreams.items()
+            },
+            "endpoints": {
+                name: endpoint.model_dump(mode="json") for name, endpoint in self.endpoints.items()
+            },
+        }
+        return sha256(json.dumps(value, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 DEFAULT_PROXY_NAME = "mabrid-gateway"
@@ -81,20 +94,38 @@ def resolve_runtime_configuration(config_path: str | None) -> RuntimeConfigurati
         update={"proxy_name": process.bridge.proxy_name or DEFAULT_PROXY_NAME}
     )
     runtime_error: str | None = None
+    host_error: str | None = None
     try:
         candidate = _load_runtime_file(path, bridge, process.bridge.diagnostic_upstream)
     except ConfigError as exc:
         if exc.source != "runtime_file":
             raise
-        candidate = RuntimeFileCandidate(
-            upstreams={},
-            endpoints={},
-            agent_host=RuntimeAgentHostConfig(),
-            agent_host_signature=_agent_host_signature(AgentHostFileConfig()),
-            source="runtime_file",
-            content_hash=exc.content_hash,
-        )
-        runtime_error = str(exc)
+        try:
+            candidate = _load_runtime_file(
+                path, bridge, process.bridge.diagnostic_upstream, component="gateway"
+            )
+            host_error = str(exc)
+        except ConfigError as gateway_error:
+            host_candidate: RuntimeFileCandidate | None = None
+            try:
+                host_candidate = _load_runtime_file(
+                    path, bridge, process.bridge.diagnostic_upstream, component="host"
+                )
+            except ConfigError as host_failure:
+                host_error = str(host_failure)
+            candidate = RuntimeFileCandidate(
+                upstreams={},
+                endpoints={},
+                agent_host=host_candidate.agent_host
+                if host_candidate
+                else RuntimeAgentHostConfig(),
+                agent_host_signature=host_candidate.agent_host_signature
+                if host_candidate
+                else _agent_host_signature(AgentHostFileConfig()),
+                source="runtime_file",
+                content_hash=exc.content_hash,
+            )
+            runtime_error = str(gateway_error)
     sqlite_path = process.storage.sqlite_path
     if not sqlite_path.is_absolute():
         sqlite_path = (path.parent / sqlite_path).resolve()
@@ -111,15 +142,23 @@ def resolve_runtime_configuration(config_path: str | None) -> RuntimeConfigurati
         runtime_hash=candidate.content_hash,
         runtime_error=runtime_error,
         static_signature=_process_signature(process),
+        host_error=host_error,
     )
 
 
-def load_runtime_candidate(configuration: RuntimeConfiguration) -> RuntimeFileCandidate:
+def load_runtime_candidate(
+    configuration: RuntimeConfiguration,
+    *,
+    component: Literal["all", "gateway", "host"] = "all",
+) -> RuntimeFileCandidate:
     """Read the selected runtime file without applying changed process settings."""
     raw, static_hash = _read_document(configuration.config_path)
     _validate_process(raw, static_hash)
     return _load_runtime_file(
-        configuration.config_path, configuration.bridge, configuration.diagnostic_upstream
+        configuration.config_path,
+        configuration.bridge,
+        configuration.diagnostic_upstream,
+        component=component,
     )
 
 
@@ -168,7 +207,11 @@ def _validate_process(raw: dict[str, object], content_hash: str) -> ProcessFileC
 
 
 def _load_runtime_file(
-    config_path: Path, bridge: BridgeRuntimeConfig, diagnostic_upstream: str | None
+    config_path: Path,
+    bridge: BridgeRuntimeConfig,
+    diagnostic_upstream: str | None,
+    *,
+    component: Literal["all", "gateway", "host"] = "all",
 ) -> RuntimeFileCandidate:
     runtime_path = config_path.with_name(RUNTIME_CONFIG_FILE_NAME)
     if runtime_path.exists():
@@ -184,7 +227,13 @@ def _load_runtime_file(
         content_hash = None
         source = "unconfigured"
     return resolve_runtime_document(
-        runtime_raw, config_path, bridge, diagnostic_upstream, content_hash, source
+        runtime_raw,
+        config_path,
+        bridge,
+        diagnostic_upstream,
+        content_hash,
+        source,
+        component=component,
     )
 
 
@@ -195,17 +244,29 @@ def resolve_runtime_document(
     diagnostic_upstream: str | None,
     content_hash: str | None,
     source: Literal["runtime_file", "unconfigured"] = "runtime_file",
+    *,
+    component: Literal["all", "gateway", "host"] = "all",
 ) -> RuntimeFileCandidate:
     """Resolve a complete candidate identically for file loading and validated editing."""
     try:
-        config = RuntimeFileConfig.model_validate(runtime_raw)
+        selected = dict(runtime_raw)
+        if component == "gateway":
+            selected.pop("agentHost", None)
+        elif component == "host":
+            selected.pop("upstreams", None)
+            selected.pop("endpoints", None)
+        config = RuntimeFileConfig.model_validate(selected)
     except ValidationError as exc:
         raise ConfigError(
             f"Invalid runtime configuration: {_validation_summary(exc)}",
             content_hash=content_hash,
             source=source,
         ) from exc
-    if diagnostic_upstream is not None and diagnostic_upstream not in config.upstreams:
+    if (
+        component != "host"
+        and diagnostic_upstream is not None
+        and diagnostic_upstream not in config.upstreams
+    ):
         raise ConfigError(
             f"'bridge.diagnosticUpstream' references unknown upstream '{diagnostic_upstream}'",
             content_hash=content_hash,

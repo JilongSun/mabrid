@@ -77,3 +77,4 @@ class RuntimeConfiguration:
     runtime_hash: str | None = None
     runtime_error: str | None = None
     static_signature: str | None = None
+    host_error: str | None = None

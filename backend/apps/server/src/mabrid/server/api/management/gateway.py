@@ -12,7 +12,7 @@ from mabrid.application.gateway.sessions import BridgeSessionStatus, SessionPage
 from mabrid.server.composition import GatewayManagementComposition
 from mabrid.server.composition.configuration import (
     ConfigurationApplyError,
-    GatewayConfigurationManager,
+    RuntimeConfigurationManager,
 )
 from mabrid.server.composition.topology import TopologyConfigurationError
 from mabrid.server.config.editor import ConfigurationEditError, RuntimeEditRequest, RuntimeEditView
@@ -121,7 +121,6 @@ def create_gateway_management_router(
             status_code = {
                 "configuration_invalid": 422,
                 "configuration_conflict": 409,
-                "configuration_restart_required": 409,
                 "configuration_ledger_error": 500,
                 "configuration_storage_error": 500,
             }[exc.code]
@@ -230,7 +229,7 @@ def create_gateway_management_router(
     return router
 
 
-def _configuration_manager(management: GatewayManagementComposition) -> GatewayConfigurationManager:
+def _configuration_manager(management: GatewayManagementComposition) -> RuntimeConfigurationManager:
     if management.configuration is None:
         raise ManagementProblem(
             problem(

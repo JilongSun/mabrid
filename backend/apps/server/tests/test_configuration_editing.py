@@ -189,6 +189,46 @@ async def _client(tmp_path: Path, content: str | None = None):
         await result.database.close()
 
 
+async def test_host_save_preserves_gateway_and_uses_shared_conflict_guard(tmp_path: Path) -> None:
+    content = """# shared note
+agentHost: # Host note
+    enabled: false
+upstreams:
+    service: # Gateway note
+        transport: sse
+        url: https://example.test/sse
+        headers: {Authorization: fixture-secret}
+endpoints: {}
+"""
+    async with _client(tmp_path, content) as (client, result, editor, path):
+        gateway_request = _request(editor)
+        view = (await client.get("/api/v1/agent-host/configuration/runtime")).json()
+        assert "fixture-secret" not in str(view)
+        view["agent_host"]["targetId"] = "draft-target"
+        request = {"expected_hash": view["content_hash"], "agent_host": view["agent_host"]}
+        async with result.host_runtime.operation():
+            saved = await client.put("/api/v1/agent-host/configuration/runtime", json=request)
+            assert saved.status_code == 200
+            blocked = await client.post(
+                "/api/v1/agent-host/configuration/apply",
+                json={"expected_hash": saved.json()["content_hash"]},
+            )
+            assert blocked.status_code == 409 and blocked.json()["code"] == "configuration_busy"
+        assert "# Gateway note" in path.read_text() and "# Host note" in path.read_text()
+        assert yaml.safe_load(path.read_text())["upstreams"] == yaml.safe_load(content)["upstreams"]
+        stale = await client.put(
+            "/api/v1/gateway/configuration/runtime",
+            json=gateway_request.model_dump(mode="json", by_alias=True),
+        )
+        assert stale.status_code == 409
+        status = (await client.get("/api/v1/agent-host/configuration")).json()
+        assert status["pending"] and not status["enabled"]
+        applied = await client.post(
+            "/api/v1/agent-host/configuration/apply", json={"expected_hash": status["file_hash"]}
+        )
+        assert applied.status_code == 200 and not applied.json()["pending"]
+
+
 async def test_http_save_then_explicit_apply_and_stale_conflict(tmp_path: Path) -> None:
     async with _client(tmp_path) as (client, result, editor, _path):
         read = await client.get("/api/v1/gateway/configuration/runtime")

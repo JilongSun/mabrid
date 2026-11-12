@@ -118,9 +118,9 @@ def test_mcp_apps_workflow_requires_enabled_agent_host(tmp_path: Path) -> None:
     config_path = tmp_path / "fixture.yaml"
     _write_config(config_path, topology=TOPOLOGY + "agentHost: {mcpAppsEnabled: true}")
     configuration = resolve_runtime_configuration(str(config_path))
-    assert configuration.runtime_error is not None
-    assert "requires enabled Agent Host" in configuration.runtime_error
-    assert not configuration.agent_host.enabled and not configuration.upstreams
+    assert configuration.runtime_error is None and configuration.host_error is not None
+    assert "requires enabled Agent Host" in configuration.host_error
+    assert not configuration.agent_host.enabled and configuration.upstreams
 
 
 def test_enabled_agent_host_requires_configured_api_key_environment(
@@ -130,10 +130,10 @@ def test_enabled_agent_host_requires_configured_api_key_environment(
     _write_config(config_path)
     monkeypatch.delenv("FIXTURE_HERMES_KEY", raising=False)
     configuration = resolve_runtime_configuration(str(config_path))
-    assert configuration.runtime_error is not None
-    assert "FIXTURE_HERMES_KEY" in configuration.runtime_error
+    assert configuration.runtime_error is None and configuration.host_error is not None
+    assert "FIXTURE_HERMES_KEY" in configuration.host_error
     assert configuration.runtime_hash is not None
-    assert not configuration.agent_host.enabled and not configuration.endpoints
+    assert not configuration.agent_host.enabled and configuration.endpoints
 
 
 @pytest.mark.parametrize(
@@ -175,8 +175,8 @@ def test_agent_host_rejects_an_unknown_runtime_integration(tmp_path: Path) -> No
         config_path, topology=TOPOLOGY + HOST.replace("integration: hermes", "integration: unknown")
     )
     configuration = resolve_runtime_configuration(str(config_path))
-    assert configuration.runtime_error is not None
-    assert "integration" in configuration.runtime_error
+    assert configuration.runtime_error is None and configuration.host_error is not None
+    assert "integration" in configuration.host_error
     assert not configuration.agent_host.enabled
 
 
@@ -237,8 +237,8 @@ def test_enabled_agent_host_requires_advertised_base_url(tmp_path: Path) -> None
     config_path = tmp_path / "fixture.yaml"
     _write_config(config_path, "{}")
     configuration = resolve_runtime_configuration(str(config_path))
-    assert configuration.runtime_error is not None
-    assert "advertisedBaseUrl" in configuration.runtime_error
+    assert configuration.runtime_error is None and configuration.host_error is not None
+    assert "advertisedBaseUrl" in configuration.host_error
     assert not configuration.agent_host.enabled
 
 

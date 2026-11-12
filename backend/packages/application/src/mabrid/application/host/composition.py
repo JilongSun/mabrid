@@ -118,6 +118,7 @@ async def compose_host_capabilities(
     sessions = (
         AgentSessionService(
             target_id=target.target_id,
+            integration_kind=target.runtime_profile.integration_kind,
             runtime_binding_id=native.binding_id,
             repository=repository,
             catalog=native.catalog,

@@ -83,7 +83,7 @@ class AgentSessionRepository(Protocol):
     async def get(self, session_id: UUID) -> AgentSessionRecord | None: ...
 
     async def list_sessions(
-        self, *, target_id: str, limit: int, offset: int
+        self, *, target_id: str, integration_kind: str, limit: int, offset: int
     ) -> tuple[AgentSessionRecord, ...]: ...
 
     async def update_runtime_session(

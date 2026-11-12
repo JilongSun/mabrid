@@ -25,7 +25,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.error import YAMLError
 
-from .file import EndpointFileConfig, RuntimeFileConfig
+from .file import AgentHostFileConfig, EndpointFileConfig, RuntimeFileConfig
 from .loader import (
     RUNTIME_CONFIG_FILE_NAME,
     ConfigError,
@@ -106,6 +106,21 @@ class RuntimeEditView(EditorModel):
     agent_host: HostEditView
 
 
+class HostRuntimeEditRequest(EditorModel):
+    """Edit only Host settings using credential reference names, never resolved values."""
+
+    expected_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
+    agent_host: AgentHostFileConfig
+
+
+class HostRuntimeEditView(EditorModel):
+    """Expose the desired Host and current Gateway assignment choices separately."""
+
+    content_hash: str | None
+    agent_host: AgentHostFileConfig
+    published_endpoints: tuple[str, ...] = ()
+
+
 class ConfigurationEditError(RuntimeError):
     """Carry safe editing failures without file contents or sensitive request values."""
 
@@ -124,6 +139,51 @@ class RuntimeFileEditor:
     def read(self) -> RuntimeEditView:
         document, content_hash = self._read()
         return self._view(document, content_hash)
+
+    def read_host(self) -> HostRuntimeEditView:
+        document, content_hash = self._read()
+        return self._host_view(document, content_hash)
+
+    def prepare_host(self, request: HostRuntimeEditRequest) -> tuple[bytes, RuntimeFileCandidate]:
+        document, content_hash = self._read()
+        if request.expected_hash != content_hash:
+            raise ConfigurationEditError(
+                "configuration_conflict", "The file changed. Reload before saving."
+            )
+        node = document.setdefault("agentHost", CommentedMap())
+        self._merge_host(node, request.agent_host.model_dump(mode="json", by_alias=True))
+        stream = StringIO()
+        self._yaml().dump(document, stream)
+        content = stream.getvalue().encode("utf-8")
+        try:
+            candidate = resolve_runtime_document(
+                cast(dict[str, object], document),
+                self._configuration.config_path,
+                self._configuration.bridge,
+                self._configuration.diagnostic_upstream,
+                sha256(content).hexdigest(),
+            )
+        except ConfigError as exc:
+            raise ConfigurationEditError("configuration_invalid", str(exc)) from exc
+        return content, candidate
+
+    @classmethod
+    def _merge_host(cls, node: CommentedMap, values: dict[str, object]) -> None:
+        for key, value in values.items():
+            if isinstance(value, dict):
+                child = node.get(key)
+                if not isinstance(child, CommentedMap):
+                    child = CommentedMap()
+                    node[key] = child
+                cls._merge_host(child, value)
+            elif node.get(key) != value:
+                node[key] = value
+
+    def write_host(self, content: bytes, expected_hash: str | None) -> HostRuntimeEditView:
+        self.write(content, expected_hash)
+        return self._host_view(
+            self._yaml().load(content.decode("utf-8")), sha256(content).hexdigest()
+        )
 
     def prepare(self, request: RuntimeEditRequest) -> tuple[bytes, RuntimeFileCandidate]:
         """Merge edits without writing, then use the shared complete-candidate resolver."""
@@ -287,6 +347,12 @@ class RuntimeFileEditor:
         yaml = YAML()
         yaml.preserve_quotes = True
         return yaml
+
+    def _host_view(self, document: CommentedMap, content_hash: str | None) -> HostRuntimeEditView:
+        return HostRuntimeEditView(
+            content_hash=content_hash,
+            agent_host=self._validate(document).agent_host,
+        )
 
     def _view(self, document: CommentedMap, content_hash: str | None) -> RuntimeEditView:
         config = self._validate(document)

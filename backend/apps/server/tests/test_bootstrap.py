@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 from pathlib import Path
+from unittest.mock import AsyncMock, Mock
 
+import anyio
 from mabrid.application.agent_host import (
     AgentCapability,
     AgentRuntimeInterface,
@@ -31,7 +33,14 @@ from sqlalchemy import inspect
 
 from mabrid.server.api import create_app
 from mabrid.server.api.frontend_contract import frontend_contract
+from mabrid.server.api.host_lifecycle import HostOperationMiddleware
 from mabrid.server.composition import GatewayManagementComposition, bootstrap_server
+from mabrid.server.composition.host_runtime import (
+    ActiveHostObserverFactory,
+    AgentHostRuntime,
+    HostRuntimeBusyError,
+)
+from mabrid.bridge import ToolCallStarted, ToolsPublished
 from mabrid.server.config import (
     BridgeRuntimeConfig,
     EndpointBindingFileConfig,
@@ -50,6 +59,160 @@ from openai import AsyncOpenAI
 
 def _endpoints() -> dict[str, EndpointFileConfig]:
     return {"fixture": EndpointFileConfig(bindings=[EndpointBindingFileConfig(upstream="fixture")])}
+
+
+@pytest.mark.parametrize(
+    "path,leased",
+    [
+        ("/api/v1/host/sessions/fixture/runs", True),
+        ("/api/v1/capabilities", True),
+        ("/v1/chat/completions", True),
+        ("/api/v1/agent-host/configuration/apply", False),
+    ],
+)
+async def test_http_host_lease_covers_response_body(path: str, leased: bool) -> None:
+    runtime = AgentHostRuntime()
+    headers_sent = anyio.Event()
+    release = anyio.Event()
+
+    async def application(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"partial", "more_body": True})
+        headers_sent.set()
+        await release.wait()
+        await send({"type": "http.response.body", "body": b"done"})
+
+    async def send(message):
+        return None
+
+    async def receive():
+        return {"type": "http.disconnect"}
+
+    async def prepare() -> None:
+        return None
+
+    middleware = HostOperationMiddleware(application, runtime)
+    async with anyio.create_task_group() as group:
+        group.start_soon(middleware, {"type": "http", "path": path}, receive, send)
+        await headers_sent.wait()
+        if leased:
+            with pytest.raises(HostRuntimeBusyError):
+                await runtime.replace(prepare)
+        else:
+            await runtime.replace(prepare)
+        release.set()
+    await runtime.replace(prepare)
+    assert not runtime.busy
+
+
+async def test_host_replacement_keeps_admission_locked_through_old_client_cleanup() -> None:
+    original = Mock()
+    replacement = Mock()
+    prepared = anyio.Event()
+    publish = anyio.Event()
+    closing = anyio.Event()
+    closed = anyio.Event()
+    attempted = anyio.Event()
+    admitted = anyio.Event()
+
+    async def close():
+        closing.set()
+        await closed.wait()
+
+    original.close = AsyncMock(side_effect=close)
+    runtime = AgentHostRuntime(original)
+
+    async def prepare():
+        prepared.set()
+        await publish.wait()
+        return replacement
+
+    async def operation():
+        attempted.set()
+        async with runtime.operation() as current:
+            assert current is replacement
+            admitted.set()
+
+    async with anyio.create_task_group() as group:
+        group.start_soon(runtime.replace, prepare)
+        await prepared.wait()
+        group.start_soon(operation)
+        await attempted.wait()
+        assert not admitted.is_set()
+        publish.set()
+        await closing.wait()
+        assert not admitted.is_set()
+        closed.set()
+        await admitted.wait()
+    original.close.assert_awaited_once()
+
+
+async def test_existing_gateway_observer_switches_host_without_replaying_operations() -> None:
+    original_observer = Mock(observe=AsyncMock())
+    replacement_observer = Mock(observe=AsyncMock())
+    original = Mock(close=AsyncMock())
+    replacement = Mock(close=AsyncMock())
+    original.bridge_observer_factory.create.return_value = original_observer
+    replacement.bridge_observer_factory.create.return_value = replacement_observer
+    runtime = AgentHostRuntime(original)
+    observer = ActiveHostObserverFactory(runtime).create("existing", "fixture")
+    tools = ToolsPublished(session_key="existing", tools=())
+    started = ToolCallStarted(session_key="existing", operation_key="first", tool_name="inspect")
+    await observer.observe(tools)
+    await observer.observe(started)
+    original.bridge_observer_factory.create.assert_called_once_with("existing", "fixture")
+
+    async def prepare():
+        return replacement
+
+    await runtime.replace(prepare)
+    next_started = ToolCallStarted(
+        session_key="existing", operation_key="second", tool_name="inspect"
+    )
+    await observer.observe(next_started)
+    replacement.bridge_observer_factory.create.assert_called_once_with("existing", "fixture")
+    assert [entry.args[0] for entry in replacement_observer.observe.await_args_list] == [
+        tools,
+        next_started,
+    ]
+    assert original_observer.observe.await_count == 2
+    original.close.assert_awaited_once()
+
+
+async def test_host_runtime_replacement_requires_idle_operations() -> None:
+    runtime = AgentHostRuntime()
+    prepared = False
+
+    async def prepare() -> None:
+        nonlocal prepared
+        prepared = True
+
+    async with runtime.operation():
+        with pytest.raises(HostRuntimeBusyError):
+            await runtime.replace(prepare)
+        assert not prepared
+    await runtime.replace(prepare)
+    assert prepared
+
+
+async def test_cancelled_host_operation_releases_admission() -> None:
+    runtime = AgentHostRuntime()
+    admitted = anyio.Event()
+
+    async def operation() -> None:
+        async with runtime.operation():
+            admitted.set()
+            await anyio.sleep_forever()
+
+    async with anyio.create_task_group() as group:
+        group.start_soon(operation)
+        await admitted.wait()
+        group.cancel_scope.cancel()
+
+    async def prepare() -> None:
+        return None
+
+    await runtime.replace(prepare)
 
 
 @pytest.mark.parametrize("static_frontend", [False, True])
@@ -537,13 +700,14 @@ async def test_agent_target_requires_a_published_enabled_endpoint(tmp_path: Path
         ),
     )
 
+    result = await bootstrap_server(configuration)
     try:
-        await bootstrap_server(configuration)
-    except ValueError as exc:
-        assert "missing-endpoint" in str(exc)
-        assert "not published and enabled" in str(exc)
-    else:
-        raise AssertionError("bootstrap accepted an unpublished Agent Target endpoint")
+        assert result.agent_host is None
+        assert result.gateway.published_endpoints
+        assert result.gateway_management.configuration is not None
+        assert (await result.gateway_management.configuration.status()).host_unavailable
+    finally:
+        await result.database.close()
 
 
 @pytest.mark.parametrize("fail_session_close", [False, True])
@@ -623,6 +787,7 @@ async def test_bootstrap_restores_unsettled_native_ownership_before_all_ingress(
     repository = SqliteAgentSessionRepository(database.session_factory)
     session = AgentSessionRecord(
         target_id="fixture-target",
+        integration_kind="hermes",
         runtime_session=RuntimeSessionReference(
             runtime_binding_id="original", remote_session_id="remote-session"
         ),

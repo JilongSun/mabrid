@@ -21,6 +21,7 @@ class AgentSessionRecord(AgentHostModel):
 
     session_id: UUID = Field(default_factory=uuid4)
     target_id: str = Field(min_length=1)
+    integration_kind: str = Field(min_length=1)
     runtime_session: RuntimeSessionReference
     title: str | None = None
     created_at: AwareDatetime

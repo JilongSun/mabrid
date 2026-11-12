@@ -207,6 +207,7 @@ class GatewayConfigurationResponse(ManagementResponse):
     applied_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
     applied_source: Literal["runtime_file", "unconfigured", "provided", "ledger"]
     desired_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
+    file_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
     desired_source: Literal["runtime_file", "unconfigured", "provided", "unknown"]
     file_valid: bool
     pending: bool
@@ -220,6 +221,20 @@ class ApplyGatewayConfigurationRequest(ManagementResponse):
     """Require the file identity observed by the caller before an explicit apply."""
 
     expected_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class HostConfigurationResponse(ManagementResponse):
+    """Expose process-local Host application state without configuration history."""
+
+    applied_hash: str | None
+    desired_hash: str | None
+    file_hash: str | None
+    applied_at: datetime | None
+    enabled: bool
+    file_valid: bool
+    pending: bool
+    busy: bool
+    error: str | None
 
 
 class SessionResponse(ManagementResponse):

@@ -1,8 +1,8 @@
-"""Own serialized file-backed Gateway configuration application for one process."""
+"""Serialize shared file writes and independently apply Gateway and Host settings."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -10,6 +10,7 @@ import anyio
 from anyio.to_thread import run_sync
 from mabrid.application.gateway.sessions import GatewaySessionCoordinator
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import select
 
 from mabrid.server.config import (
     ConfigError,
@@ -19,12 +20,21 @@ from mabrid.server.config import (
     read_process_signature,
 )
 from mabrid.server.logging import get_logger
-from mabrid.server.config.editor import RuntimeEditRequest, RuntimeEditView, RuntimeFileEditor
+from mabrid.server.config.editor import (
+    HostRuntimeEditRequest,
+    HostRuntimeEditView,
+    RuntimeEditRequest,
+    RuntimeEditView,
+    RuntimeFileEditor,
+)
 from mabrid.server.persistence import SqliteDatabase
-from mabrid.server.persistence.schema import GatewayConfigurationStateRow
+from mabrid.server.persistence.schema import GatewayConfigurationStateRow, UnsettledAgentRunRow
 from mabrid.server.persistence.topology import TopologyLedgerError, reconcile_topology
+from mabrid.server.config.runtime import RuntimeAgentHostConfig
 
 from .topology import TopologyConfigurationError, build_topology_definitions
+from .host_runtime import AgentHostRuntime, HostRuntimeBusyError
+from .agent_host import compose_agent_host, AgentHostComposition, HostConfigurationError
 
 logger = get_logger(__name__)
 
@@ -38,6 +48,7 @@ class GatewayConfigurationStatus:
     applied_hash: str | None
     applied_source: str
     desired_hash: str | None
+    file_hash: str | None
     desired_source: str
     file_valid: bool
     pending: bool
@@ -45,6 +56,21 @@ class GatewayConfigurationStatus:
     restart_required: bool
     host_unavailable: bool
     recovery_required: bool
+
+
+@dataclass(frozen=True)
+class HostConfigurationStatus:
+    """Report Host application independently of Gateway revisions or file formatting."""
+
+    applied_hash: str | None
+    desired_hash: str | None
+    file_hash: str | None
+    applied_at: datetime | None
+    enabled: bool
+    file_valid: bool
+    pending: bool
+    busy: bool
+    error: str | None
 
 
 class ConfigurationStorageError(RuntimeError):
@@ -59,9 +85,10 @@ class ConfigurationApplyError(RuntimeError):
         code: Literal[
             "configuration_invalid",
             "configuration_conflict",
-            "configuration_restart_required",
             "configuration_ledger_error",
             "configuration_storage_error",
+            "configuration_busy",
+            "configuration_host_error",
         ],
         message: str,
     ):
@@ -69,12 +96,12 @@ class ConfigurationApplyError(RuntimeError):
         self.code = code
 
 
-class GatewayConfigurationManager:
-    """Serialize reconciliation, publication, and status for the current Gateway process.
+class RuntimeConfigurationManager:
+    """Coordinate component configuration in the server composition layer.
 
     SQLite heads and the active publication move together under one apply lock. Existing
-    Sessions keep their captured plans; this service does not mutate Agent Host composition, so
-    a runtime file whose `agentHost` section differs from the startup section is rejected whole.
+    Sessions keep their captured plans. Host replacement uses its separate idle-only lifecycle;
+    a file version never implies that both components have applied its contents.
     """
 
     def __init__(
@@ -94,6 +121,11 @@ class GatewayConfigurationManager:
         self._last_error: str | None = None
         self._host_unavailable = False
         self._recovery_required = False
+        self.host_runtime: AgentHostRuntime | None = None
+        self._active_host = RuntimeAgentHostConfig()
+        self._host_applied_hash: str | None = None
+        self._host_applied_at: datetime | None = None
+        self._host_error = configuration.host_error
 
     @property
     def published_endpoint_slugs(self) -> tuple[str, ...]:
@@ -103,8 +135,19 @@ class GatewayConfigurationManager:
     def has_error(self) -> bool:
         return self._last_error is not None
 
-    def mark_host_unavailable(self) -> None:
+    def mark_host_unavailable(self, error: str | None = None) -> None:
         self._host_unavailable = True
+        self._host_error = (
+            error or self._host_error or "The Host endpoint is not currently published."
+        )
+
+    def bind_host_runtime(self, runtime: AgentHostRuntime) -> None:
+        self.host_runtime = runtime
+        if runtime.current is not None:
+            self._active_host = self._configuration.agent_host
+        if not self._host_unavailable and self._host_error is None:
+            self._host_applied_hash = self._configuration.agent_host_signature
+            self._host_applied_at = datetime.now(timezone.utc)
 
     async def initialize(self) -> None:
         """Publish the startup candidate, or report and retain last-known-good heads."""
@@ -119,7 +162,7 @@ class GatewayConfigurationManager:
         candidate = RuntimeFileCandidate(
             upstreams=self._configuration.upstreams,
             endpoints=self._configuration.endpoints,
-            agent_host=self._configuration.agent_host,
+            agent_host=RuntimeAgentHostConfig(),
             agent_host_signature=self._configuration.agent_host_signature,
             source=self._configuration.runtime_source,
             content_hash=self._configuration.runtime_hash,
@@ -176,7 +219,7 @@ class GatewayConfigurationManager:
                         self._last_error or "The configuration ledger is unavailable.",
                     )
             try:
-                candidate = load_runtime_candidate(self._configuration)
+                candidate = load_runtime_candidate(self._configuration, component="gateway")
             except ConfigError as exc:
                 self._last_error = str(exc)
                 raise ConfigurationApplyError("configuration_invalid", str(exc)) from exc
@@ -185,11 +228,7 @@ class GatewayConfigurationManager:
                     "configuration_conflict",
                     "The configuration file changed. Refresh its status before applying.",
                 )
-            if candidate.agent_host_signature != self._configuration.agent_host_signature:
-                raise ConfigurationApplyError(
-                    "configuration_restart_required",
-                    "Agent Host settings changed. Restart the process to apply this file.",
-                )
+            candidate = replace(candidate, agent_host=self._active_host)
             try:
                 await self._reconcile_and_publish(
                     candidate, allow_unconfigured_host=self._host_unavailable
@@ -206,6 +245,127 @@ class GatewayConfigurationManager:
             except ConfigurationStorageError as exc:
                 raise ConfigurationApplyError("configuration_storage_error", str(exc)) from exc
             return self._status()
+
+    async def host_status(self) -> HostConfigurationStatus:
+        async with self._lock:
+            return await self._host_status()
+
+    async def read_host_runtime(self) -> HostRuntimeEditView:
+        async with self._lock:
+            view = await run_sync(RuntimeFileEditor(self._configuration).read_host)
+            return view.model_copy(update={"published_endpoints": self.published_endpoint_slugs})
+
+    async def save_host_runtime(self, request: HostRuntimeEditRequest) -> HostRuntimeEditView:
+        def save() -> HostRuntimeEditView:
+            editor = RuntimeFileEditor(self._configuration)
+            content, candidate = editor.prepare_host(request)
+            build_topology_definitions(self._configuration, candidate)
+            return editor.write_host(content, request.expected_hash)
+
+        async with self._lock:
+            view = await run_sync(save)
+            return view.model_copy(update={"published_endpoints": self.published_endpoint_slugs})
+
+    async def apply_host(self, expected_hash: str | None) -> HostConfigurationStatus:
+        """Replace only the idle Host, never publish pending Gateway definitions."""
+        async with self._lock:
+            runtime = self.host_runtime
+            if runtime is None:
+                raise ConfigurationApplyError(
+                    "configuration_host_error", "Host lifecycle is unavailable."
+                )
+            try:
+                candidate = load_runtime_candidate(self._configuration, component="host")
+            except ConfigError as exc:
+                self._host_error = str(exc)
+                raise ConfigurationApplyError("configuration_invalid", str(exc)) from exc
+            if candidate.content_hash != expected_hash:
+                raise ConfigurationApplyError(
+                    "configuration_conflict", "The file changed. Reload before applying."
+                )
+            if (
+                candidate.agent_host_signature == self._host_applied_hash
+                and self._host_error is None
+            ):
+                return await self._host_status()
+
+            async def prepare() -> AgentHostComposition | None:
+                current = runtime.current
+                if (
+                    current is not None
+                    and await current.service.coordinator.active_run_id(
+                        current.service.target.target_id
+                    )
+                    is not None
+                ):
+                    raise HostRuntimeBusyError("The Host has an active or unsettled Run.")
+                async with self._database.session_factory() as session:
+                    pending = await session.scalar(select(UnsettledAgentRunRow).limit(1))
+                if pending is not None:
+                    raise HostRuntimeBusyError(
+                        "An unsettled Run must be reconciled before changing Host configuration."
+                    )
+                return await compose_agent_host(
+                    replace(self._configuration, agent_host=candidate.agent_host),
+                    self._gateway,
+                    self._database,
+                )
+
+            try:
+                await runtime.replace(prepare)
+            except HostRuntimeBusyError as exc:
+                raise ConfigurationApplyError("configuration_busy", str(exc)) from exc
+            except HostConfigurationError as exc:
+                self._host_error = str(exc)
+                raise ConfigurationApplyError("configuration_invalid", str(exc)) from exc
+            except Exception as exc:
+                self._host_error = "Unable to prepare Host clients. Check the server logs."
+                logger.error("Host preparation failed (%s).", type(exc).__name__)
+                raise ConfigurationApplyError("configuration_host_error", self._host_error) from exc
+            self._active_host = candidate.agent_host
+            self._host_applied_hash = candidate.agent_host_signature
+            self._host_applied_at = datetime.now(timezone.utc)
+            self._host_error = None
+            self._host_unavailable = False
+            return await self._host_status()
+
+    async def _host_status(self) -> HostConfigurationStatus:
+        desired_hash: str | None = None
+        file_hash: str | None = None
+        error = self._host_error
+        valid = True
+        try:
+            candidate = load_runtime_candidate(self._configuration, component="host")
+            desired_hash = candidate.agent_host_signature
+            file_hash = candidate.content_hash
+            host = candidate.agent_host
+            if host.enabled and host.endpoint_slug not in self.published_endpoint_slugs:
+                error = "The desired Host endpoint is not currently published. Apply Gateway configuration first."
+                valid = False
+        except ConfigError as exc:
+            file_hash = exc.content_hash
+            error = str(exc)
+            valid = False
+        busy = self.host_runtime.busy if self.host_runtime else False
+        current = self.host_runtime.current if self.host_runtime else None
+        if current is not None:
+            busy |= (
+                await current.service.coordinator.active_run_id(current.service.target.target_id)
+                is not None
+            )
+        async with self._database.session_factory() as session:
+            busy |= await session.scalar(select(UnsettledAgentRunRow).limit(1)) is not None
+        return HostConfigurationStatus(
+            applied_hash=self._host_applied_hash,
+            desired_hash=desired_hash,
+            file_hash=file_hash,
+            applied_at=self._host_applied_at,
+            enabled=self.host_runtime is not None and self.host_runtime.current is not None,
+            file_valid=valid,
+            pending=not valid or desired_hash != self._host_applied_hash,
+            busy=busy,
+            error=error,
+        )
 
     async def _reconcile_and_publish(
         self, candidate: RuntimeFileCandidate, *, allow_unconfigured_host: bool = False
@@ -236,12 +396,12 @@ class GatewayConfigurationManager:
                             state = GatewayConfigurationStateRow(id=1)
                             session.add(state)
                         applied_at = datetime.now(timezone.utc)
-                        state.applied_hash = candidate.content_hash
+                        state.applied_hash = candidate.gateway_signature
                         state.applied_source = candidate.source
                         state.applied_at = applied_at
                     self._gateway.publish(publication)
                     self._applied_at = applied_at
-                    self._applied_hash = candidate.content_hash
+                    self._applied_hash = candidate.gateway_signature
                     self._applied_source = candidate.source
                     self._last_error = None
                     self._recovery_required = False
@@ -300,22 +460,21 @@ class GatewayConfigurationManager:
 
     def _status(self) -> GatewayConfigurationStatus:
         desired_hash: str | None = None
+        file_hash: str | None = None
         desired_source = "unknown"
         error: str | None = None
         valid = True
-        host_changed = False
         try:
-            candidate = load_runtime_candidate(self._configuration)
-            desired_hash = candidate.content_hash
+            candidate = load_runtime_candidate(self._configuration, component="gateway")
+            candidate = replace(candidate, agent_host=self._active_host)
+            desired_hash = candidate.gateway_signature
+            file_hash = candidate.content_hash
             desired_source = candidate.source
-            host_changed = (
-                candidate.agent_host_signature != self._configuration.agent_host_signature
-            )
             build_topology_definitions(
                 self._configuration, candidate, allow_unconfigured_host=self._host_unavailable
             )
         except ConfigError as exc:
-            desired_hash = exc.content_hash if exc.source is not None else None
+            file_hash = exc.content_hash if exc.source is not None else None
             desired_source = exc.source or "unknown"
             error = str(exc)
             valid = False
@@ -323,7 +482,7 @@ class GatewayConfigurationManager:
             error = str(exc)
             valid = False
 
-        restart_required = host_changed
+        restart_required = False
         if self._configuration.static_signature is not None:
             try:
                 restart_required |= (
@@ -334,23 +493,16 @@ class GatewayConfigurationManager:
                 restart_required = True
                 error = error or str(exc)
                 valid = False
-        if self._host_unavailable:
-            target_slug = self._configuration.agent_host.endpoint_slug
-            restart_required |= target_slug in self.published_endpoint_slugs
-
         return GatewayConfigurationStatus(
             generation=self._generation,
             applied_at=self._applied_at,
             applied_hash=self._applied_hash,
             applied_source=self._applied_source,
             desired_hash=desired_hash,
+            file_hash=file_hash,
             desired_source=desired_source,
             file_valid=valid,
-            pending=(
-                not valid
-                or desired_hash != self._applied_hash
-                or desired_source != self._applied_source
-            ),
+            pending=(not valid or desired_hash != self._applied_hash),
             error=error or self._last_error,
             restart_required=restart_required,
             host_unavailable=self._host_unavailable,

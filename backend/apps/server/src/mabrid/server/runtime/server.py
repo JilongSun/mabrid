@@ -26,7 +26,7 @@ _GRACEFUL_REQUEST_SHUTDOWN_TIMEOUT_SECONDS = 10
 
 
 class MabridServerRuntime:
-    """Own listener serving for [create_app](../api/app.py:43)'s composed HTTP application.
+    """Own listener serving for [create_app](../api/app.py:44)'s composed HTTP application.
 
     Receive typed Gateway, Host, presentation, and management dependencies;
     delegate their lifespan to the API rather than reproducing application logic.
