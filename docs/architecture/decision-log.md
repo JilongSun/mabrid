@@ -35,7 +35,9 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 
 - Review identifier: `managed-config-foundations`.
 - Workstream: `feat/managed-config-and-recovery`.
-- Review state: **Approved for the configuration-owned Host credential simplification below**. The owner accepted
+- Review state: **Draft for the CI, version preparation, and release design below**, with the
+	owner-approved release choices recorded separately. Earlier configuration batches retain their
+	approvals and delivery evidence. The owner accepted
 	[ADR 0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md)
 	and the dated amendments below, including component-scoped application, the existing Hermes
 	interface boundary, and the explicit deferral of Host management access hardening.
@@ -47,6 +49,40 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 	simplification has controlled evidence on 2026-11-13, separately from live acceptance.
 - Further work: live deployment acceptance, README delivery review, CI/version handling, and
 	unrelated Agent Host capabilities remain separately scoped; this batch does not authorize them.
+
+#### CI, Version Preparation, And Tag-Triggered Releases (2026-11-13)
+
+Review state: **Draft**, with the following owner-approved choices. These choices do not approve
+the remaining detailed design or authorize workflow implementation or repository-setting changes.
+
+- Before a release, the owner selects the target version once. Automation prepares a version PR
+	containing the required version metadata and lockfile updates. CI and review precede its merge;
+	merging it prepares the source but does not publish a release. Ordinary development merges do
+	not require version PRs or automatically increment the version.
+- After that PR is merged, the owner creates and pushes the matching version tag on the selected
+	prepared commit. The tag is the publication decision: successful release checks publish a public
+	GitHub Release directly, without a separate draft-approval step.
+- The tagged source must already contain the prepared version. Do not repair version mismatches
+	by rewriting source after tagging or moving an existing release tag. The source archive and
+	reported product version must be consistent with the tag.
+- Use one product version across backend workspace packages, frontend metadata, and API/MCP Apps
+	Host reports. Internal packages do not select independent versions or gain package-registry
+	publication as part of this design.
+- Use package/version/build tooling to prepare and propagate versions automatically. Remove
+	manually maintained runtime version literals rather than replacing them by hand for every release.
+	The specific tooling and metadata/build integration remain implementation-design details.
+- Merge into `main` through PRs with required CI checks and Merge commits, preserving the ancestry
+	of long-lived workstreams. The maintainer decides when to merge; automatic merge and a merge queue
+	are outside the initial design. Disallow force pushes and deletion of `main`; do not require
+	approval from an additional maintainer for the initial workflow.
+- Automatic container builds and image publication are deferred, not prerequisites for this batch.
+
+Required CI checks and runners, version-tool integration, tag/prerelease formats, release
+artifacts/notes, automation permissions and event chaining, and failure/rerun behavior remain
+subject to the focused design review. Approval of the merge policy does not authorize applying
+repository settings yet; bot-created tags and package-registry publication remain out of scope.
+
+Delivery: **Pending**. No CI, version-preparation, or release workflow has been implemented.
 
 #### Configuration-Owned Host Credential (2026-11-13)
 
