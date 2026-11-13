@@ -153,7 +153,9 @@ agentHost:
 ```
 
 This fragment assumes the deployment already declares `bridge.advertisedBaseUrl`, the `tools`
-endpoint, and the API key environment variable. `apiRoot` is not inferred from `baseUrl`.
+endpoint, and a Host credential. `apiRoot` is not inferred from `baseUrl`. A credential explicitly
+selects either `runtime.apiKeyEnv` or `runtime.apiKey`, never both. Host Settings exposes only
+source/configured metadata and preserves or replaces literal values without returning them.
 `bindingId` identifies the external runtime deployment, not the Mabrid process or a conversation;
 keep it stable across Mabrid restarts and change it when replacing the runtime deployment. Do not
 reuse a binding to silently migrate conversations to a different runtime. Omitting `sessions`
@@ -166,6 +168,12 @@ history. Host application rejects in-flight reads, probes, streams, and active o
 including durable claims from another logical identity. Gateway application is separate and checks
 the running Host assignment. This adds neither Host configuration generations nor last-known-good
 startup restoration; static process settings and environment-secret rotation still require restart.
+
+Literal key rotation instead uses the same idle-only application guard and replaces both native
+and compatibility clients without changing Target identity, deployment binding, or local Session
+records. The configuration value is plaintext on disk and requires protected directory/backup
+access. Successful local application does not establish remote authentication; failures never
+trigger a secret fallback or automatic business-operation retry.
 
 Bootstrap restores unresolved Target ownership before either ingress can invoke the runtime,
 without a remote probe and even if native configuration is absent or changed. Normal shutdown and

@@ -31,14 +31,25 @@ case "$timeout" in ''|*[!0-9]*) fail "Timeout must be a positive number of secon
 [ "$timeout" -gt 0 ] || fail "Timeout must be positive"
 
 if [ "$action" = setup ]; then
+    if [ -e "$config_dir/mabrid.runtime.yaml" ] && [ ! -e "$config_dir/runtime/mabrid.runtime.yaml" ]; then
+        fail "Existing adjacent runtime file kept. Explicitly move it to runtime/mabrid.runtime.yaml and set runtimeConfigFile before using the container layout."
+    fi
     mkdir -p -- "$config_dir"
-    for file in mabrid.yaml mabrid.runtime.yaml; do
+    runtime_dir=$config_dir/runtime
+    if [ -e "$runtime_dir" ]; then
+        [ -d "$runtime_dir" ] && [ ! -L "$runtime_dir" ] || fail "Expected a real directory: $runtime_dir"
+    else
+        (umask 007; mkdir -- "$runtime_dir")
+        chmod 2770 "$runtime_dir"
+    fi
+    for file in mabrid.yaml runtime/mabrid.runtime.yaml; do
         target=$config_dir/$file
         if [ -e "$target" ]; then
             [ -f "$target" ] || fail "Expected a regular file: $target"
             printf 'Keeping existing %s\n' "$target"
         else
-            cp "$root/$file.example" "$target"
+            cp "$root/${file##*/}.example" "$target"
+            if [ "$file" = runtime/mabrid.runtime.yaml ]; then chmod 660 "$target"; fi
             printf 'Created %s\n' "$target"
         fi
     done
@@ -50,11 +61,11 @@ if [ "$action" = setup ]; then
         umask 077
         printf '%s\n' \
             '# Container runtime secrets. Values are injected as environment variables,' \
-            '# not mounted as a file. Set variables referenced by mabrid.yaml, for example:' \
+            '# not mounted as a file. Set variables referenced by Host apiKeyEnv, for example:' \
             '# API_SERVER_KEY=' >"$env_target"
         printf 'Created %s\n' "$env_target"
     fi
-    printf '%s\n' 'Configure process settings in mabrid.yaml, and Gateway topology and Agent Host settings in mabrid.runtime.yaml.'
+    printf '%s\n' 'Configure mabrid.yaml and runtime/mabrid.runtime.yaml. Existing files and permissions are preserved; the runtime directory must permit group writes and setgid for the non-root container.'
     exit 0
 fi
 
@@ -62,6 +73,15 @@ fi
 config_dir=$(CDPATH= cd -- "$config_dir" && pwd -P)
 if [ "$action" != stop ]; then
     [ -f "$config_dir/mabrid.yaml" ] || fail "Run setup first"
+fi
+if [ "$action" = run ] || [ "$action" = recreate ]; then
+    [ -d "$config_dir/runtime" ] && [ ! -L "$config_dir/runtime" ] && [ -f "$config_dir/runtime/mabrid.runtime.yaml" ] || fail "Run setup first; the container layout requires runtime/mabrid.runtime.yaml and an explicit runtimeConfigFile setting"
+fi
+if [ "$action" != stop ]; then
+    if config_gid=$(stat -c '%g' "$config_dir/runtime" 2>/dev/null); then :
+    else config_gid=$(stat -f '%g' "$config_dir/runtime")
+    fi
+    export MABRID_CONFIG_GID="$config_gid"
 fi
 command -v docker >/dev/null 2>&1 || fail "Docker CLI is required"
 [ "$(docker info --format '{{.OSType}}')" = linux ] || fail "Select a Docker context using Linux containers"

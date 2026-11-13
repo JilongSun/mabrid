@@ -1,9 +1,10 @@
-# Gateway topology and Agent Host settings are loaded only from mabrid.runtime.yaml beside
-# mabrid.yaml. Gateway Settings edits the desired topology; saving and applying are separate.
+# Gateway topology and Agent Host settings are loaded from the static runtimeConfigFile path.
+# Setup places this file in runtime/. Saving and component application are separate.
 # Missing or empty runtime configuration publishes no endpoints and keeps Agent Host disabled.
-# Any change to the agentHost section requires a process restart, even when Host is disabled.
-# Agent Host and stdio launch settings remain file-managed; stdio enablement is editable.
-# Header and subprocess environment values may contain secrets. Protect this file's access.
+# Apply Host only when no Host operation or active/unsettled Run owns its clients.
+# Stdio launch settings remain file-managed; stdio enablement is editable.
+# Headers, subprocess environment, and literal Host credentials may contain secrets.
+# Protect this file and its backups; management reads never return credential values.
 endpoints:
   test-endpoint:
     displayName: Test Endpoint
@@ -36,7 +37,9 @@ upstreams:
 #     integration: hermes
 #     interface: openai-chat-completions
 #     baseUrl: http://127.0.0.1:8642/v1
-#     apiKeyEnv: API_SERVER_KEY  # Read from the environment or the adjacent .env at startup.
+#     apiKeyEnv: API_SERVER_KEY  # Optional source; container environment rotation requires recreation.
+#     # Alternatively remove apiKeyEnv and set apiKey; Settings writes values without reading them back.
+#     # apiKey: replace-with-your-Hermes-key
 #     timeoutSeconds: 120
 #     sessions:
 #       apiRoot: http://127.0.0.1:8642

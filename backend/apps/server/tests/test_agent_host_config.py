@@ -73,6 +73,32 @@ def test_runtime_file_rejects_process_settings(tmp_path: Path, key: str) -> None
     assert not configuration.upstreams and not configuration.endpoints
 
 
+@pytest.mark.parametrize("absolute", [False, True])
+def test_runtime_file_placement_preserves_static_path_bases(tmp_path: Path, absolute: bool) -> None:
+    from mabrid.server.config import load_runtime_candidate
+    from mabrid.server.config.editor import RuntimeFileEditor
+
+    config_path = tmp_path / "mabrid.yaml"
+    runtime_path = tmp_path / "runtime" / "selected.yaml"
+    runtime_path.parent.mkdir()
+    selected = runtime_path.as_posix() if absolute else "runtime/selected.yaml"
+    config_path.write_text(f"runtimeConfigFile: {selected}\n", encoding="utf-8")
+    runtime_path.write_text(
+        TOPOLOGY.replace("command: fixture-server", "command: fixture-server\n    cwd: ."),
+        encoding="utf-8",
+    )
+    config_path.with_name("mabrid.runtime.yaml").write_text("invalid: [yaml", encoding="utf-8")
+
+    configuration = resolve_runtime_configuration(str(config_path))
+    assert configuration.runtime_path == runtime_path
+    assert configuration.storage.sqlite_path == tmp_path / "backend/var/mabrid.db"
+    assert configuration.upstreams["fixture"].cwd == tmp_path
+    assert configuration.runtime_error is None
+    assert RuntimeFileEditor(configuration).read().content_hash == configuration.runtime_hash
+    config_path.write_text("runtimeConfigFile: missing.yaml\n", encoding="utf-8")
+    assert load_runtime_candidate(configuration).content_hash == configuration.runtime_hash
+
+
 def test_enabled_agent_host_resolves_api_key_from_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -98,6 +124,35 @@ def test_enabled_agent_host_resolves_api_key_from_environment(
     assert configuration.runtime_source == "runtime_file"
     assert configuration.runtime_error is None
     assert set(configuration.endpoints) == {"fixture"}
+
+
+@pytest.mark.parametrize(
+    "credential",
+    [
+        "apiKey: literal-fixture-secret",
+        "apiKey: ''",
+        "apiKey: literal-fixture-secret\n    apiKeyEnv: FIXTURE_HERMES_KEY",
+    ],
+)
+def test_literal_host_credential_resolution_is_exclusive_and_safe(
+    tmp_path: Path, credential: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FIXTURE_HERMES_KEY", "environment-fixture-secret")
+    config_path = tmp_path / "mabrid.yaml"
+    _write_config(
+        config_path, topology=TOPOLOGY + HOST.replace("apiKeyEnv: FIXTURE_HERMES_KEY", credential)
+    )
+    configuration = resolve_runtime_configuration(str(config_path))
+    if credential == "apiKey: literal-fixture-secret":
+        assert configuration.host_error is None
+        assert configuration.agent_host.runtime.api_key is not None
+        assert (
+            configuration.agent_host.runtime.api_key.get_secret_value() == "literal-fixture-secret"
+        )
+    else:
+        assert configuration.host_error is not None
+        assert "literal-fixture-secret" not in configuration.host_error
+        assert "environment-fixture-secret" not in configuration.host_error
 
 
 def test_agent_host_can_disable_mcp_apps_workflow(

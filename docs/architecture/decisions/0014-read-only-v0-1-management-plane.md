@@ -24,6 +24,11 @@ Host settings reads, writes, and application. Host writes retain environment-sec
 modify only the Host section; Gateway and Host application are separate. This does not authorize
 untrusted management access, new integrations, or general remote runtime administration.
 
+The owner-approved 2026-11-12 amendment adds write-only literal Host credentials alongside explicit
+environment-variable references. Ordinary reads never expose either resolved or stored values;
+credential updates use preserve/replace semantics and the existing idle-only Host application guard.
+This does not change the trusted-only access-hardening deferral or add general secret providers.
+
 ## Context
 
 ADR 0008 selected restart-applied topology mutation so the first-party UI could replace hand-edited

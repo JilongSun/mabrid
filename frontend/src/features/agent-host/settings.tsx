@@ -50,7 +50,7 @@ export function HostSettings({ active, onApplied, runPending }: { active: boolea
   async function command(apply: boolean) {
     if (!draft || !file || !status || blocked || busy || loading || operation.current) return
     let request
-    try { request = hostSettingsRequest(draft, file.content_hash) } catch (failure) { setError(failure instanceof Error ? failure.message : 'Invalid Host settings.'); return }
+    try { request = hostSettingsRequest(draft, file.content_hash, file.credential) } catch (failure) { setError(failure instanceof Error ? failure.message : 'Invalid Host settings.'); return }
     const controller = new AbortController()
     operation.current = controller; setBusy(true); setError(null); setNotice(null)
     let confirmed = false
@@ -111,7 +111,10 @@ export function HostSettings({ active, onApplied, runPending }: { active: boolea
           <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]"><dt className="text-muted-foreground">Interface</dt><dd className="break-words">OpenAI Chat Completions</dd></dl>
           <div className="mt-5 grid min-w-0 gap-5 sm:grid-cols-2">
             <label className="min-w-0 text-sm sm:col-span-2">Compatibility base URL<input type="url" className={inputClass} value={draft.baseUrl} onChange={(event) => change({ baseUrl: event.target.value })} /></label>
-            <label className="min-w-0 text-sm">API key environment variable<input autoComplete="off" spellCheck={false} className={inputClass} value={draft.apiKeyEnv} onChange={(event) => change({ apiKeyEnv: event.target.value })} /></label>
+            <label className="min-w-0 text-sm">Credential source<select aria-label="Credential source" className={inputClass} value={draft.credentialSource} onChange={(event) => change({ credentialSource: event.target.value === 'value' ? 'value' : 'environment', apiKey: '' })}><option value="environment">Environment variable</option><option value="value">Configuration value</option></select></label>
+            {draft.credentialSource === 'environment'
+              ? <label className="min-w-0 text-sm">API key environment variable<input autoComplete="off" spellCheck={false} className={inputClass} value={draft.apiKeyEnv} onChange={(event) => change({ apiKeyEnv: event.target.value })} /></label>
+              : <label className="min-w-0 text-sm">API key<input type="password" autoComplete="new-password" spellCheck={false} className={inputClass} placeholder={file.credential.source === 'value' && file.credential.configured ? 'Configured' : 'Required'} value={draft.apiKey} onChange={(event) => change({ apiKey: event.target.value })} /></label>}
             <label className="min-w-0 text-sm">Timeout (seconds)<input type="number" min="0.01" step="any" className={inputClass} value={draft.timeoutSeconds} onChange={(event) => change({ timeoutSeconds: event.target.value })} /></label>
           </div>
         </section>

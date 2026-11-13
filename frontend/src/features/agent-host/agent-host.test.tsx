@@ -32,9 +32,10 @@ describe('Host Settings', () => {
   const path = '/api/v1/agent-host/configuration'
   const file: HostSettingsFile = {
     content_hash: 'a'.repeat(64), published_endpoints: ['entry'],
+    credential: { source: 'environment', variable: 'FIXTURE_KEY', configured: true },
     agent_host: {
       enabled: true, mcpAppsEnabled: false, targetId: 'primary', endpointSlug: 'entry',
-      runtime: { integration: 'hermes', interface: 'openai-chat-completions', baseUrl: 'https://hermes.test/v1', apiKeyEnv: 'FIXTURE_KEY', timeoutSeconds: 120, sessions: null },
+      runtime: { integration: 'hermes', interface: 'openai-chat-completions', baseUrl: 'https://hermes.test/v1', timeoutSeconds: 120, sessions: null },
     },
   }
   const status: HostSettingsStatus = { applied_hash: 'c'.repeat(64), desired_hash: 'd'.repeat(64), file_hash: file.content_hash, applied_at: null, enabled: true, file_valid: true, pending: true, busy: false, error: null }
@@ -43,7 +44,9 @@ describe('Host Settings', () => {
     let currentStatus = status
     fetchMock.mockImplementation(async (input, options) => {
       if (options?.method === 'PUT') {
-        currentFile = { ...file, content_hash: 'b'.repeat(64), agent_host: JSON.parse(String(options.body)).agent_host }
+        const request = JSON.parse(String(options.body))
+        const credential = request.credential.action === 'replace' ? { source: 'value' as const, variable: null, configured: true } : request.credential.action === 'environment' ? { source: 'environment' as const, variable: request.credential.variable, configured: true } : currentFile.credential
+        currentFile = { ...file, content_hash: 'b'.repeat(64), agent_host: request.agent_host, credential }
         currentStatus = { ...status, file_hash: currentFile.content_hash }
         return json(currentFile)
       }
@@ -53,9 +56,9 @@ describe('Host Settings', () => {
   }
   it('preserves exact logical/deployment identity and credential reference names', () => {
     const draft = { ...hostSettingsDraft(file), targetId: ' Target ', apiKeyEnv: ' KEY ', native: true, apiRoot: 'https://native.test/', bindingId: ' deployment ' }
-    const request = hostSettingsRequest(draft, file.content_hash)
+    const request = hostSettingsRequest(draft, file.content_hash, file.credential)
     expect(request.agent_host.targetId).toBe(' Target ')
-    expect(request.agent_host.runtime.apiKeyEnv).toBe(' KEY ')
+    expect(request.credential).toEqual({ action: 'environment', variable: ' KEY ' })
     expect(request.agent_host.runtime.sessions?.bindingId).toBe(' deployment ')
   })
   it('saves only Host fields and credential names without implicitly applying', async () => {
@@ -70,10 +73,37 @@ describe('Host Settings', () => {
     expect(writes).toHaveLength(1)
     const body = JSON.parse(String(writes[0][1]?.body))
     expect(body.expected_hash).toBe(file.content_hash)
-    expect(Object.keys(body).sort()).toEqual(['agent_host', 'expected_hash'])
-    expect(body.agent_host.runtime.apiKeyEnv).toBe('NEXT_KEY')
+    expect(Object.keys(body).sort()).toEqual(['agent_host', 'credential', 'expected_hash'])
+    expect(body.credential).toEqual({ action: 'environment', variable: 'NEXT_KEY' })
     expect(body.agent_host.runtime.api_key).toBeUndefined()
     expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  })
+  it('saves a write-only credential then clears its input without applying', async () => {
+    const user = userEvent.setup()
+    responses()
+    render(<MemoryRouter><HostSettings active runPending={false} onApplied={vi.fn()} /></MemoryRouter>)
+    await user.selectOptions(await screen.findByLabelText('Credential source'), 'value')
+    const input = screen.getByLabelText('API key') as HTMLInputElement
+    expect(input.type).toBe('password')
+    await user.type(input, 'literal-fixture-secret')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByText('Host settings saved. Not yet applied.')
+    expect((screen.getByLabelText('API key') as HTMLInputElement).value).toBe('')
+    const writes = fetchMock.mock.calls.filter(([, options]) => options?.method === 'PUT')
+    expect(JSON.parse(String(writes[0][1]?.body)).credential).toEqual({ action: 'replace', value: 'literal-fixture-secret' })
+    expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+    await user.type(screen.getByLabelText('Timeout (seconds)'), '1')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(2))
+    const preserved = fetchMock.mock.calls.filter(([, options]) => options?.method === 'PUT')[1]
+    expect(JSON.parse(String(preserved[1]?.body)).credential).toEqual({ action: 'preserve' })
+    expect(String(preserved[1]?.body)).not.toContain('literal-fixture-secret')
+  })
+  it('requires a value when switching sources and preserves exact credential bytes', () => {
+    const draft = { ...hostSettingsDraft(file), credentialSource: 'value' as const }
+    expect(() => hostSettingsRequest(draft, file.content_hash, file.credential)).toThrow('Enter a new API key')
+    expect(hostSettingsRequest({ ...draft, apiKey: ' fixture-secret ' }, file.content_hash, file.credential).credential).toEqual({ action: 'replace', value: ' fixture-secret ' })
+    expect(() => hostSettingsRequest({ ...draft, apiKey: 'fixture\nsecret' }, file.content_hash, file.credential)).toThrow('no newlines')
   })
   it('applies only the inspected Host file and refreshes capabilities once', async () => {
     const user = userEvent.setup()

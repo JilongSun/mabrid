@@ -16,6 +16,7 @@ from mabrid.server.config.editor import (
     HttpUpstreamEdit,
     RuntimeEditRequest,
     RuntimeFileEditor,
+    HostRuntimeEditRequest,
 )
 from mabrid.server.api import create_app
 from mabrid.server.composition import bootstrap_server
@@ -229,6 +230,99 @@ endpoints: {}
         assert applied.status_code == 200 and not applied.json()["pending"]
 
 
+def test_host_credentials_are_write_only_preserved_and_exclusive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FIXTURE_HOST_KEY", "environment-fixture-secret")
+    editor, path = _editor(
+        tmp_path, "# note\nagentHost: {runtime: {apiKey: literal-fixture-secret}}\n"
+    )
+    view = editor.read_host()
+    assert view.credential.source == "value" and view.credential.configured
+    assert "literal-fixture-secret" not in view.model_dump_json()
+    request = HostRuntimeEditRequest(expected_hash=view.content_hash, agent_host=view.agent_host)
+    content, _ = editor.prepare_host(request)
+    saved = editor.write_host(content, request.expected_hash)
+    assert (
+        yaml.safe_load(path.read_text())["agentHost"]["runtime"]["apiKey"]
+        == "literal-fixture-secret"
+    )
+    request = HostRuntimeEditRequest.model_validate(
+        {
+            "expected_hash": saved.content_hash,
+            "agent_host": saved.agent_host.model_dump(mode="json", by_alias=True),
+            "credential": {"action": "replace", "value": "replacement-fixture-secret"},
+        }
+    )
+    content, _ = editor.prepare_host(request)
+    saved = editor.write_host(content, request.expected_hash)
+    assert "replacement-fixture-secret" not in saved.model_dump_json()
+    assert (
+        yaml.safe_load(path.read_text())["agentHost"]["runtime"]["apiKey"]
+        == "replacement-fixture-secret"
+    )
+    request = HostRuntimeEditRequest.model_validate(
+        {
+            "expected_hash": saved.content_hash,
+            "agent_host": saved.agent_host.model_dump(mode="json", by_alias=True),
+            "credential": {"action": "environment", "variable": "FIXTURE_HOST_KEY"},
+        }
+    )
+    content, _ = editor.prepare_host(request)
+    saved = editor.write_host(content, request.expected_hash)
+    stored = yaml.safe_load(path.read_text())["agentHost"]["runtime"]
+    assert stored["apiKeyEnv"] == "FIXTURE_HOST_KEY" and "apiKey" not in stored
+    assert saved.credential.source == "environment" and saved.credential.configured
+    assert "environment-fixture-secret" not in saved.model_dump_json()
+    assert "# note" in path.read_text()
+
+
+@pytest.mark.parametrize("value", ["", " ", "fixture\nsecret", "fixture\rsecret"])
+def test_host_replacement_rejects_empty_or_multiline_values(tmp_path: Path, value: str) -> None:
+    editor, _ = _editor(tmp_path)
+    with pytest.raises(ValidationError):
+        HostRuntimeEditRequest.model_validate(
+            {
+                "expected_hash": None,
+                "agent_host": editor.read_host().agent_host.model_dump(mode="json", by_alias=True),
+                "credential": {"action": "replace", "value": value},
+            }
+        )
+
+
+async def test_host_secret_validation_conflict_and_write_errors_never_expose_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async with _client(tmp_path, "agentHost: {runtime: {apiKey: original-fixture-secret}}\n") as (
+        client,
+        _result,
+        _editor_value,
+        path,
+    ):
+        route = "/api/v1/agent-host/configuration/runtime"
+        view = (await client.get(route)).json()
+        assert "original-fixture-secret" not in str(view)
+        request = {
+            "expected_hash": view["content_hash"],
+            "agent_host": view["agent_host"],
+            "credential": {"action": "replace", "value": "replacement-fixture-secret\n"},
+        }
+        invalid = await client.put(route, json=request)
+        assert invalid.status_code == 422 and "replacement-fixture-secret" not in invalid.text
+        request["credential"] = {"action": "replace", "value": "replacement-fixture-secret"}
+        stale = await client.put(route, json=request | {"expected_hash": "0" * 64})
+        assert stale.status_code == 409 and "replacement-fixture-secret" not in stale.text
+
+        def fail_replace(*_args) -> None:
+            raise PermissionError("replacement-fixture-secret")
+
+        monkeypatch.setattr(os, "replace", fail_replace)
+        failed = await client.put(route, json=request)
+        assert failed.status_code == 503 and "replacement-fixture-secret" not in failed.text
+        assert "original-fixture-secret" in path.read_text()
+        assert not list(tmp_path.glob(".mabrid-runtime-*"))
+
+
 async def test_http_save_then_explicit_apply_and_stale_conflict(tmp_path: Path) -> None:
     async with _client(tmp_path) as (client, result, editor, _path):
         read = await client.get("/api/v1/gateway/configuration/runtime")
@@ -342,7 +436,7 @@ def test_setup_example_comments_and_host_template_survive_editing(tmp_path: Path
     response = editor.write(content, request.expected_hash)
     assert "# agentHost:" in path.read_text()
     assert "#     apiKeyEnv: API_SERVER_KEY" in path.read_text()
-    assert "# Any change to the agentHost section" in path.read_text()
+    assert "# Apply Host only when no Host operation" in path.read_text()
     assert "# headers: {}" in path.read_text()
     assert "apiKeyEnv" not in response.model_dump_json()
     assert response.endpoints["test-endpoint"].display_name == "Updated endpoint"

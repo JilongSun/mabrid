@@ -925,51 +925,6 @@
           "title": "AgentHostFeatures",
           "type": "object"
         },
-        "AgentHostFileConfig": {
-          "additionalProperties": false,
-          "description": "Single Target, endpoint assignment, and Host feature selection from the runtime file.",
-          "properties": {
-            "enabled": {
-              "default": false,
-              "title": "Enabled",
-              "type": "boolean"
-            },
-            "endpointSlug": {
-              "anyOf": [
-                {
-                  "pattern": "^[a-z][a-z0-9-]*$",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Endpointslug"
-            },
-            "mcpAppsEnabled": {
-              "default": false,
-              "title": "Mcpappsenabled",
-              "type": "boolean"
-            },
-            "runtime": {
-              "$ref": "#/components/schemas/HermesAgentRuntimeFileConfig"
-            },
-            "targetId": {
-              "anyOf": [
-                {
-                  "minLength": 1,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Targetid"
-            }
-          },
-          "title": "AgentHostFileConfig",
-          "type": "object"
-        },
         "AgentRuntimeProfileResponse": {
           "additionalProperties": false,
           "description": "Expose selected integration/interface and locally implemented capability names.",
@@ -1311,6 +1266,28 @@
           "title": "EndpointMode",
           "type": "string"
         },
+        "EnvironmentHostCredential": {
+          "additionalProperties": false,
+          "description": "Explicitly select one process-environment credential without fallback.",
+          "properties": {
+            "action": {
+              "const": "environment",
+              "title": "Action",
+              "type": "string"
+            },
+            "variable": {
+              "minLength": 1,
+              "title": "Variable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "variable"
+          ],
+          "title": "EnvironmentHostCredential",
+          "type": "object"
+        },
         "ErrorRaisedEventResponse": {
           "additionalProperties": false,
           "description": "Present recorded diagnostic error details under the trusted deployment profile.",
@@ -1597,55 +1574,6 @@
           "title": "HeaderEdit",
           "type": "object"
         },
-        "HermesAgentRuntimeFileConfig": {
-          "additionalProperties": false,
-          "description": "Hermes runtime selection and connection settings with an environment-secret reference.",
-          "properties": {
-            "apiKeyEnv": {
-              "default": "API_SERVER_KEY",
-              "minLength": 1,
-              "title": "Apikeyenv",
-              "type": "string"
-            },
-            "baseUrl": {
-              "default": "http://127.0.0.1:8642/v1",
-              "format": "uri",
-              "minLength": 1,
-              "title": "Baseurl",
-              "type": "string"
-            },
-            "integration": {
-              "const": "hermes",
-              "default": "hermes",
-              "title": "Integration",
-              "type": "string"
-            },
-            "interface": {
-              "const": "openai-chat-completions",
-              "default": "openai-chat-completions",
-              "title": "Interface",
-              "type": "string"
-            },
-            "sessions": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/HermesSessionFileConfig"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "timeoutSeconds": {
-              "default": 120.0,
-              "exclusiveMinimum": 0.0,
-              "title": "Timeoutseconds",
-              "type": "number"
-            }
-          },
-          "title": "HermesAgentRuntimeFileConfig",
-          "type": "object"
-        },
         "HermesSessionFileConfig": {
           "additionalProperties": false,
           "description": "Declare native API root and stable deployment binding for remote Session references.",
@@ -1869,6 +1797,42 @@
           "title": "HostConfigurationResponse",
           "type": "object"
         },
+        "HostCredentialView": {
+          "additionalProperties": false,
+          "description": "Expose credential selection and presence, never plaintext or secret-derived hashes.",
+          "properties": {
+            "configured": {
+              "title": "Configured",
+              "type": "boolean"
+            },
+            "source": {
+              "enum": [
+                "environment",
+                "value",
+                "none"
+              ],
+              "title": "Source",
+              "type": "string"
+            },
+            "variable": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Variable"
+            }
+          },
+          "required": [
+            "source",
+            "configured"
+          ],
+          "title": "HostCredentialView",
+          "type": "object"
+        },
         "HostEditView": {
           "additionalProperties": false,
           "description": "Summarize the preserved, read-only Host configuration.",
@@ -1994,10 +1958,32 @@
         },
         "HostRuntimeEditRequest": {
           "additionalProperties": false,
-          "description": "Edit only Host settings using credential reference names, never resolved values.",
+          "description": "Edit Host settings and apply an explicit write-only credential operation.",
           "properties": {
             "agent_host": {
-              "$ref": "#/components/schemas/AgentHostFileConfig"
+              "$ref": "#/components/schemas/HostSettings"
+            },
+            "credential": {
+              "discriminator": {
+                "mapping": {
+                  "environment": "#/components/schemas/EnvironmentHostCredential",
+                  "preserve": "#/components/schemas/PreserveHostCredential",
+                  "replace": "#/components/schemas/ReplaceHostCredential"
+                },
+                "propertyName": "action"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/PreserveHostCredential"
+                },
+                {
+                  "$ref": "#/components/schemas/ReplaceHostCredential"
+                },
+                {
+                  "$ref": "#/components/schemas/EnvironmentHostCredential"
+                }
+              ],
+              "title": "Credential"
             },
             "expected_hash": {
               "anyOf": [
@@ -2024,7 +2010,7 @@
           "description": "Expose the desired Host and current Gateway assignment choices separately.",
           "properties": {
             "agent_host": {
-              "$ref": "#/components/schemas/AgentHostFileConfig"
+              "$ref": "#/components/schemas/HostSettings"
             },
             "content_hash": {
               "anyOf": [
@@ -2037,6 +2023,9 @@
               ],
               "title": "Content Hash"
             },
+            "credential": {
+              "$ref": "#/components/schemas/HostCredentialView"
+            },
             "published_endpoints": {
               "default": [],
               "items": {
@@ -2048,9 +2037,53 @@
           },
           "required": [
             "content_hash",
-            "agent_host"
+            "agent_host",
+            "credential"
           ],
           "title": "HostRuntimeEditView",
+          "type": "object"
+        },
+        "HostRuntimeSettings": {
+          "additionalProperties": false,
+          "description": "Editable Hermes settings, deliberately excluding all credential fields.",
+          "properties": {
+            "baseUrl": {
+              "default": "http://127.0.0.1:8642/v1",
+              "format": "uri",
+              "minLength": 1,
+              "title": "Baseurl",
+              "type": "string"
+            },
+            "integration": {
+              "const": "hermes",
+              "default": "hermes",
+              "title": "Integration",
+              "type": "string"
+            },
+            "interface": {
+              "const": "openai-chat-completions",
+              "default": "openai-chat-completions",
+              "title": "Interface",
+              "type": "string"
+            },
+            "sessions": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/HermesSessionFileConfig"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeoutSeconds": {
+              "default": 120.0,
+              "exclusiveMinimum": 0.0,
+              "title": "Timeoutseconds",
+              "type": "number"
+            }
+          },
+          "title": "HostRuntimeSettings",
           "type": "object"
         },
         "HostSessionPageResponse": {
@@ -2148,6 +2181,51 @@
             "binding_state"
           ],
           "title": "HostSessionResponse",
+          "type": "object"
+        },
+        "HostSettings": {
+          "additionalProperties": false,
+          "description": "Share Host identity validation without permitting credential round-tripping.",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "endpointSlug": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z][a-z0-9-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Endpointslug"
+            },
+            "mcpAppsEnabled": {
+              "default": false,
+              "title": "Mcpappsenabled",
+              "type": "boolean"
+            },
+            "runtime": {
+              "$ref": "#/components/schemas/HostRuntimeSettings"
+            },
+            "targetId": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Targetid"
+            }
+          },
+          "title": "HostSettings",
           "type": "object"
         },
         "HostStopResponse": {
@@ -2412,6 +2490,20 @@
           "title": "ManagedUpstreamResponse",
           "type": "object"
         },
+        "PreserveHostCredential": {
+          "additionalProperties": false,
+          "description": "Keep the stored credential unchanged during ordinary Host settings edits.",
+          "properties": {
+            "action": {
+              "const": "preserve",
+              "default": "preserve",
+              "title": "Action",
+              "type": "string"
+            }
+          },
+          "title": "PreserveHostCredential",
+          "type": "object"
+        },
         "ProductCapabilitiesResponse": {
           "additionalProperties": false,
           "description": "Combine independent Gateway and Agent Host capability/availability views.",
@@ -2442,6 +2534,29 @@
             }
           },
           "title": "ReadinessResponse",
+          "type": "object"
+        },
+        "ReplaceHostCredential": {
+          "additionalProperties": false,
+          "description": "Accept a write-only literal credential for the desired runtime file.",
+          "properties": {
+            "action": {
+              "const": "replace",
+              "title": "Action",
+              "type": "string"
+            },
+            "value": {
+              "format": "password",
+              "title": "Value",
+              "type": "string",
+              "writeOnly": true
+            }
+          },
+          "required": [
+            "action",
+            "value"
+          ],
+          "title": "ReplaceHostCredential",
           "type": "object"
         },
         "ResourceContentResponse": {

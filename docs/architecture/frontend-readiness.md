@@ -66,9 +66,12 @@ errors use `application/json`; successful Host Run delivery uses `text/event-str
 Saving Host settings does not require idle and does not apply either component. Host application
 rejects in-flight operations and active or unsettled Runs; it does not apply pending Gateway
 settings. Endpoint migration publishes the new Gateway endpoint while retaining the old one,
-applies the Host assignment, then removes the old endpoint. Host management exposes environment
-reference names, never resolved credentials. This surface retains the explicitly deferred access
-hardening boundary and must not be exposed to untrusted clients. The scoped delivery evidence is
+applies the Host assignment, then removes the old endpoint. Host management exposes credential
+source, environment-variable name, and configured state, never resolved or stored credential values. Host writes explicitly
+preserve a credential, replace its literal value, or select an environment-variable reference;
+ordinary edits never round-trip the key. Literal rotation uses the same idle-only Apply Host.
+This surface retains the explicitly deferred access hardening boundary and must not be exposed
+to untrusted clients. The scoped delivery evidence is
 recorded in the [active decision review](decision-log.md#managed-configuration-and-release-foundations).
 
 ## Contract Readiness Evidence

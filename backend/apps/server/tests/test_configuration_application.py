@@ -192,6 +192,132 @@ async def test_host_application_is_independent_and_requires_idle(
         assert result.agent_host is not None
 
 
+async def test_runtime_placement_is_static_and_host_editor_uses_selected_file(
+    tmp_path: Path,
+) -> None:
+    from mabrid.server.config.editor import HostRuntimeEditRequest
+
+    config_path = tmp_path / "mabrid.yaml"
+    _static(config_path)
+    with config_path.open("a", encoding="utf-8") as stream:
+        stream.write("runtimeConfigFile: runtime/selected.yaml\n")
+    runtime_path = tmp_path / "runtime/selected.yaml"
+    runtime_path.parent.mkdir()
+    _runtime(runtime_path, "https://old.example.test/mcp")
+    async with _running(config_path) as result:
+        manager = result.gateway_management.configuration
+        assert manager is not None
+        view = await manager.read_host_runtime()
+        saved = await manager.save_host_runtime(
+            HostRuntimeEditRequest(expected_hash=view.content_hash, agent_host=view.agent_host)
+        )
+        assert saved.content_hash == (await manager.host_status()).file_hash
+        assert not config_path.with_name("mabrid.runtime.yaml").exists()
+        config_path.write_text(
+            config_path.read_text().replace("runtime/selected.yaml", "missing.yaml"),
+            encoding="utf-8",
+        )
+        status = await manager.status()
+        assert status.restart_required and not status.pending
+        await manager.apply(status.file_hash)
+        assert result.gateway.published_endpoints
+
+
+async def test_credential_only_rotation_replaces_both_clients_without_changing_sessions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import Mock
+    import mabrid.server.composition.agent_host as agent_composition
+
+    config_path = tmp_path / "mabrid.yaml"
+    runtime_path = tmp_path / "mabrid.runtime.yaml"
+    _static(config_path)
+    monkeypatch.setenv("FIXTURE_AGENT_KEY", "environment-fixture-secret")
+    native_host = (
+        HOST + "    sessions:\n      apiRoot: http://native.invalid/\n      bindingId: original\n"
+    )
+    _runtime(runtime_path, "https://old.example.test/mcp", host=native_host)
+    compatibility = Mock(wraps=agent_composition.HermesChatCompletionsAdapter)
+    native = Mock(wraps=agent_composition.HermesSessionAdapter)
+    monkeypatch.setattr(agent_composition, "HermesChatCompletionsAdapter", compatibility)
+    monkeypatch.setattr(agent_composition, "HermesSessionAdapter", native)
+    async with _running(config_path) as result:
+        manager = result.gateway_management.configuration
+        assert manager is not None
+        original = result.agent_host
+        assert original is not None
+        close = AsyncMock(wraps=original.runtime.close)
+        monkeypatch.setattr(original.runtime, "close", close)
+        repository = SqliteAgentSessionRepository(result.database.session_factory)
+        record = AgentSessionRecord(
+            target_id="fixture-target",
+            integration_kind="hermes",
+            runtime_session=RuntimeSessionReference(
+                runtime_binding_id="original", remote_session_id="remote-fixture"
+            ),
+            created_at=datetime.now(timezone.utc),
+        )
+        await repository.add(record)
+        app = create_app(result.gateway, gateway_management=result.gateway_management)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://fixture.test"
+        ) as client:
+            path = "/api/v1/agent-host/configuration"
+            initial = (await client.get(path)).json()
+            view = (await client.get(path + "/runtime")).json()
+            assert "environment-fixture-secret" not in str(view)
+            async with result.host_runtime.operation():
+                saved = await client.put(
+                    path + "/runtime",
+                    json={
+                        "expected_hash": view["content_hash"],
+                        "agent_host": view["agent_host"],
+                        "credential": {"action": "replace", "value": "literal-fixture-secret"},
+                    },
+                )
+                assert saved.status_code == 200 and "literal-fixture-secret" not in saved.text
+                assert result.agent_host is original
+                desired = (await client.get(path)).json()
+                assert desired["pending"] and desired["desired_hash"] != initial["applied_hash"]
+                blocked = await client.post(
+                    path + "/apply", json={"expected_hash": desired["file_hash"]}
+                )
+                assert blocked.status_code == 409 and blocked.json()["code"] == "configuration_busy"
+            applied = await client.post(
+                path + "/apply", json={"expected_hash": desired["file_hash"]}
+            )
+            assert applied.status_code == 200 and not applied.json()["pending"]
+            assert "literal-fixture-secret" not in applied.text
+            assert compatibility.call_args.kwargs["api_key"] == "literal-fixture-secret"
+            assert native.call_args.kwargs["api_key"] == "literal-fixture-secret"
+            assert compatibility.call_count == 2 and native.call_count == 2
+            close.assert_awaited_once()
+            assert result.agent_host is not original
+            assert (await repository.get(record.session_id)) == record
+            assert not (await manager.status()).pending
+            replacement = native_host.replace(
+                "apiKeyEnv: FIXTURE_AGENT_KEY", "apiKey: second-fixture-secret"
+            )
+            _runtime(runtime_path, "https://old.example.test/mcp", host=replacement)
+            again = await manager.host_status()
+            assert again.pending and again.desired_hash != applied.json()["applied_hash"]
+            await manager.apply_host(again.file_hash)
+            assert native.call_args.kwargs["api_key"] == "second-fixture-secret"
+            assert not (await manager.host_status()).pending
+            current = result.agent_host
+            assert await repository.claim_run(record, uuid4())
+            _runtime(
+                runtime_path,
+                "https://old.example.test/mcp",
+                host=replacement.replace("second-fixture-secret", "blocked-fixture-secret"),
+            )
+            with pytest.raises(ConfigurationApplyError) as failure:
+                await manager.apply_host((await manager.host_status()).file_hash)
+            assert failure.value.code == "configuration_busy"
+            assert result.agent_host is current
+            assert native.call_count == 3 and compatibility.call_count == 3
+
+
 async def test_unsettled_run_blocks_host_identity_change_even_after_restart(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -270,6 +396,37 @@ async def test_failed_host_preparation_keeps_current_host_and_redacts_client_err
         status = await manager.host_status()
         assert status.pending and status.error and "fixture-secret" not in status.error
         assert not (await manager.status()).pending
+
+
+async def test_failed_credential_preparation_keeps_current_host_and_pending_desired_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "mabrid.yaml"
+    runtime_path = tmp_path / "mabrid.runtime.yaml"
+    _static(config_path)
+    host = HOST.replace("apiKeyEnv: FIXTURE_AGENT_KEY", "apiKey: original-fixture-secret")
+    _runtime(runtime_path, "https://old.example.test/mcp", host=host)
+    async with _running(config_path) as result:
+        manager = result.gateway_management.configuration
+        assert manager is not None
+        original = result.agent_host
+        _runtime(
+            runtime_path,
+            "https://old.example.test/mcp",
+            host=host.replace("original-fixture-secret", "replacement-fixture-secret"),
+        )
+        monkeypatch.setattr(
+            configuration_composition,
+            "compose_agent_host",
+            AsyncMock(side_effect=RuntimeError("replacement-fixture-secret")),
+        )
+        with pytest.raises(ConfigurationApplyError) as failure:
+            await manager.apply_host((await manager.host_status()).file_hash)
+        assert failure.value.code == "configuration_host_error"
+        assert "replacement-fixture-secret" not in str(failure.value)
+        assert result.agent_host is original
+        status = await manager.host_status()
+        assert status.pending and status.error and "replacement-fixture-secret" not in status.error
 
 
 async def test_invalid_gateway_can_recover_heads_without_disabling_valid_host(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+import secrets
 import os
 import json
 from dataclasses import dataclass
@@ -84,11 +86,14 @@ def resolve_runtime_configuration(config_path: str | None) -> RuntimeConfigurati
 
     Listener settings, proxy identity, diagnostic upstream selection, and transport timeout
     are static-file values only. Gateway topology and Agent Host settings come only from the
-    adjacent runtime file; an invalid runtime file starts with no Host and an explicit error.
+    selected runtime file; an invalid runtime file starts with no Host and an explicit error.
     """
     path = _resolve_config_path(config_path)
     raw, static_hash = _read_document(path)
     process = _validate_process(raw, static_hash)
+    runtime_path = process.runtime_config_file or Path(RUNTIME_CONFIG_FILE_NAME)
+    if not runtime_path.is_absolute():
+        runtime_path = (path.parent / runtime_path).resolve()
     load_dotenv(path.with_name(".env"), override=False)
     bridge = process.bridge.model_copy(
         update={"proxy_name": process.bridge.proxy_name or DEFAULT_PROXY_NAME}
@@ -96,20 +101,30 @@ def resolve_runtime_configuration(config_path: str | None) -> RuntimeConfigurati
     runtime_error: str | None = None
     host_error: str | None = None
     try:
-        candidate = _load_runtime_file(path, bridge, process.bridge.diagnostic_upstream)
+        candidate = _load_runtime_file(
+            path, bridge, process.bridge.diagnostic_upstream, runtime_path=runtime_path
+        )
     except ConfigError as exc:
         if exc.source != "runtime_file":
             raise
         try:
             candidate = _load_runtime_file(
-                path, bridge, process.bridge.diagnostic_upstream, component="gateway"
+                path,
+                bridge,
+                process.bridge.diagnostic_upstream,
+                runtime_path=runtime_path,
+                component="gateway",
             )
             host_error = str(exc)
         except ConfigError as gateway_error:
             host_candidate: RuntimeFileCandidate | None = None
             try:
                 host_candidate = _load_runtime_file(
-                    path, bridge, process.bridge.diagnostic_upstream, component="host"
+                    path,
+                    bridge,
+                    process.bridge.diagnostic_upstream,
+                    runtime_path=runtime_path,
+                    component="host",
                 )
             except ConfigError as host_failure:
                 host_error = str(host_failure)
@@ -143,6 +158,7 @@ def resolve_runtime_configuration(config_path: str | None) -> RuntimeConfigurati
         runtime_error=runtime_error,
         static_signature=_process_signature(process),
         host_error=host_error,
+        runtime_config_file=runtime_path,
     )
 
 
@@ -158,6 +174,7 @@ def load_runtime_candidate(
         configuration.config_path,
         configuration.bridge,
         configuration.diagnostic_upstream,
+        runtime_path=configuration.runtime_path,
         component=component,
     )
 
@@ -172,8 +189,23 @@ def _process_signature(process: ProcessFileConfig) -> str:
     return sha256(process.model_dump_json(by_alias=True).encode("utf-8")).hexdigest()
 
 
+_HOST_FINGERPRINT_KEY = secrets.token_bytes(32)
+
+
 def _agent_host_signature(config: AgentHostFileConfig) -> str:
-    return sha256(config.model_dump_json(by_alias=True).encode("utf-8")).hexdigest()
+    settings = config.model_dump(mode="json", by_alias=True, exclude={"runtime": {"api_key"}})
+    runtime = config.runtime
+    credential = (
+        runtime.api_key.get_secret_value()
+        if runtime.api_key is not None
+        else os.environ.get(runtime.api_key_env, "")
+        if runtime.api_key_env is not None
+        else ""
+    )
+    payload = (
+        json.dumps(settings, sort_keys=True).encode("utf-8") + b"\0" + credential.encode("utf-8")
+    )
+    return hmac.digest(_HOST_FINGERPRINT_KEY, payload, "sha256").hex()
 
 
 def _read_document(path: Path) -> tuple[dict[str, object], str]:
@@ -211,9 +243,10 @@ def _load_runtime_file(
     bridge: BridgeRuntimeConfig,
     diagnostic_upstream: str | None,
     *,
+    runtime_path: Path | None = None,
     component: Literal["all", "gateway", "host"] = "all",
 ) -> RuntimeFileCandidate:
-    runtime_path = config_path.with_name(RUNTIME_CONFIG_FILE_NAME)
+    runtime_path = runtime_path or config_path.with_name(RUNTIME_CONFIG_FILE_NAME)
     if runtime_path.exists():
         try:
             runtime_raw, content_hash = _read_document(runtime_path)
@@ -304,11 +337,19 @@ def _validation_summary(error: ValidationError) -> str:
 
 def _resolve_agent_host_config(config: AgentHostFileConfig) -> RuntimeAgentHostConfig:
     runtime = config.runtime
-    api_key = os.environ.get(runtime.api_key_env)
+    api_key = (
+        runtime.api_key.get_secret_value()
+        if runtime.api_key is not None
+        else os.environ.get(runtime.api_key_env)
+        if runtime.api_key_env is not None
+        else None
+    )
     if config.enabled and not api_key:
-        raise ConfigError(
-            f"Agent Host is enabled but environment variable '{runtime.api_key_env}' is not set"
-        )
+        if runtime.api_key_env is not None:
+            raise ConfigError(
+                f"Agent Host is enabled but environment variable '{runtime.api_key_env}' is not set"
+            )
+        raise ConfigError("Enabled Agent Host requires a configured credential")
     return RuntimeAgentHostConfig(
         enabled=config.enabled,
         mcp_apps_enabled=config.mcp_apps_enabled,

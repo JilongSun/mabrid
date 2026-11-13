@@ -35,16 +35,82 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 
 - Review identifier: `managed-config-foundations`.
 - Workstream: `feat/managed-config-and-recovery`.
-- Review state: **Approved for the bounded Host application and settings contract below**. The owner accepted
+- Review state: **Approved for the bounded runtime placement, Host credential rotation, and deployment batch below**. The owner accepted
 	[ADR 0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md)
 	and the dated amendments below, including component-scoped application, the existing Hermes
 	interface boundary, and the explicit deferral of Host management access hardening.
 - Delivery: the first Gateway configuration skeleton, runtime-only cleanup, and the Agent Host
 	runtime-file location are implemented, together with the Gateway runtime-file editor assessed
 	on 2026-11-10 and the bounded idle-only Host application and Hermes Settings batch assessed
-	on 2026-11-11. Controlled verification is recorded below, separately from live acceptance.
-- Further work: deployment integration, CI/version handling, and unrelated Agent Host capabilities
-	remain separately scoped; delivery of this batch does not authorize their implementation.
+	on 2026-11-11. Runtime placement, literal Host credential rotation, and container-layout
+	integration have controlled evidence on 2026-11-12, separately from live acceptance.
+- Further work: live deployment acceptance, README delivery review, CI/version handling, and
+	unrelated Agent Host capabilities remain separately scoped; this batch does not authorize them.
+
+#### Runtime Placement, Host Credentials, And Container Integration (2026-11-12)
+
+The owner approved the discussed combination and authorized implementation. Hermes credentials are
+Host runtime inputs and must support rotation without container recreation; environment injection
+remains an optional source, not the only update mechanism. This amends ADR 0018's adjacent-only
+placement and Host environment-reference-only rules, with the reciprocal notice in ADR 0014.
+
+- Add static `runtimeConfigFile`, relative to the static directory when not absolute. Keep the
+	adjacent default, existing database and stdio path bases, and restart ownership. Do not search,
+	move files automatically, reset storage, or silently fall back to another source.
+- Use a dedicated writable `runtime/` directory in new container templates, retain a read-only
+	static file and environment-only injection, and preserve the current named data volume and
+	relative database location. Do not mount the repository root writable. Define non-root directory
+	access explicitly; native deployment commands must not require Python or uv.
+- Add mutually exclusive environment-reference and literal Host credentials. Management reads
+	expose only source/configured metadata; writes preserve or explicitly replace/select credentials.
+	Save and apply stay separate. Credential-only changes must bypass no-op suppression without
+	publishing secret-derived component digests, and replace both clients under the idle guard.
+- Retain identity, binding, durable Run protection, trusted-only access, safe errors, and no replay.
+	Successful local replacement is not remote authentication evidence. Do not add independent key
+	files, watchers, secret frameworks, access control, CI, version automation, or release publication.
+- Update the deployment guide, templates, and configuration contracts for the completed layout
+	and behavior. Preserve existing operator files and services; README delivery review remains
+	separately requested rather than an implicit part of implementation.
+
+Required verification: relative/absolute/default placement and static restart reporting; unchanged
+database/stdio bases; mutually exclusive sources and invalid values; read/write/error redaction;
+preserve/replace and failed atomic writes; credential-only pending/application and client replacement;
+busy/unsettled rejection, retained Session identity, preparation failure, and no business retries;
+frontend source switching and unknown outcomes; native Unix/PowerShell setup preservation, permissions,
+Compose mount structure, contract/type/lint/build checks, and controlled browser flows. Actual Docker
+and real Agent/MCP acceptance remain separate; no such operations are authorized in this workspace.
+
+Delivery assessment on 2026-11-12: **Implemented for the approved configuration, credential,
+and container-layout scope, with controlled verification**.
+
+- Startup resolves the selected runtime path once. Relative/absolute placement and the adjacent
+	default are tested; a static path edit reports restart required without switching the file.
+	Database and stdio relative-path bases remain unchanged, and the editor uses the same path.
+- Host file credentials select an environment name or a literal value. Separate management models
+	expose only source/configured metadata and accept explicit preserve/replace/source operations.
+	Credential-only changes use a process-keyed opaque Host fingerprint, rebuild both clients under
+	the idle guard, retain Session identity/binding, and respect all durable unsettled claims.
+- New setup templates and Compose mount only the runtime directory writable, preserve the static
+	file/data-volume locations, and use supplementary directory-group access for the existing non-root
+	identity. Setup retains existing files/permissions and rejects implicit adjacent-file migration.
+	Native scripts do not require host Python and never reset storage. The deployment guide is updated;
+	README changes remain outside this implementation assessment.
+- `uv run --directory backend --all-packages pytest -q --tb=short`: 466 passed, 1 skipped. The skip
+	explicitly reserves Windows directory ACL verification for actual deployment. Native Unix and
+	Windows PowerShell workflows use Docker doubles; no real Docker command was executed.
+- Pyright, Ruff, full formatting, editor diagnostics, and the offline frontend contract check passed.
+	The approved preview snapshot includes the separated credential-read/write models. Safe HTTP
+	validation/conflict/storage/preparation failures do not expose credentials or replace the Host.
+- Frontend typecheck, lint, all 191 tests, and production build passed. Settings source selection,
+	required replacement, cleared password input, ordinary preserve writes, save/apply separation,
+	busy/conflict behavior, and unknown outcomes without retry are covered. The existing bundle-size
+	warning remains outside this batch.
+- Controlled Chromium checks at 1280x900 and 390x844 verified those Settings flows, native capability
+	refresh, control bounds, and screenshots without overflow or overlap. All business requests used
+	intercepted synthetic responses; no real Agent/MCP request or remote authentication was attempted.
+- Existing operator configuration, secrets, databases, and services were not changed. Actual image
+	builds, container filesystem/ACL behavior, recreate persistence, and remote credential acceptance
+	remain unverified. Trusted-only management access and explicit deferral of hardening remain in force.
 
 #### Agent Host Reconfiguration Policy (2026-11-11)
 

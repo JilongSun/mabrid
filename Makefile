@@ -10,10 +10,10 @@ help:
 	@echo ""
 	@echo "  install   Install backend and frontend dependencies"
 	@echo "  dev       Start the whole project (backend + frontend)"
-	@echo "  setup     Create missing static/runtime configuration files and .env"
+	@echo "  setup     Create mabrid.yaml, runtime/mabrid.runtime.yaml and optional-key .env"
 	@echo "  build     Build the image after setup (IMAGE=mabrid:local)"
 	@echo "  run       Start the built image with the local YAML configuration"
-	@echo "  recreate  Replace the container so changed .env values take effect"
+	@echo "  recreate  Apply static settings or changed environment-secret values"
 	@echo "  stop      Stop the managed container without deleting its data"
 	@echo "  help      Show this help"
 

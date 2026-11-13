@@ -5,6 +5,7 @@
 - Amended: 2026-11-03; runtime-only developer-preview configuration
 - Amended: 2026-11-10; bounded Gateway file editing, literal header operations, and deferred access hardening
 - Amended: 2026-11-11; Host identity, idle-only replacement, component-scoped application/settings, and no Host last-known-good restoration
+- Amended: 2026-11-12; explicit runtime-file placement, write-only Host credentials, and container deployment integration
 - Supersedes: ADR 0008, including its surviving constraints recorded below
 - Amends: ADR 0002 ([Configuration boundary](0002-sqlite-persistence-and-configuration-authority.md#configuration-boundary)),
   ADR 0014 ([Post-v0.1 product-configuration ownership](0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership),
@@ -54,11 +55,12 @@ Configuration is split by how it is applied:
 | --- | --- | --- |
 | Static process configuration | Listener host and port, advertised base URL, storage path and migration policy, logging, diagnostic upstream selection, and future extension loading | Loaded at process start; a later change is reported as restart required and never partially applied |
 | Dynamic runtime configuration | Upstreams and transport connection settings, endpoints and endpoint-owned bindings, Agent Host enablement, Target, endpoint assignment, runtime integration, interface, connection, and deployment binding settings, and future UI preferences | Applied by a validated configuration generation without restarting the process |
-| Secret values | Host credentials and upstream connection values | Host credentials use startup environment-variable references; upstream headers and subprocess environment values may remain literal values in the runtime file, never returned by management reads |
+| Secret values | Host credentials and upstream connection values | Host credentials explicitly select environment references or write-only literal runtime values; management reads never return values |
 
 The static file remains `mabrid.yaml`. It is read-only to the management API. The dynamic settings
-move to `mabrid.runtime.yaml` in the same directory as the static file; no separate path setting is
-required for the initial design. A missing or empty runtime file is a valid unconfigured
+move to `mabrid.runtime.yaml`. The initial adjacent-file default remains available; the 2026-11-12
+amendment below permits explicit placement without changing other relative-path bases.
+A missing or empty runtime file is a valid unconfigured
 installation: the process starts, publishes no endpoints, keeps Agent Host disabled, and reports
 Gateway readiness as not ready. Gateway topology is accepted only from the runtime file;
 `upstreams` and `endpoints` in the static file are errors. There is no single-file import or fallback.
@@ -72,7 +74,8 @@ Invalid Host configuration at startup leaves the Host unavailable and reports th
 configuration recovery ledger is not required by the amended policy.
 
 Rotation of startup environment values, including variables not present at startup, requires a restart.
-A reloadable secret source is deferred. Management reads and errors never return secret values.
+A literal Host credential can instead be changed through the runtime file under the 2026-11-12
+amendment below. Management reads and errors never return secret values.
 The existing global `bridge.httpxTimeoutSeconds` remains unchanged and restart-applied in the first
 batch. The 2026-11-10 editing amendment explicitly retains literal upstream values; management
 writes distinguish preserving, replacing, and removing values without returning their originals.
@@ -262,6 +265,40 @@ success. Host application status may remain in process; startup resolves the fil
 restoring status as configuration. This creates no durable Host configuration history/recovery
 table and does not weaken persistent Session/Run ownership.
 
+### Runtime-file placement and Host credential rotation (2026-11-12)
+
+The owner approved a bounded deployment and credential amendment after confirming that the Hermes
+API key is part of Host runtime configuration and must support idle-only hot replacement.
+
+- Static `runtimeConfigFile` optionally selects an absolute runtime-file path or a path relative to
+  the static file's directory. When omitted, the adjacent `mabrid.runtime.yaml` remains the default.
+  There is no search, fallback, automatic file move, or import. Database and stdio relative paths
+  retain their existing static-directory base. Changing placement requires process restart.
+- New deployment templates use a dedicated `runtime/` directory. Only that directory is mounted
+  writable for atomic file replacement; the static file remains read-only, environment files remain
+  host-side injection inputs, and the existing data volume and database path are preserved.
+  Native Unix/PowerShell tooling remains independent of host Python and never resets storage.
+- Host credentials explicitly select either an environment-variable reference or a literal runtime
+  configuration value, never both. Environment injection remains supported; changing injected values
+  requires container recreation. Switching to a literal value permits rotation without recreation.
+  No independent secret-file provider, secret registry, or implicit fallback is introduced.
+- Host credential reads expose only source, reference name, and configured state. Writes preserve
+  existing values or explicitly replace/select a source; ordinary edits never round-trip the value.
+  Empty replacement is invalid. File persistence contains plaintext and requires operator-managed
+  permissions and backup protection. Safe errors, logs, status, and contract examples omit values.
+- A credential-only change must make the desired Host pending and rebuild both compatibility and
+  native clients under the existing idle guard. Public component fingerprints must not expose a
+  reusable digest of a secret; an opaque process-keyed fingerprint includes effective credentials
+  without publishing an ordinary secret digest or persisting a Host configuration history.
+  Save remains separate from application. Failed local preparation keeps the current Host.
+- Successful application confirms local client replacement, not remote authentication. A later
+  authentication failure is reported without secret fallback or automatic business-operation retry.
+  Rotation preserves Target/integration identity, deployment binding, Session IDs, and unsettled
+  ownership. No real Agent/MCP operation is required to validate this batch.
+
+This amends the earlier Host environment-reference-only rule and the initial adjacent-only placement
+rule, not the trusted-deployment access boundary. Access hardening remains explicitly deferred.
+
 ### Preserved constraints
 
 - Immutable revisions, coherent dependent endpoint revisions, revision-pinned bridge Sessions,
@@ -324,10 +361,9 @@ The first Gateway configuration batch has controlled test and isolated browser e
 decision log. Runtime-only cleanup was approved on 2026-11-03. On 2026-11-04 Agent Host settings
 moved to the runtime file with unchanged fields and restart-applied behavior. On 2026-11-10 the
 bounded Gateway runtime-file editor was implemented with controlled file/API/frontend tests and
-isolated browser evidence recorded in the decision log. The 2026-11-11 Host policy is accepted but
-not implemented: current code still uses startup composition and whole-file rejection for Host
-changes. The focused contract review selected separate application, additive native capabilities,
-and bounded Host writes with explicit access-hardening deferral; its backend/frontend delivery is
-pending. Host last-known-good restoration is excluded rather than pending delivery. Broader
-secret-reference contracts and access hardening remain deferred. Compose integration is deferred
-and is not evidence of runtime-only deployment support.
+isolated browser evidence recorded in the decision log. The 2026-11-11 idle-only Host application
+and Settings batch is implemented with separately recorded controlled evidence. The 2026-11-12
+placement, literal Host credential rotation, and deployment integration amendment is implemented
+with controlled test/browser evidence recorded in the decision log. Host last-known-good restoration is excluded
+rather than pending delivery. Broader secret providers and access hardening remain deferred.
+Controlled verification is not evidence of live Agent/MCP or container acceptance.

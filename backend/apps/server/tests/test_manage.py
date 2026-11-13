@@ -84,7 +84,7 @@ def launcher(request: pytest.FixtureRequest, tmp_path: Path):
             pytest.skip("POSIX shell is unavailable")
         binaries = tmp_path / "bin"
         binaries.mkdir()
-        for utility in ("dirname", "mkdir", "cp", "grep"):
+        for utility in ("dirname", "mkdir", "cp", "grep", "chmod", "stat"):
             executable = shutil.which(utility)
             assert executable is not None
             (binaries / utility).symlink_to(executable)
@@ -152,38 +152,43 @@ def test_native_setup_is_idempotent_without_host_python(launcher) -> None:
     result = invoke("setup")
     assert result.returncode == 0, result.stderr
     assert (directory / "mabrid.yaml").read_bytes() == (ROOT / "mabrid.yaml.example").read_bytes()
-    assert (directory / "mabrid.runtime.yaml").read_bytes() == (
+    assert (directory / "runtime/mabrid.runtime.yaml").read_bytes() == (
         ROOT / "mabrid.runtime.yaml.example"
     ).read_bytes()
     env_file = directory / ".env"
     assert env_file.is_file()
     assert "API_SERVER_KEY" in env_file.read_text(encoding="utf-8")
     (directory / "mabrid.yaml").write_bytes(b"user-owned configuration\n")
-    (directory / "mabrid.runtime.yaml").write_bytes(b"user-owned runtime configuration\n")
+    (directory / "runtime/mabrid.runtime.yaml").write_bytes(b"user-owned runtime configuration\n")
     (directory / ".env").write_bytes(b"USER_VALUE=fixture-only\n")
     result = invoke("setup")
     assert result.returncode == 0, result.stderr
     assert (directory / "mabrid.yaml").read_bytes() == b"user-owned configuration\n"
-    assert (directory / "mabrid.runtime.yaml").read_bytes() == b"user-owned runtime configuration\n"
+    assert (
+        directory / "runtime/mabrid.runtime.yaml"
+    ).read_bytes() == b"user-owned runtime configuration\n"
     assert (directory / ".env").read_bytes() == b"USER_VALUE=fixture-only\n"
     assert not log.exists()
 
 
-@pytest.mark.parametrize("existing", ["mabrid.yaml", "mabrid.runtime.yaml"])
+@pytest.mark.parametrize("existing", ["mabrid.yaml", "runtime/mabrid.runtime.yaml"])
 def test_setup_creates_only_missing_configuration_files(launcher, existing: str) -> None:
     invoke, directory, log = launcher
     directory.mkdir()
     existing_file = directory / existing
+    existing_file.parent.mkdir(parents=True, exist_ok=True)
     existing_file.write_bytes(b"owner-maintained configuration\n")
     result = invoke("setup")
     assert result.returncode == 0, result.stderr
     assert existing_file.read_bytes() == b"owner-maintained configuration\n"
-    missing = "mabrid.runtime.yaml" if existing == "mabrid.yaml" else "mabrid.yaml"
-    assert (directory / missing).read_bytes() == (ROOT / f"{missing}.example").read_bytes()
+    missing = "runtime/mabrid.runtime.yaml" if existing == "mabrid.yaml" else "mabrid.yaml"
+    assert (directory / missing).read_bytes() == (
+        ROOT / f"{Path(missing).name}.example"
+    ).read_bytes()
     assert not log.exists()
 
 
-@pytest.mark.parametrize("name", ["mabrid.yaml", "mabrid.runtime.yaml", ".env"])
+@pytest.mark.parametrize("name", ["mabrid.yaml", "runtime/mabrid.runtime.yaml", ".env"])
 def test_setup_rejects_directories_in_place_of_configuration_files(launcher, name: str) -> None:
     invoke, directory, log = launcher
     (directory / name).mkdir(parents=True)
@@ -270,6 +275,50 @@ def test_failed_prerequisites_do_not_claim_success(launcher, scenario: str) -> N
         assert " up --detach" not in commands
 
 
+def test_setup_requires_explicit_adjacent_runtime_migration(launcher) -> None:
+    invoke, directory, log = launcher
+    directory.mkdir()
+    static = directory / "mabrid.yaml"
+    static.write_bytes(b"operator-static\n")
+    adjacent = directory / "mabrid.runtime.yaml"
+    adjacent.write_bytes(b"operator-secret\n")
+    result = invoke("setup")
+    assert result.returncode != 0 and "Explicitly move" in result.stderr
+    assert static.read_bytes() == b"operator-static\n"
+    assert adjacent.read_bytes() == b"operator-secret\n"
+    assert not (directory / "runtime").exists()
+    assert not log.exists()
+
+
+def test_unix_setup_runtime_permissions_and_existing_modes_are_preserved(
+    launcher, request: pytest.FixtureRequest
+) -> None:
+    if request.node.callspec.params["launcher"] != "unix":
+        pytest.skip("Windows directory ACLs require deployment acceptance")
+    from stat import S_IMODE
+
+    invoke, directory, _ = launcher
+    assert invoke("setup").returncode == 0
+    runtime = directory / "runtime"
+    configuration = runtime / "mabrid.runtime.yaml"
+    assert S_IMODE(runtime.stat().st_mode) == 0o2770
+    assert S_IMODE(configuration.stat().st_mode) == 0o660
+    assert S_IMODE((directory / ".env").stat().st_mode) == 0o600
+    configuration.chmod(0o640)
+    assert invoke("setup").returncode == 0
+    assert S_IMODE(configuration.stat().st_mode) == 0o640
+
+
+@pytest.mark.parametrize("action", ["run", "recreate"])
+def test_missing_runtime_never_starts_or_stops_containers(launcher, action: str) -> None:
+    invoke, directory, log = launcher
+    assert invoke("setup").returncode == 0
+    (directory / "runtime/mabrid.runtime.yaml").unlink()
+    result = invoke(action)
+    assert result.returncode != 0 and "Run setup first" in result.stderr
+    assert not log.exists()
+
+
 def test_compose_keeps_secrets_runtime_only() -> None:
     document = yaml.safe_load((ROOT / "compose.yaml").read_text(encoding="utf-8"))
     service = document["services"]["mabrid"]
@@ -281,6 +330,11 @@ def test_compose_keeps_secrets_runtime_only() -> None:
     assert configuration["source"] == "${MABRID_CONFIG_DIR}/mabrid.yaml"
     assert configuration["target"] == "/var/lib/mabrid/mabrid.yaml"
     assert configuration["read_only"]
+    runtime = service["volumes"][2]
+    assert runtime["source"] == "${MABRID_CONFIG_DIR}/runtime"
+    assert runtime["target"] == "/var/lib/mabrid/runtime"
+    assert not runtime["read_only"] and not runtime["bind"]["create_host_path"]
+    assert service["group_add"] == ["${MABRID_CONFIG_GID:-10001}"]
 
 
 def test_root_example_matches_current_configuration_contract(tmp_path: Path) -> None:
@@ -293,7 +347,8 @@ def test_root_example_matches_current_configuration_contract(tmp_path: Path) -> 
     assert loaded.storage.sqlite_path == tmp_path / "backend/var/mabrid.db"
     assert loaded.runtime_source == "unconfigured"
     assert not loaded.upstreams and not loaded.endpoints
-    (tmp_path / "mabrid.runtime.yaml").write_bytes(
+    (tmp_path / "runtime").mkdir()
+    (tmp_path / "runtime/mabrid.runtime.yaml").write_bytes(
         (ROOT / "mabrid.runtime.yaml.example").read_bytes()
     )
     split = resolve_runtime_configuration(str(config))

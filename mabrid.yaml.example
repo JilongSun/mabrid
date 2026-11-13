@@ -6,9 +6,11 @@ bridge:
   # advertisedBaseUrl: http://127.0.0.1:8765
   # httpxTimeoutSeconds: 30  # HTTP request timeout in seconds (default: 30)
 
+runtimeConfigFile: runtime/mabrid.runtime.yaml
+
 storage:
   sqlitePath: ./backend/var/mabrid.db
   autoMigrate: true
 
-# Gateway upstreams, endpoints, and Agent Host settings belong only in the adjacent
-# mabrid.runtime.yaml.
+# Gateway upstreams, endpoints, and Agent Host settings belong only in runtimeConfigFile.
+# Relative database and stdio paths remain relative to this static file's directory.

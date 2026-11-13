@@ -15,6 +15,7 @@ from pydantic import (
     ConfigDict,
     Field,
     PositiveFloat,
+    SecretStr,
     field_validator,
     model_validator,
 )
@@ -68,27 +69,45 @@ class HermesSessionFileConfig(CamelModel):
 
 
 class HermesAgentRuntimeFileConfig(CamelModel):
-    """Hermes runtime selection and connection settings with an environment-secret reference."""
+    """Select exactly one Host credential source without exposing its resolved value."""
 
     integration: Literal["hermes"] = "hermes"
     interface: Literal["openai-chat-completions"] = "openai-chat-completions"
     base_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8642/v1")
-    api_key_env: str = Field(default="API_SERVER_KEY", min_length=1)
+    api_key_env: str | None = Field(default="API_SERVER_KEY", min_length=1)
+    api_key: SecretStr | None = None
     timeout_seconds: PositiveFloat = 120.0
     sessions: HermesSessionFileConfig | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def select_literal_source(cls, value: object) -> object:
+        if isinstance(value, dict) and any(key in value for key in ("apiKey", "api_key")):
+            if not any(key in value for key in ("apiKeyEnv", "api_key_env")):
+                return {**value, "apiKeyEnv": None}
+        return value
 
-class AgentHostFileConfig(CamelModel):
-    """Single Target, endpoint assignment, and Host feature selection from the runtime file."""
+    @model_validator(mode="after")
+    def validate_credential(self) -> HermesAgentRuntimeFileConfig:
+        if self.api_key is not None:
+            if self.api_key_env is not None:
+                raise ValueError("Host credentials require either apiKey or apiKeyEnv, not both")
+            value = self.api_key.get_secret_value()
+            if not value.strip() or "\r" in value or "\n" in value:
+                raise ValueError("Host API key must be nonempty and contain no newlines")
+        return self
+
+
+class HostIdentityConfig(CamelModel):
+    """Share Host identity and enablement invariants across file and management settings."""
 
     enabled: bool = False
     mcp_apps_enabled: bool = False
     target_id: str | None = Field(default=None, min_length=1)
     endpoint_slug: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
-    runtime: HermesAgentRuntimeFileConfig = Field(default_factory=HermesAgentRuntimeFileConfig)
 
     @model_validator(mode="after")
-    def validate_enabled_target(self) -> AgentHostFileConfig:
+    def validate_enabled_target(self) -> HostIdentityConfig:
         if self.mcp_apps_enabled and not self.enabled:
             raise ValueError("'mcpAppsEnabled' requires enabled Agent Host")
         if self.enabled and self.target_id is None:
@@ -96,6 +115,12 @@ class AgentHostFileConfig(CamelModel):
         if self.enabled and self.endpoint_slug is None:
             raise ValueError("enabled Agent Host requires 'endpointSlug'")
         return self
+
+
+class AgentHostFileConfig(HostIdentityConfig):
+    """Add credential-bearing Hermes settings to the file-owned Host identity."""
+
+    runtime: HermesAgentRuntimeFileConfig = Field(default_factory=HermesAgentRuntimeFileConfig)
 
 
 class UpstreamFileConfig(CamelModel):
@@ -142,6 +167,7 @@ class ProcessFileConfig(CamelModel):
 
     bridge: BridgeRuntimeConfig = Field(default_factory=BridgeRuntimeConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    runtime_config_file: Path | None = None
 
 
 class RuntimeFileConfig(CamelModel):

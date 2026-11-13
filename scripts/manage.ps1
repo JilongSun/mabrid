@@ -63,8 +63,25 @@ function Confirm-Owner {
 
 try {
     if ($Action -eq 'setup') {
+        $runtimeDirectory = Join-Path $ConfigDir 'runtime'
+        $runtimeTarget = Join-Path $runtimeDirectory 'mabrid.runtime.yaml'
+        if ((Test-Path -LiteralPath (Join-Path $ConfigDir 'mabrid.runtime.yaml')) -and -not (Test-Path -LiteralPath $runtimeTarget)) {
+            throw 'Existing adjacent runtime file kept. Explicitly move it to runtime/mabrid.runtime.yaml and set runtimeConfigFile before using the container layout.'
+        }
         [IO.Directory]::CreateDirectory($ConfigDir) | Out-Null
-        foreach ($file in @('mabrid.yaml', 'mabrid.runtime.yaml')) {
+        $unixHost = [Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT
+        if (Test-Path -LiteralPath $runtimeDirectory) {
+            if (-not (Test-Path -LiteralPath $runtimeDirectory -PathType Container) -or (Get-Item -LiteralPath $runtimeDirectory).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+                throw "Expected a real directory: $runtimeDirectory"
+            }
+        } else {
+            [IO.Directory]::CreateDirectory($runtimeDirectory) | Out-Null
+            if ($unixHost) {
+                & chmod 2770 $runtimeDirectory
+                if ($LASTEXITCODE -ne 0) { throw 'Unable to set runtime directory permissions' }
+            }
+        }
+        foreach ($file in @('mabrid.yaml', 'runtime/mabrid.runtime.yaml')) {
             $target = Join-Path $ConfigDir $file
             if (Test-Path -LiteralPath $target) {
                 if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
@@ -72,7 +89,12 @@ try {
                 }
                 Write-Output "Keeping existing $target"
             } else {
-                Copy-Item -LiteralPath (Join-Path $Root "$file.example") -Destination $target
+                $template = (Split-Path -Leaf $file) + '.example'
+                Copy-Item -LiteralPath (Join-Path $Root $template) -Destination $target
+                if ($unixHost -and $file -eq 'runtime/mabrid.runtime.yaml') {
+                    & chmod 660 $target
+                    if ($LASTEXITCODE -ne 0) { throw 'Unable to set runtime file permissions' }
+                }
                 Write-Output "Created $target"
             }
         }
@@ -85,13 +107,13 @@ try {
         } else {
             $envContent = @(
                 '# Container runtime secrets. Values are injected as environment variables,'
-                '# not mounted as a file. Set variables referenced by mabrid.yaml, for example:'
+                '# not mounted as a file. Set variables referenced by Host apiKeyEnv, for example:'
                 '# API_SERVER_KEY='
             ) -join "`n"
             [IO.File]::WriteAllText($envTarget, $envContent + "`n")
             Write-Output "Created $envTarget"
         }
-        Write-Output 'Configure process settings in mabrid.yaml, and Gateway topology and Agent Host settings in mabrid.runtime.yaml.'
+        Write-Output 'Configure mabrid.yaml and runtime/mabrid.runtime.yaml. Existing files and permissions are preserved; Unix runtime directories need group writes and setgid, and Windows directories need operator-managed ACL protection.'
         exit 0
     }
     if (-not (Test-Path -LiteralPath $ConfigDir -PathType Container)) {
@@ -102,6 +124,17 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $ConfigDir 'mabrid.yaml') -PathType Leaf)) {
             throw 'Run setup first'
         }
+    }
+    if ($Action -in @('run', 'recreate')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $ConfigDir 'runtime/mabrid.runtime.yaml') -PathType Leaf)) {
+            throw 'Run setup first; the container layout requires runtime/mabrid.runtime.yaml and an explicit runtimeConfigFile setting'
+        }
+    }
+    $env:MABRID_CONFIG_GID = '10001'
+    if ($Action -ne 'stop' -and [Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+        $groupArguments = if ($IsMacOS) { @('-f', '%g') } else { @('-c', '%g') }
+        $env:MABRID_CONFIG_GID = (& stat @groupArguments (Join-Path $ConfigDir 'runtime')).Trim()
+        if ($LASTEXITCODE -ne 0) { throw 'Unable to determine runtime directory group' }
     }
     Get-Command docker -ErrorAction Stop | Out-Null
     if ((Invoke-Docker -DockerArguments @('info', '--format', '{{.OSType}}')) -ne 'linux') {

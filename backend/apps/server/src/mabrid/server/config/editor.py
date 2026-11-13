@@ -25,9 +25,14 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.error import YAMLError
 
-from .file import AgentHostFileConfig, EndpointFileConfig, RuntimeFileConfig
+from .file import (
+    CamelModel,
+    EndpointFileConfig,
+    HermesSessionFileConfig,
+    HostIdentityConfig,
+    RuntimeFileConfig,
+)
 from .loader import (
-    RUNTIME_CONFIG_FILE_NAME,
     ConfigError,
     RuntimeFileCandidate,
     resolve_runtime_document,
@@ -106,18 +111,74 @@ class RuntimeEditView(EditorModel):
     agent_host: HostEditView
 
 
+class HostRuntimeSettings(CamelModel):
+    """Editable Hermes settings, deliberately excluding all credential fields."""
+
+    integration: Literal["hermes"] = "hermes"
+    interface: Literal["openai-chat-completions"] = "openai-chat-completions"
+    base_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8642/v1")
+    timeout_seconds: float = Field(default=120.0, gt=0)
+    sessions: HermesSessionFileConfig | None = None
+
+
+class HostSettings(HostIdentityConfig):
+    """Share Host identity validation without permitting credential round-tripping."""
+
+    runtime: HostRuntimeSettings = Field(default_factory=HostRuntimeSettings)
+
+
+class HostCredentialView(EditorModel):
+    """Expose credential selection and presence, never plaintext or secret-derived hashes."""
+
+    source: Literal["environment", "value", "none"]
+    variable: str | None = None
+    configured: bool
+
+
+class PreserveHostCredential(EditorModel):
+    """Keep the stored credential unchanged during ordinary Host settings edits."""
+
+    action: Literal["preserve"] = "preserve"
+
+
+class ReplaceHostCredential(EditorModel):
+    """Accept a write-only literal credential for the desired runtime file."""
+
+    action: Literal["replace"]
+    value: SecretStr
+
+    @model_validator(mode="after")
+    def validate_value(self) -> ReplaceHostCredential:
+        value = self.value.get_secret_value()
+        if not value.strip() or "\r" in value or "\n" in value:
+            raise ValueError("Host API key must be nonempty and contain no newlines")
+        return self
+
+
+class EnvironmentHostCredential(EditorModel):
+    """Explicitly select one process-environment credential without fallback."""
+
+    action: Literal["environment"]
+    variable: str = Field(min_length=1)
+
+
 class HostRuntimeEditRequest(EditorModel):
-    """Edit only Host settings using credential reference names, never resolved values."""
+    """Edit Host settings and apply an explicit write-only credential operation."""
 
     expected_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
-    agent_host: AgentHostFileConfig
+    agent_host: HostSettings
+    credential: Annotated[
+        PreserveHostCredential | ReplaceHostCredential | EnvironmentHostCredential,
+        Field(discriminator="action"),
+    ] = Field(default_factory=PreserveHostCredential)
 
 
 class HostRuntimeEditView(EditorModel):
     """Expose the desired Host and current Gateway assignment choices separately."""
 
     content_hash: str | None
-    agent_host: AgentHostFileConfig
+    agent_host: HostSettings
+    credential: HostCredentialView
     published_endpoints: tuple[str, ...] = ()
 
 
@@ -134,7 +195,7 @@ class RuntimeFileEditor:
 
     def __init__(self, configuration: RuntimeConfiguration) -> None:
         self._configuration = configuration
-        self._path = configuration.config_path.with_name(RUNTIME_CONFIG_FILE_NAME)
+        self._path = configuration.runtime_path
 
     def read(self) -> RuntimeEditView:
         document, content_hash = self._read()
@@ -152,6 +213,13 @@ class RuntimeFileEditor:
             )
         node = document.setdefault("agentHost", CommentedMap())
         self._merge_host(node, request.agent_host.model_dump(mode="json", by_alias=True))
+        runtime = node["runtime"]
+        if isinstance(request.credential, ReplaceHostCredential):
+            runtime.pop("apiKeyEnv", None)
+            runtime["apiKey"] = request.credential.value.get_secret_value()
+        elif isinstance(request.credential, EnvironmentHostCredential):
+            runtime.pop("apiKey", None)
+            runtime["apiKeyEnv"] = request.credential.variable
         stream = StringIO()
         self._yaml().dump(document, stream)
         content = stream.getvalue().encode("utf-8")
@@ -349,9 +417,26 @@ class RuntimeFileEditor:
         return yaml
 
     def _host_view(self, document: CommentedMap, content_hash: str | None) -> HostRuntimeEditView:
+        config = self._validate(document).agent_host
+        runtime = config.runtime
+        credential = HostCredentialView(
+            source="value"
+            if runtime.api_key is not None
+            else "environment"
+            if runtime.api_key_env is not None
+            else "none",
+            variable=runtime.api_key_env,
+            configured=runtime.api_key is not None
+            or bool(runtime.api_key_env and os.environ.get(runtime.api_key_env)),
+        )
         return HostRuntimeEditView(
             content_hash=content_hash,
-            agent_host=self._validate(document).agent_host,
+            agent_host=HostSettings.model_validate(
+                config.model_dump(
+                    mode="json", by_alias=True, exclude={"runtime": {"api_key", "api_key_env"}}
+                )
+            ),
+            credential=credential,
         )
 
     def _view(self, document: CommentedMap, content_hash: str | None) -> RuntimeEditView:

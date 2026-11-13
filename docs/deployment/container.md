@@ -7,7 +7,7 @@ just setup
 just build
 ```
 
-Edit `mabrid.yaml`, then run:
+Edit `mabrid.yaml` and `runtime/mabrid.runtime.yaml`, then run:
 
 ```sh
 just run
@@ -22,13 +22,22 @@ separate tooling requirements.
 
 ## Setup
 
-Setup copies [mabrid.yaml.example](../../mabrid.yaml.example) to `mabrid.yaml` in the repository
-root, removing only the `.example` suffix. Contents are unchanged. An existing target is kept.
+Setup copies [mabrid.yaml.example](../../mabrid.yaml.example) to `mabrid.yaml` and
+[mabrid.runtime.yaml.example](../../mabrid.runtime.yaml.example) to
+`runtime/mabrid.runtime.yaml` under the selected configuration directory. Template contents are
+unchanged. Existing files are kept, not parsed, rewritten, or merged by the launcher.
 
-Setup also creates `.env` beside that configuration file when it does not exist yet. The new file
-contains only commented guidance and no active values, so an Agent Host deployment still fails fast
-until the referenced environment variable is supplied. An existing `.env` is never modified or
-overwritten. There is no separate container configuration template or configuration transformation.
+Setup also creates a commented `.env` beside the static file if missing. It is an optional Host
+credential source, not a requirement when a literal runtime credential is selected. Setup never
+overwrites an existing environment file. Configuration and secret values are not build inputs.
+
+```text
+<config-dir>/
+  mabrid.yaml
+  runtime/
+    mabrid.runtime.yaml
+  .env
+```
 
 The direct entry points are:
 
@@ -40,17 +49,50 @@ sh scripts/manage.sh setup
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 setup
 ```
 
+### Existing Deployments
+
+The application still supports an adjacent runtime file when `runtimeConfigFile` is omitted, but
+the supplied Compose layout mounts only `runtime/`. Setup detects an existing adjacent runtime
+file without a destination and stops before creating another configuration. It never imports,
+copies, deletes, or resets operator state.
+
+To adopt the layout, explicitly move the desired runtime file into `runtime/`, add
+`runtimeConfigFile: runtime/mabrid.runtime.yaml` to the static file, and arrange the directory
+permissions below. Keep the static file's location, `storage.sqlitePath`, and named data volume
+unchanged. Then recreate the container. Resolve any two pre-existing runtime files explicitly;
+there is no source precedence or automatic fallback.
+
+### Permissions
+
+The image keeps UID/GID `10001:10001`; it does not start as root or change data-volume ownership.
+For new Unix directories, setup creates `runtime/` with mode `2770` and its runtime file with mode
+`0660`. The launcher adds the directory's numeric group to the container as a supplementary group
+through `MABRID_CONFIG_GID`. Group write permits atomic replacement; setgid keeps replacement files
+in the operator-controlled group. Existing permissions are never automatically changed.
+
+An existing Unix runtime directory therefore needs group read/write/search access and setgid, and
+the runtime file needs group read/write access. Protect the directory from untrusted group members.
+Windows deployments use operator-managed ACLs and Docker Desktop bind-mount behavior; their actual
+non-root read/write behavior requires container acceptance. Do not mount the checkout root writable
+or make the runtime directory world-writable to work around permissions.
+
 ## Runtime Files
 
 The image does not contain local YAML or secrets. Compose mounts the selected `mabrid.yaml`
 read-only at `/var/lib/mabrid/mabrid.yaml`. The application reads its settings from YAML;
 the launcher does not override listener settings or parse product configuration.
 
-The current Compose workflow does **not** mount `mabrid.runtime.yaml`, so runtime-file
-application is not supported in this deployment. Keep the upstreams and endpoints used by
-Compose in `mabrid.yaml`. A runtime file in the host directory is invisible to the container.
-Do not remove the legacy topology from `mabrid.yaml` on the assumption that Compose reads it.
-Legacy topology is selected only when the database has not previously adopted a runtime file.
+Compose separately mounts the host `runtime/` directory writable at `/var/lib/mabrid/runtime`.
+The static template selects `runtimeConfigFile: runtime/mabrid.runtime.yaml`. The server resolves
+that path relative to the static file, so API saves and explicit component application use the
+same mounted file. Directory mounting preserves host-side atomic edits and permits API temporary
+files and replacement; a writable single-file mount is insufficient.
+
+Absolute runtime paths are supported by the application, but custom placement requires matching
+deployment mounts. There is no runtime-path search or fallback. Gateway topology and Host settings
+are rejected in the static file. A missing runtime file is unconfigured; an invalid Gateway file
+may use existing ledger heads, while an invalid Host is unavailable without Host last-known-good
+restoration. Neither case authorizes database deletion.
 
 The existing named volume `mabrid-data` is mounted at `/var/lib/mabrid`. Relative SQLite paths
 resolve from the mounted YAML's directory, so the root example's `./backend/var/mabrid.db`
@@ -69,12 +111,12 @@ an agent-reachable `bridge.advertisedBaseUrl` when Agent Host is enabled.
 
 ## Storage and Injection Channels
 
-External state reaches the container through three distinct channels. Only one of them becomes a
-file inside the container.
+External state reaches the container through explicit file, environment, and persistence channels.
 
 | Content | Host location | Inside the container | Channel |
 | --- | --- | --- | --- |
 | `mabrid.yaml` | `<config-dir>/mabrid.yaml` | `/var/lib/mabrid/mabrid.yaml`, read-only file | Bind mount of one host file |
+| Runtime configuration | `<config-dir>/runtime/mabrid.runtime.yaml` | `/var/lib/mabrid/runtime/mabrid.runtime.yaml`, writable file | Bind mount of the runtime directory |
 | `.env` | `<config-dir>/.env` | No file; values become process environment variables | Compose `env_file` injection |
 | SQLite database | Docker volume `<name>-data` | The directory `/var/lib/mabrid` | Named volume |
 | Logs | Not stored | Not stored; standard error | Docker log driver (`docker logs`) |
@@ -85,24 +127,26 @@ Consequences:
   never copied into the image or the data volume.
 - `.env` is not mounted. Compose reads it on the host and injects every active `NAME=value` line as
   an environment variable. `docker exec ... ls /var/lib/mabrid` shows no `.env` file.
-- The named volume is the only writable persistent location, because the container root filesystem
-  is read-only and `/tmp` is a `tmpfs`.
+- Only the data volume and runtime directory are writable persistent mounts; the root filesystem
+  stays read-only and `/tmp` is a `tmpfs`.
 - Because the YAML is mounted inside the volume's mount point, a relative `storage.sqlitePath`
   resolves against `/var/lib/mabrid` and therefore stays inside the volume.
 
 ## Configuration and Secret Ownership
 
-YAML owns structured configuration; `.env` owns secret values. The split is deliberate rather than
-a leftover of the original development workflow.
+The static file owns process settings. The runtime file owns desired Gateway and Host settings,
+including optional literal credentials. Environment injection remains another explicit source.
 
 | Content | Owner | Reason |
 | --- | --- | --- |
-| Listener settings, upstream URLs, endpoint topology, timeouts, Agent Host enablement, and the *names* of Agent Host secret variables (`apiKeyEnv`) | `mabrid.yaml` | Typed models validate the file at startup |
-| Secret *values* such as `API_SERVER_KEY` | `.env` | Kept out of images, the data volume, and Git; injected only at container creation |
+| Listener settings, advertised origin, storage, and runtime-file placement | `mabrid.yaml` | Restart-applied process settings |
+| Upstreams, endpoints, Host connection settings, and selected credentials | `runtime/mabrid.runtime.yaml` | Saved desired settings; explicit component application |
+| Optional environment credential values such as `API_SERVER_KEY` | `.env` | Host-side input; injected only at container creation |
 | Product and runtime state | Named volume | Written by the application and required across restarts |
 | Diagnostics | Standard error | Owned by the container runtime |
 
-Agent Host configuration stores the environment variable name to read:
+Host credentials select either an environment name or a literal value, never both. For example,
+the Host runtime section can contain:
 
 ```yaml
 agentHost:
@@ -110,15 +154,22 @@ agentHost:
     apiKeyEnv: API_SERVER_KEY
 ```
 
+Alternatively, remove `apiKeyEnv` and set `apiKey` in that section. Host Settings can switch sources
+and write a replacement key without reading the current value back. Ordinary saves preserve the
+existing key; an empty replacement is invalid. The runtime file contains the literal plaintext:
+protect its directory, backups, and access, and never commit real configuration or credentials.
+Management reads expose source/configured metadata only, not the value or resolved environment key.
+
 Do not treat `.env` as a second configuration file. The application reads environment variables
 only for the secrets named by `apiKeyEnv` and for `MABRID_FRONTEND_DIST`, which the image sets. An
 unrelated variable added to `.env` has no effect on the server. Environment injection also lacks
 structure, type validation, nesting, and review history, and changing it requires container
 recreation rather than a restart.
 
-Legacy upstream `headers` and `env` may contain literal values. Treat YAML, upstream URLs, and the
-SQLite revision ledger as sensitive if they contain credentials; this batch does not migrate those
-values to secret references.
+Upstream `headers` and `env` may contain literal values. Treat runtime YAML, upstream URLs, and the
+SQLite revision ledger as sensitive if they contain credentials. Host literal keys are not added
+to a Host configuration history table. Management writes remain unauthenticated and must only be
+accessible to trusted clients; this is not a hardened public administration surface.
 
 One exception deserves attention: when the configuration directory is the repository root, Compose
 also auto-loads that `.env` for `${...}` interpolation in `compose.yaml`. Variables such as
@@ -131,12 +182,14 @@ so injected secrets are not forwarded to third-party MCP subprocesses.
 
 ## Changing Container Configuration
 
-The two configuration inputs are applied at different times.
+Saving and applying are separate. Gateway and Host apply independently against the running state
+of their dependencies; neither implicitly applies the other component.
 
 | Changed file | Effect on the running container | Required action |
 | --- | --- | --- |
-| `mabrid.yaml` | A single-file bind mount may not observe atomic replace-on-save edits | Recreate the container to remount the file and reconcile its topology |
-| `mabrid.runtime.yaml` | Not mounted and not read by the standard Compose deployment | Keep Compose topology in `mabrid.yaml` until runtime-file mounting is supported |
+| `mabrid.yaml` | Static settings and runtime placement remain fixed; single-file mounts may retain replaced files | Recreate to remount and restart the process |
+| Runtime Gateway section | Desired file changes without switching existing Sessions | Apply Gateway; new Sessions use the new publication |
+| Runtime Host section, including literal key | Desired file changes without switching the running Host | Apply Host when no operation or active/unsettled Run owns its clients |
 | `.env` | No effect. Environment variables are fixed when the container is created | Recreate the container; a plain restart reuses the existing environment |
 
 `just stop` followed by `just run` starts the existing container again. Recreate after editing
@@ -150,12 +203,15 @@ just recreate
 verified graceful stop first, then replaces the container from the existing image. It never builds,
 pulls, or deletes the data volume.
 
-On startup, a valid legacy topology is reconciled with existing database heads without deleting
-historical revisions or Session references, provided that database has not adopted a runtime file.
-If it has, the missing runtime file selects an unconfigured topology instead of restoring the old
-legacy topology. Preserve the data volume and use a deployment that supplies the runtime file;
-do not reset the database to force a fallback. Container runtime-file hot application is deferred;
-the current single-file mount is not a supported hot-apply interface.
+Literal Host key rotation updates both compatibility and native clients under the same idle guard.
+It does not change Target/integration identity, deployment binding, or Session IDs. Failed local
+preparation retains the running Host and leaves the desired file unapplied. Successful application
+confirms local replacement, not remote authentication; later authentication failures are reported
+without credential fallback or automatic Run/tool retry. An unresolved Run still blocks replacement.
+
+For endpoint migration, publish the new Gateway endpoint while retaining the old one, apply the
+Host assignment, then remove the old endpoint. Startup and application preserve historical
+Gateway revisions, Session references, and durable unsettled ownership without resetting storage.
 
 ## Build, Run, and Stop
 
@@ -165,15 +221,14 @@ health-check script. A running container is not proof of application readiness; 
 `docker logs mabrid` and the existing `/ready` endpoint separately.
 
 Stop sends SIGTERM, verifies shutdown, and preserves the stopped container and data volume.
-Use stop before applying new runtime settings. Existing resource-ownership checks still reject
+Runtime changes use explicit component apply without a stop. Existing resource-ownership checks still reject
 unrelated containers/volumes with the same names; this workflow does not adopt or delete them.
 
 Recreate applies settings that Compose fixes when a container is created, such as `.env` values. It
 stops a running container with the same verified shutdown check, then replaces the container from
 the existing image. The data volume is preserved, and no build or pull occurs.
 
-No command resets the database. For databases that have not adopted a runtime file, changes to
-legacy topology take effect through reconciliation when the recreated container starts.
+No command resets the database, deletes the data volume, or implicitly replays business operations.
 
 Make retains `IMAGE`, `CONTAINER_NAME`, `PORT`, and `CONFIG_DIR`; just retains `image`, `name`,
 `port`, and `config_dir`. These select Docker resources, the host port, and the source directory,
@@ -182,5 +237,12 @@ not application settings. The default source directory is the repository root.
 ## Verification Boundary
 
 Controlled tests run the native Unix and PowerShell scripts with Docker doubles and check the
-root example against current configuration models. Real image builds, Docker launches, shutdown,
-and persistence still require deployment acceptance. No actual Docker acceptance is claimed.
+root examples, permissions, source selection, API writes, and application against controlled files
+and runtime fixtures. Real image builds, Docker launches, Windows ACLs, shutdown, and persistence
+still require deployment acceptance. No actual Docker acceptance is claimed.
+
+For deployment acceptance, verify non-root API save and host-side atomic replacement on the mounted
+runtime directory; separate Gateway/Host application; literal key rotation while idle; busy/unsettled
+rejection; safe invalid-value and preparation failures; and persistence across recreate without
+changing Session identity or deleting the named volume. Live authentication tests require separately
+authorized runtime credentials and operations, not synthetic test evidence.

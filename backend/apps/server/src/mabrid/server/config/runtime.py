@@ -61,8 +61,8 @@ class RuntimeUpstreamConfig(BaseModel):
 class RuntimeConfiguration:
     """Typed startup settings plus the runtime-file Gateway topology and Agent Host selection.
 
-    `agent_host` and `agent_host_signature` describe the Host settings this process started
-    with; changing them in the runtime file requires a restart.
+    Startup owns static settings and runtime-file placement. The configuration manager owns
+    subsequent component application; these initial Host values are not the active-client store.
     """
 
     config_path: Path
@@ -78,3 +78,8 @@ class RuntimeConfiguration:
     runtime_error: str | None = None
     static_signature: str | None = None
     host_error: str | None = None
+    runtime_config_file: Path | None = None
+
+    @property
+    def runtime_path(self) -> Path:
+        return self.runtime_config_file or self.config_path.with_name("mabrid.runtime.yaml")
