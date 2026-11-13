@@ -106,9 +106,9 @@ try {
             Write-Output "Keeping existing $envTarget"
         } else {
             $envContent = @(
-                '# Container runtime secrets. Values are injected as environment variables,'
-                '# not mounted as a file. Set variables referenced by Host apiKeyEnv, for example:'
-                '# API_SERVER_KEY='
+                '# Optional process/container environment. Values are injected at container creation,'
+                '# not mounted as a file. Changes require container recreation.'
+                '# Agent Host credentials belong to runtime apiKey, not environment variables.'
             ) -join "`n"
             [IO.File]::WriteAllText($envTarget, $envContent + "`n")
             Write-Output "Created $envTarget"

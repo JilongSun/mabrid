@@ -32,7 +32,7 @@ describe('Host Settings', () => {
   const path = '/api/v1/agent-host/configuration'
   const file: HostSettingsFile = {
     content_hash: 'a'.repeat(64), published_endpoints: ['entry'],
-    credential: { source: 'environment', variable: 'FIXTURE_KEY', configured: true },
+    credential: { configured: true },
     agent_host: {
       enabled: true, mcpAppsEnabled: false, targetId: 'primary', endpointSlug: 'entry',
       runtime: { integration: 'hermes', interface: 'openai-chat-completions', baseUrl: 'https://hermes.test/v1', timeoutSeconds: 120, sessions: null },
@@ -45,7 +45,7 @@ describe('Host Settings', () => {
     fetchMock.mockImplementation(async (input, options) => {
       if (options?.method === 'PUT') {
         const request = JSON.parse(String(options.body))
-        const credential = request.credential.action === 'replace' ? { source: 'value' as const, variable: null, configured: true } : request.credential.action === 'environment' ? { source: 'environment' as const, variable: request.credential.variable, configured: true } : currentFile.credential
+        const credential = request.credential.action === 'replace' ? { configured: true } : currentFile.credential
         currentFile = { ...file, content_hash: 'b'.repeat(64), agent_host: request.agent_host, credential }
         currentStatus = { ...status, file_hash: currentFile.content_hash }
         return json(currentFile)
@@ -54,19 +54,19 @@ describe('Host Settings', () => {
       return String(input).endsWith('/configuration/runtime') ? json(currentFile) : String(input).endsWith('/configuration') ? json(currentStatus) : responseFor(input)
     })
   }
-  it('preserves exact logical/deployment identity and credential reference names', () => {
-    const draft = { ...hostSettingsDraft(file), targetId: ' Target ', apiKeyEnv: ' KEY ', native: true, apiRoot: 'https://native.test/', bindingId: ' deployment ' }
+  it('preserves exact logical/deployment identity and credential bytes', () => {
+    const draft = { ...hostSettingsDraft(file), targetId: ' Target ', apiKey: ' KEY ', native: true, apiRoot: 'https://native.test/', bindingId: ' deployment ' }
     const request = hostSettingsRequest(draft, file.content_hash, file.credential)
     expect(request.agent_host.targetId).toBe(' Target ')
-    expect(request.credential).toEqual({ action: 'environment', variable: ' KEY ' })
+    expect(request.credential).toEqual({ action: 'replace', value: ' KEY ' })
     expect(request.agent_host.runtime.sessions?.bindingId).toBe(' deployment ')
   })
-  it('saves only Host fields and credential names without implicitly applying', async () => {
+  it('saves only Host fields while preserving the key without implicitly applying', async () => {
     const user = userEvent.setup()
     responses()
     render(<MemoryRouter><HostSettings active runPending={false} onApplied={vi.fn()} /></MemoryRouter>)
-    const input = await screen.findByLabelText('API key environment variable')
-    await user.clear(input); await user.type(input, 'NEXT_KEY')
+    const input = await screen.findByLabelText('Target ID')
+    await user.type(input, '-next')
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await screen.findByText('Host settings saved. Not yet applied.')
     const writes = fetchMock.mock.calls.filter(([, options]) => options?.method === 'PUT')
@@ -74,16 +74,19 @@ describe('Host Settings', () => {
     const body = JSON.parse(String(writes[0][1]?.body))
     expect(body.expected_hash).toBe(file.content_hash)
     expect(Object.keys(body).sort()).toEqual(['agent_host', 'credential', 'expected_hash'])
-    expect(body.credential).toEqual({ action: 'environment', variable: 'NEXT_KEY' })
+    expect(body.credential).toEqual({ action: 'preserve' })
     expect(body.agent_host.runtime.api_key).toBeUndefined()
+    expect(body.agent_host.runtime.apiKey).toBeUndefined()
+    expect(body.agent_host.runtime.apiKeyEnv).toBeUndefined()
     expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
   it('saves a write-only credential then clears its input without applying', async () => {
     const user = userEvent.setup()
     responses()
     render(<MemoryRouter><HostSettings active runPending={false} onApplied={vi.fn()} /></MemoryRouter>)
-    await user.selectOptions(await screen.findByLabelText('Credential source'), 'value')
-    const input = screen.getByLabelText('API key') as HTMLInputElement
+    const input = await screen.findByLabelText('API key') as HTMLInputElement
+    expect(screen.queryByLabelText('Credential source')).toBeNull()
+    expect(screen.queryByLabelText('API key environment variable')).toBeNull()
     expect(input.type).toBe('password')
     await user.type(input, 'literal-fixture-secret')
     await user.click(screen.getByRole('button', { name: 'Save' }))
@@ -99,9 +102,11 @@ describe('Host Settings', () => {
     expect(JSON.parse(String(preserved[1]?.body)).credential).toEqual({ action: 'preserve' })
     expect(String(preserved[1]?.body)).not.toContain('literal-fixture-secret')
   })
-  it('requires a value when switching sources and preserves exact credential bytes', () => {
-    const draft = { ...hostSettingsDraft(file), credentialSource: 'value' as const }
-    expect(() => hostSettingsRequest(draft, file.content_hash, file.credential)).toThrow('Enter a new API key')
+  it('requires a file key only for an unconfigured enabled Host and preserves exact bytes', () => {
+    const draft = hostSettingsDraft(file)
+    const unconfigured = { configured: false }
+    expect(() => hostSettingsRequest(draft, file.content_hash, unconfigured)).toThrow('Enter an API key')
+    expect(hostSettingsRequest({ ...draft, enabled: false }, file.content_hash, unconfigured).credential).toEqual({ action: 'preserve' })
     expect(hostSettingsRequest({ ...draft, apiKey: ' fixture-secret ' }, file.content_hash, file.credential).credential).toEqual({ action: 'replace', value: ' fixture-secret ' })
     expect(() => hostSettingsRequest({ ...draft, apiKey: 'fixture\nsecret' }, file.content_hash, file.credential)).toThrow('no newlines')
   })

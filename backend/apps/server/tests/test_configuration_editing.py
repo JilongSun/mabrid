@@ -230,15 +230,12 @@ endpoints: {}
         assert applied.status_code == 200 and not applied.json()["pending"]
 
 
-def test_host_credentials_are_write_only_preserved_and_exclusive(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("FIXTURE_HOST_KEY", "environment-fixture-secret")
+def test_host_credentials_are_write_only_preserved_and_replaced(tmp_path: Path) -> None:
     editor, path = _editor(
         tmp_path, "# note\nagentHost: {runtime: {apiKey: literal-fixture-secret}}\n"
     )
     view = editor.read_host()
-    assert view.credential.source == "value" and view.credential.configured
+    assert view.credential.model_dump() == {"configured": True}
     assert "literal-fixture-secret" not in view.model_dump_json()
     request = HostRuntimeEditRequest(expected_hash=view.content_hash, agent_host=view.agent_host)
     content, _ = editor.prepare_host(request)
@@ -261,19 +258,24 @@ def test_host_credentials_are_write_only_preserved_and_exclusive(
         yaml.safe_load(path.read_text())["agentHost"]["runtime"]["apiKey"]
         == "replacement-fixture-secret"
     )
-    request = HostRuntimeEditRequest.model_validate(
-        {
-            "expected_hash": saved.content_hash,
-            "agent_host": saved.agent_host.model_dump(mode="json", by_alias=True),
-            "credential": {"action": "environment", "variable": "FIXTURE_HOST_KEY"},
-        }
+    original = path.read_text()
+    with pytest.raises(ValidationError):
+        HostRuntimeEditRequest.model_validate(
+            {
+                "expected_hash": saved.content_hash,
+                "agent_host": saved.agent_host.model_dump(mode="json", by_alias=True),
+                "credential": {"action": "environment", "variable": "FIXTURE_HOST_KEY"},
+            }
+        )
+    assert path.read_text() == original
+    request = _request(editor)
+    content, _ = editor.prepare(request)
+    editor.write(content, request.expected_hash)
+    assert (
+        yaml.safe_load(path.read_text())["agentHost"]["runtime"]["apiKey"]
+        == "replacement-fixture-secret"
     )
-    content, _ = editor.prepare_host(request)
-    saved = editor.write_host(content, request.expected_hash)
-    stored = yaml.safe_load(path.read_text())["agentHost"]["runtime"]
-    assert stored["apiKeyEnv"] == "FIXTURE_HOST_KEY" and "apiKey" not in stored
-    assert saved.credential.source == "environment" and saved.credential.configured
-    assert "environment-fixture-secret" not in saved.model_dump_json()
+    assert saved.credential.model_dump() == {"configured": True}
     assert "# note" in path.read_text()
 
 
@@ -435,8 +437,8 @@ def test_setup_example_comments_and_host_template_survive_editing(tmp_path: Path
     content, _ = editor.prepare(request)
     response = editor.write(content, request.expected_hash)
     assert "# agentHost:" in path.read_text()
-    assert "#     apiKeyEnv: API_SERVER_KEY" in path.read_text()
+    assert "#     apiKey: replace-with-your-Hermes-key" in path.read_text()
     assert "# Apply Host only when no Host operation" in path.read_text()
     assert "# headers: {}" in path.read_text()
-    assert "apiKeyEnv" not in response.model_dump_json()
+    assert "apiKey" not in response.model_dump_json()
     assert response.endpoints["test-endpoint"].display_name == "Updated endpoint"

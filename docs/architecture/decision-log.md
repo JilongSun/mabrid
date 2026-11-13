@@ -35,7 +35,7 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 
 - Review identifier: `managed-config-foundations`.
 - Workstream: `feat/managed-config-and-recovery`.
-- Review state: **Approved for the bounded runtime placement, Host credential rotation, and deployment batch below**. The owner accepted
+- Review state: **Approved for the configuration-owned Host credential simplification below**. The owner accepted
 	[ADR 0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md)
 	and the dated amendments below, including component-scoped application, the existing Hermes
 	interface boundary, and the explicit deferral of Host management access hardening.
@@ -43,9 +43,58 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 	runtime-file location are implemented, together with the Gateway runtime-file editor assessed
 	on 2026-11-10 and the bounded idle-only Host application and Hermes Settings batch assessed
 	on 2026-11-11. Runtime placement, literal Host credential rotation, and container-layout
-	integration have controlled evidence on 2026-11-12, separately from live acceptance.
+	integration have controlled evidence on 2026-11-12. The configuration-owned Host credential
+	simplification has controlled evidence on 2026-11-13, separately from live acceptance.
 - Further work: live deployment acceptance, README delivery review, CI/version handling, and
 	unrelated Agent Host capabilities remain separately scoped; this batch does not authorize them.
+
+#### Configuration-Owned Host Credential (2026-11-13)
+
+The owner approved removal of the dual-source Host credential model and authorized implementation.
+This explicitly amends the 2026-11-12 environment-or-value choice in ADR 0018, with a reciprocal
+notice in ADR 0014. Runtime-file placement, component application, and deployment layout are retained.
+
+- `agentHost.runtime.apiKey` is the only Host credential field. Remove `apiKeyEnv`, environment
+	lookup, default variable names, source selection, and source/variable management metadata.
+	Reject obsolete fields rather than retaining aliases, fallback, or automatic migration.
+- Keep `.env` as startup process/container environment, not Host configuration. It does not
+	override or supply a missing Host key; do not add configuration interpolation. Environment
+	changes remain restart/recreate applied, while file-owned keys retain idle-only Host application.
+- Management reads expose only whether the key is configured. Writes preserve or replace the key;
+	ordinary edits never round-trip its value. Settings has one password input, cleared after saving.
+	Missing credentials on an enabled Host fail explicitly. Protect plaintext runtime files/backups.
+- Preserve secret-safe errors, file concurrency/atomicity, separate save/apply, both-client
+	replacement, Session identity/binding, durable unsettled ownership, trusted-only access, and no
+	business replay. No watcher, provider framework, general authentication, or deployment restart API.
+
+Required verification: file keys remain independent of process/dotenv values; missing/obsolete/invalid
+keys are rejected safely; preserve/replace and key-only application retain their guards and identity;
+the UI has no source selector, clears passwords after save, and never reads a key back; templates,
+native setup comments, deployment documentation, and the generated contract match the single field.
+Actual Docker, service restart, and real Agent/MCP operations remain outside controlled verification.
+
+Delivery assessment on 2026-11-13: **Implemented for the approved single-field Host credential scope,
+with controlled verification**.
+
+- The file model, loader, and management editor have no environment credential branch. Process and
+	dotenv precedence remains available for startup environment, but cannot override a file key or
+	satisfy an enabled Host with no key. Obsolete fields and environment-write operations are rejected.
+	Reads return only configured state; ordinary writes and Gateway edits preserve the stored key.
+- `uv run --directory backend --all-packages pytest -q --tb=short`: 467 passed, 1 skipped. The skip
+	reserves Windows directory ACL verification for actual deployment. Rotation tests retain both-client
+	replacement, Session identity/binding, idle and durable unsettled guards, and failed-prepare safety.
+	Native Unix/PowerShell setup tests use Docker doubles, not real Docker operations.
+- Pyright, Ruff, full formatting, editor diagnostics, and offline contract drift checks passed.
+	All 31 frontend contract tests passed with configured-only reads and preserve/replace writes.
+	Updated setup comments, templates, and deployment documentation match the single-field contract.
+- Frontend typecheck, lint, all 191 tests, and production build passed. Controlled Chromium checks
+	at 1280x900 and 390x844 verified one password input without source/name controls, cleared values
+	after save, preservation without round-trip, missing-key request blocking, separate save/apply,
+	capability refresh, conflict/reload, and unknown application without retry. Screenshots/control
+	bounds showed no overflow or overlap. All business requests used intercepted synthetic responses.
+- Actual image builds, Docker/Windows ACL behavior, service restarts, and remote credential acceptance
+	remain unverified. Trusted-only management and plaintext file/backup protection remain required;
+	the existing frontend bundle-size warning remains outside this batch.
 
 #### Runtime Placement, Host Credentials, And Container Integration (2026-11-12)
 

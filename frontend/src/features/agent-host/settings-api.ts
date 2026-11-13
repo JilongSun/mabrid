@@ -15,7 +15,7 @@ export const hostSettingsSchema = z.object({
   if (value.enabled && (!value.targetId || !value.endpointSlug)) context.addIssue({ code: 'custom', message: 'An enabled Host requires a Target ID and endpoint.' })
   if (value.mcpAppsEnabled && !value.enabled) context.addIssue({ code: 'custom', message: 'MCP Apps requires an enabled Host.' })
 })
-export const hostSettingsFileSchema = z.object({ content_hash: hash, agent_host: hostSettingsSchema, credential: z.object({ source: z.enum(['environment', 'value', 'none']), variable: z.string().nullable(), configured: z.boolean() }), published_endpoints: z.array(z.string()) })
+export const hostSettingsFileSchema = z.object({ content_hash: hash, agent_host: hostSettingsSchema, credential: z.object({ configured: z.boolean() }), published_endpoints: z.array(z.string()) })
 export const hostSettingsStatusSchema = z.object({
   applied_hash: hash, desired_hash: hash, file_hash: hash, applied_at: z.string().nullable(),
   enabled: z.boolean(), file_valid: z.boolean(), pending: z.boolean(), busy: z.boolean(), error: z.string().nullable(),
@@ -24,15 +24,13 @@ export type HostSettingsFile = z.infer<typeof hostSettingsFileSchema>
 export type HostSettingsStatus = z.infer<typeof hostSettingsStatusSchema>
 export type HostSettingsDraft = {
   enabled: boolean; mcpAppsEnabled: boolean; targetId: string; endpointSlug: string;
-  baseUrl: string; apiKeyEnv: string; timeoutSeconds: string; native: boolean; apiRoot: string; bindingId: string;
-  credentialSource: 'environment' | 'value'; apiKey: string;
+  baseUrl: string; apiKey: string; timeoutSeconds: string; native: boolean; apiRoot: string; bindingId: string;
 }
 export function hostSettingsDraft(file: HostSettingsFile): HostSettingsDraft {
   const host = file.agent_host
   return {
     enabled: host.enabled, mcpAppsEnabled: host.mcpAppsEnabled, targetId: host.targetId ?? '', endpointSlug: host.endpointSlug ?? '',
-    baseUrl: host.runtime.baseUrl, apiKeyEnv: file.credential.variable ?? 'API_SERVER_KEY', timeoutSeconds: String(host.runtime.timeoutSeconds),
-    credentialSource: file.credential.source === 'value' ? 'value' : 'environment', apiKey: '',
+    baseUrl: host.runtime.baseUrl, apiKey: '', timeoutSeconds: String(host.runtime.timeoutSeconds),
     native: host.runtime.sessions !== null, apiRoot: host.runtime.sessions?.apiRoot ?? '', bindingId: host.runtime.sessions?.bindingId ?? '',
   }
 }
@@ -47,15 +45,12 @@ export function hostSettingsRequest(draft: HostSettingsDraft, expectedHash: stri
     },
   })
   if (!result.success) throw new Error(result.error.issues[0]?.message ?? 'Invalid Host settings.')
-  let credential: { action: 'preserve' } | { action: 'replace'; value: string } | { action: 'environment'; variable: string }
-  if (draft.credentialSource === 'environment') {
-    if (!draft.apiKeyEnv) throw new Error('Enter an API key environment variable name.')
-    credential = current.source === 'environment' && current.variable === draft.apiKeyEnv ? { action: 'preserve' } : { action: 'environment', variable: draft.apiKeyEnv }
-  } else if (draft.apiKey) {
+  let credential: { action: 'preserve' } | { action: 'replace'; value: string }
+  if (draft.apiKey) {
     if (!draft.apiKey.trim() || /[\r\n]/.test(draft.apiKey)) throw new Error('API key must be nonempty and contain no newlines.')
     credential = { action: 'replace', value: draft.apiKey }
   } else {
-    if (current.source !== 'value' || !current.configured) throw new Error('Enter a new API key to use a configuration value.')
+    if (result.data.enabled && !current.configured) throw new Error('Enter an API key for an enabled Host.')
     credential = { action: 'preserve' }
   }
   return { expected_hash: expectedHash, agent_host: result.data, credential }

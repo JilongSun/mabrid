@@ -6,6 +6,7 @@
 - Amended: 2026-11-10; bounded Gateway file editing, literal header operations, and deferred access hardening
 - Amended: 2026-11-11; Host identity, idle-only replacement, component-scoped application/settings, and no Host last-known-good restoration
 - Amended: 2026-11-12; explicit runtime-file placement, write-only Host credentials, and container deployment integration
+- Amended: 2026-11-13; configuration-owned Host key without an environment credential source
 - Supersedes: ADR 0008, including its surviving constraints recorded below
 - Amends: ADR 0002 ([Configuration boundary](0002-sqlite-persistence-and-configuration-authority.md#configuration-boundary)),
   ADR 0014 ([Post-v0.1 product-configuration ownership](0014-read-only-v0-1-management-plane.md#post-v01-product-configuration-ownership),
@@ -47,6 +48,25 @@ Existing implementation evidence relevant to live application:
 
 ## Decision
 
+### Configuration-owned Host credential amendment (2026-11-13)
+
+The owner approved a single Host credential field, `agentHost.runtime.apiKey`, replacing the
+2026-11-12 environment-or-value selection. Remove `apiKeyEnv`, its default/reference lookup,
+credential-source UI, and source/variable response metadata. Obsolete fields are validation errors;
+do not add aliases, fallback, interpolation, or automatic configuration migration.
+
+The runtime file alone owns the key. An enabled Host without a valid nonempty key is unavailable
+with an explicit safe error, even if a process or adjacent `.env` contains a previous credential
+variable. `.env` remains available for process/container environment and future explicitly defined
+restart-applied environment settings; it does not override or complete Host configuration.
+
+Management reads expose configured state only, never the key. Writes preserve or replace it.
+Settings offers one password input; ordinary edits preserve the stored value, and successful saves
+clear the input. File-owned key changes keep separate save/apply, credential-sensitive opaque
+fingerprints, both-client replacement under the idle/unsettled guard, and stable Session identity.
+Plaintext-at-rest protection, atomic writes, safe errors, trusted-only management, and no replay
+remain required. The dated 2026-11-12 source-selection rationale and evidence remain historical.
+
 ### Two configuration classes in separate files
 
 Configuration is split by how it is applied:
@@ -55,7 +75,7 @@ Configuration is split by how it is applied:
 | --- | --- | --- |
 | Static process configuration | Listener host and port, advertised base URL, storage path and migration policy, logging, diagnostic upstream selection, and future extension loading | Loaded at process start; a later change is reported as restart required and never partially applied |
 | Dynamic runtime configuration | Upstreams and transport connection settings, endpoints and endpoint-owned bindings, Agent Host enablement, Target, endpoint assignment, runtime integration, interface, connection, and deployment binding settings, and future UI preferences | Applied by a validated configuration generation without restarting the process |
-| Secret values | Host credentials and upstream connection values | Host credentials explicitly select environment references or write-only literal runtime values; management reads never return values |
+| Secret values | Host credentials and upstream connection values | Host credentials use only write-only runtime `apiKey`; management reads never return values |
 
 The static file remains `mabrid.yaml`. It is read-only to the management API. The dynamic settings
 move to `mabrid.runtime.yaml`. The initial adjacent-file default remains available; the 2026-11-12
@@ -73,9 +93,9 @@ current delivery, not a requirement for the idle-only Host policy accepted on 20
 Invalid Host configuration at startup leaves the Host unavailable and reports the error; a Host
 configuration recovery ledger is not required by the amended policy.
 
-Rotation of startup environment values, including variables not present at startup, requires a restart.
-A literal Host credential can instead be changed through the runtime file under the 2026-11-12
-amendment below. Management reads and errors never return secret values.
+Changes to startup environment values, including variables not present at startup, require a restart.
+Host credentials are file-owned and change through the runtime file under the 2026-11-13 amendment
+above. Management reads and errors never return secret values.
 The existing global `bridge.httpxTimeoutSeconds` remains unchanged and restart-applied in the first
 batch. The 2026-11-10 editing amendment explicitly retains literal upstream values; management
 writes distinguish preserving, replacing, and removing values without returning their originals.
@@ -364,6 +384,8 @@ bounded Gateway runtime-file editor was implemented with controlled file/API/fro
 isolated browser evidence recorded in the decision log. The 2026-11-11 idle-only Host application
 and Settings batch is implemented with separately recorded controlled evidence. The 2026-11-12
 placement, literal Host credential rotation, and deployment integration amendment is implemented
-with controlled test/browser evidence recorded in the decision log. Host last-known-good restoration is excluded
-rather than pending delivery. Broader secret providers and access hardening remain deferred.
+with controlled test/browser evidence recorded in the decision log. The 2026-11-13 single-field
+Host credential amendment is implemented with separately recorded controlled evidence. Host
+last-known-good restoration is excluded rather than pending delivery. Broader secret providers
+and access hardening remain deferred.
 Controlled verification is not evidence of live Agent/MCP or container acceptance.

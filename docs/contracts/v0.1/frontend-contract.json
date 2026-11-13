@@ -1266,28 +1266,6 @@
           "title": "EndpointMode",
           "type": "string"
         },
-        "EnvironmentHostCredential": {
-          "additionalProperties": false,
-          "description": "Explicitly select one process-environment credential without fallback.",
-          "properties": {
-            "action": {
-              "const": "environment",
-              "title": "Action",
-              "type": "string"
-            },
-            "variable": {
-              "minLength": 1,
-              "title": "Variable",
-              "type": "string"
-            }
-          },
-          "required": [
-            "action",
-            "variable"
-          ],
-          "title": "EnvironmentHostCredential",
-          "type": "object"
-        },
         "ErrorRaisedEventResponse": {
           "additionalProperties": false,
           "description": "Present recorded diagnostic error details under the trusted deployment profile.",
@@ -1799,35 +1777,14 @@
         },
         "HostCredentialView": {
           "additionalProperties": false,
-          "description": "Expose credential selection and presence, never plaintext or secret-derived hashes.",
+          "description": "Expose only credential presence, never plaintext or secret-derived hashes.",
           "properties": {
             "configured": {
               "title": "Configured",
               "type": "boolean"
-            },
-            "source": {
-              "enum": [
-                "environment",
-                "value",
-                "none"
-              ],
-              "title": "Source",
-              "type": "string"
-            },
-            "variable": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Variable"
             }
           },
           "required": [
-            "source",
             "configured"
           ],
           "title": "HostCredentialView",
@@ -1966,7 +1923,6 @@
             "credential": {
               "discriminator": {
                 "mapping": {
-                  "environment": "#/components/schemas/EnvironmentHostCredential",
                   "preserve": "#/components/schemas/PreserveHostCredential",
                   "replace": "#/components/schemas/ReplaceHostCredential"
                 },
@@ -1978,9 +1934,6 @@
                 },
                 {
                   "$ref": "#/components/schemas/ReplaceHostCredential"
-                },
-                {
-                  "$ref": "#/components/schemas/EnvironmentHostCredential"
                 }
               ],
               "title": "Credential"

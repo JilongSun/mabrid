@@ -1,7 +1,7 @@
 """Validated YAML contracts for a Mabrid server deployment.
 
-These models preserve camelCase file syntax and reject unknown fields. Agent Host credentials use
-environment-variable references; legacy upstream headers and environment values may be literal.
+These models preserve camelCase file syntax and reject unknown fields. Agent Host credentials,
+upstream headers, and subprocess environment values belong to the runtime file.
 """
 
 from __future__ import annotations
@@ -69,29 +69,18 @@ class HermesSessionFileConfig(CamelModel):
 
 
 class HermesAgentRuntimeFileConfig(CamelModel):
-    """Select exactly one Host credential source without exposing its resolved value."""
+    """Validate file-owned Hermes settings without an environment credential source."""
 
     integration: Literal["hermes"] = "hermes"
     interface: Literal["openai-chat-completions"] = "openai-chat-completions"
     base_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8642/v1")
-    api_key_env: str | None = Field(default="API_SERVER_KEY", min_length=1)
     api_key: SecretStr | None = None
     timeout_seconds: PositiveFloat = 120.0
     sessions: HermesSessionFileConfig | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def select_literal_source(cls, value: object) -> object:
-        if isinstance(value, dict) and any(key in value for key in ("apiKey", "api_key")):
-            if not any(key in value for key in ("apiKeyEnv", "api_key_env")):
-                return {**value, "apiKeyEnv": None}
-        return value
-
     @model_validator(mode="after")
     def validate_credential(self) -> HermesAgentRuntimeFileConfig:
         if self.api_key is not None:
-            if self.api_key_env is not None:
-                raise ValueError("Host credentials require either apiKey or apiKeyEnv, not both")
             value = self.api_key.get_secret_value()
             if not value.strip() or "\r" in value or "\n" in value:
                 raise ValueError("Host API key must be nonempty and contain no newlines")

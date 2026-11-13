@@ -153,9 +153,9 @@ agentHost:
 ```
 
 This fragment assumes the deployment already declares `bridge.advertisedBaseUrl`, the `tools`
-endpoint, and a Host credential. `apiRoot` is not inferred from `baseUrl`. A credential explicitly
-selects either `runtime.apiKeyEnv` or `runtime.apiKey`, never both. Host Settings exposes only
-source/configured metadata and preserves or replaces literal values without returning them.
+endpoint, and a Host credential. `apiRoot` is not inferred from `baseUrl`. The key belongs only to
+`runtime.apiKey`; process and dotenv values never supply or override it. Host Settings exposes only
+configured state and preserves or replaces the value without returning it.
 `bindingId` identifies the external runtime deployment, not the Mabrid process or a conversation;
 keep it stable across Mabrid restarts and change it when replacing the runtime deployment. Do not
 reuse a binding to silently migrate conversations to a different runtime. Omitting `sessions`
@@ -167,7 +167,7 @@ binding permits access to those Sessions again; disabling native service does no
 history. Host application rejects in-flight reads, probes, streams, and active or unsettled Runs,
 including durable claims from another logical identity. Gateway application is separate and checks
 the running Host assignment. This adds neither Host configuration generations nor last-known-good
-startup restoration; static process settings and environment-secret rotation still require restart.
+startup restoration; static process settings and startup environment changes still require restart.
 
 Literal key rotation instead uses the same idle-only application guard and replaces both native
 and compatibility clients without changing Target identity, deployment binding, or local Session

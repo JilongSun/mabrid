@@ -157,7 +157,8 @@ def test_native_setup_is_idempotent_without_host_python(launcher) -> None:
     ).read_bytes()
     env_file = directory / ".env"
     assert env_file.is_file()
-    assert "API_SERVER_KEY" in env_file.read_text(encoding="utf-8")
+    assert "Optional process/container environment" in env_file.read_text(encoding="utf-8")
+    assert "API_SERVER_KEY" not in env_file.read_text(encoding="utf-8")
     (directory / "mabrid.yaml").write_bytes(b"user-owned configuration\n")
     (directory / "runtime/mabrid.runtime.yaml").write_bytes(b"user-owned runtime configuration\n")
     (directory / ".env").write_bytes(b"USER_VALUE=fixture-only\n")

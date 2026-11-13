@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hmac
 import secrets
-import os
 import json
 from dataclasses import dataclass
 from hashlib import sha256
@@ -195,13 +194,7 @@ _HOST_FINGERPRINT_KEY = secrets.token_bytes(32)
 def _agent_host_signature(config: AgentHostFileConfig) -> str:
     settings = config.model_dump(mode="json", by_alias=True, exclude={"runtime": {"api_key"}})
     runtime = config.runtime
-    credential = (
-        runtime.api_key.get_secret_value()
-        if runtime.api_key is not None
-        else os.environ.get(runtime.api_key_env, "")
-        if runtime.api_key_env is not None
-        else ""
-    )
+    credential = runtime.api_key.get_secret_value() if runtime.api_key is not None else ""
     payload = (
         json.dumps(settings, sort_keys=True).encode("utf-8") + b"\0" + credential.encode("utf-8")
     )
@@ -337,18 +330,8 @@ def _validation_summary(error: ValidationError) -> str:
 
 def _resolve_agent_host_config(config: AgentHostFileConfig) -> RuntimeAgentHostConfig:
     runtime = config.runtime
-    api_key = (
-        runtime.api_key.get_secret_value()
-        if runtime.api_key is not None
-        else os.environ.get(runtime.api_key_env)
-        if runtime.api_key_env is not None
-        else None
-    )
+    api_key = runtime.api_key.get_secret_value() if runtime.api_key is not None else None
     if config.enabled and not api_key:
-        if runtime.api_key_env is not None:
-            raise ConfigError(
-                f"Agent Host is enabled but environment variable '{runtime.api_key_env}' is not set"
-            )
         raise ConfigError("Enabled Agent Host requires a configured credential")
     return RuntimeAgentHostConfig(
         enabled=config.enabled,

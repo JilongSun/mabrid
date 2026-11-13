@@ -29,6 +29,11 @@ environment-variable references. Ordinary reads never expose either resolved or 
 credential updates use preserve/replace semantics and the existing idle-only Host application guard.
 This does not change the trusted-only access-hardening deferral or add general secret providers.
 
+The owner-approved 2026-11-13 amendment removes the environment credential source. Host credentials
+are owned only by runtime `apiKey`; reads expose configured state, and writes preserve or replace
+the value without returning it. `.env` remains process/container environment, not a Host credential
+fallback. Idle-only application and the trusted-only access-hardening deferral are unchanged.
+
 ## Context
 
 ADR 0008 selected restart-applied topology mutation so the first-party UI could replace hand-edited

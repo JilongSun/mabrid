@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSessionTransaction
 from mabrid.server.composition import BootstrapResult, bootstrap_server
 from mabrid.server.composition.configuration import ConfigurationApplyError
 from mabrid.server.api import create_app
-from mabrid.server.config import resolve_runtime_configuration, load_runtime_candidate
+from mabrid.server.config import ConfigError, resolve_runtime_configuration, load_runtime_candidate
 from mabrid.server.persistence import SqliteDatabase
 from mabrid.server.persistence.schema import (
     AgentSessionRow,
@@ -49,7 +49,7 @@ agentHost:
   endpointSlug: fixture
   runtime:
     baseUrl: http://fixture-agent.invalid/v1
-    apiKeyEnv: FIXTURE_AGENT_KEY
+    apiKey: fixture-secret
 """
 
 
@@ -154,13 +154,17 @@ def test_component_candidates_ignore_other_sections_and_comments(tmp_path: Path)
     _runtime(runtime_path, "https://old.example.test/mcp")
     configuration = resolve_runtime_configuration(str(config_path))
     before = load_runtime_candidate(configuration, component="gateway")
-    _runtime(runtime_path, "https://old.example.test/mcp", host=HOST)
+    _runtime(
+        runtime_path,
+        "https://old.example.test/mcp",
+        host=HOST.replace("    apiKey: fixture-secret\n", ""),
+    )
     with runtime_path.open("a", encoding="utf-8") as stream:
         stream.write("\n# fixture comment\n")
     after = load_runtime_candidate(configuration, component="gateway")
     assert before.content_hash != after.content_hash
     assert before.gateway_signature == after.gateway_signature
-    with pytest.raises(Exception, match="environment variable"):
+    with pytest.raises(ConfigError, match="requires a configured credential"):
         load_runtime_candidate(configuration, component="host")
 
 
@@ -232,7 +236,7 @@ async def test_credential_only_rotation_replaces_both_clients_without_changing_s
     config_path = tmp_path / "mabrid.yaml"
     runtime_path = tmp_path / "mabrid.runtime.yaml"
     _static(config_path)
-    monkeypatch.setenv("FIXTURE_AGENT_KEY", "environment-fixture-secret")
+    monkeypatch.setenv("API_SERVER_KEY", "environment-fixture-secret")
     native_host = (
         HOST + "    sessions:\n      apiRoot: http://native.invalid/\n      bindingId: original\n"
     )
@@ -246,6 +250,8 @@ async def test_credential_only_rotation_replaces_both_clients_without_changing_s
         assert manager is not None
         original = result.agent_host
         assert original is not None
+        assert compatibility.call_args.kwargs["api_key"] == "fixture-secret"
+        assert native.call_args.kwargs["api_key"] == "fixture-secret"
         close = AsyncMock(wraps=original.runtime.close)
         monkeypatch.setattr(original.runtime, "close", close)
         repository = SqliteAgentSessionRepository(result.database.session_factory)
@@ -265,7 +271,7 @@ async def test_credential_only_rotation_replaces_both_clients_without_changing_s
             path = "/api/v1/agent-host/configuration"
             initial = (await client.get(path)).json()
             view = (await client.get(path + "/runtime")).json()
-            assert "environment-fixture-secret" not in str(view)
+            assert "fixture-secret" not in str(view)
             async with result.host_runtime.operation():
                 saved = await client.put(
                     path + "/runtime",
@@ -296,7 +302,7 @@ async def test_credential_only_rotation_replaces_both_clients_without_changing_s
             assert (await repository.get(record.session_id)) == record
             assert not (await manager.status()).pending
             replacement = native_host.replace(
-                "apiKeyEnv: FIXTURE_AGENT_KEY", "apiKey: second-fixture-secret"
+                "apiKey: fixture-secret", "apiKey: second-fixture-secret"
             )
             _runtime(runtime_path, "https://old.example.test/mcp", host=replacement)
             again = await manager.host_status()
@@ -404,7 +410,7 @@ async def test_failed_credential_preparation_keeps_current_host_and_pending_desi
     config_path = tmp_path / "mabrid.yaml"
     runtime_path = tmp_path / "mabrid.runtime.yaml"
     _static(config_path)
-    host = HOST.replace("apiKeyEnv: FIXTURE_AGENT_KEY", "apiKey: original-fixture-secret")
+    host = HOST.replace("apiKey: fixture-secret", "apiKey: original-fixture-secret")
     _runtime(runtime_path, "https://old.example.test/mcp", host=host)
     async with _running(config_path) as result:
         manager = result.gateway_management.configuration

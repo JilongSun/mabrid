@@ -27,9 +27,9 @@ Setup copies [mabrid.yaml.example](../../mabrid.yaml.example) to `mabrid.yaml` a
 `runtime/mabrid.runtime.yaml` under the selected configuration directory. Template contents are
 unchanged. Existing files are kept, not parsed, rewritten, or merged by the launcher.
 
-Setup also creates a commented `.env` beside the static file if missing. It is an optional Host
-credential source, not a requirement when a literal runtime credential is selected. Setup never
-overwrites an existing environment file. Configuration and secret values are not build inputs.
+Setup also creates a commented `.env` beside the static file if missing. It is optional
+process/container environment, not a Host credential source or a second product configuration file.
+Setup never overwrites it. Configuration and secret values are not build inputs.
 
 ```text
 <config-dir>/
@@ -99,10 +99,10 @@ resolve from the mounted YAML's directory, so the root example's `./backend/var/
 remains inside this volume without rewriting the configuration. Absolute paths must likewise
 point to writable persistent storage. Stop and image rebuilds do not delete the volume.
 
-An optional adjacent `.env` supplies runtime secrets referenced by YAML. Setup creates a commented
+An optional adjacent `.env` supplies process/container environment. Setup creates a commented
 template when the file is absent; Compose reads it using the raw env-file format, and it is never
 included in image layers. Use `NAME=value` lines without shell interpolation. Docker administrators
-can inspect container environment values.
+can inspect container environment values. Host credentials are read only from runtime YAML.
 
 The default mapping is host loopback port 8765 to container port 8765. If YAML changes the
 container listener port, the Compose mapping must match; no helper discovers or overrides it.
@@ -135,36 +135,38 @@ Consequences:
 ## Configuration and Secret Ownership
 
 The static file owns process settings. The runtime file owns desired Gateway and Host settings,
-including optional literal credentials. Environment injection remains another explicit source.
+including the Host key. Environment injection does not supply or override product configuration.
 
 | Content | Owner | Reason |
 | --- | --- | --- |
 | Listener settings, advertised origin, storage, and runtime-file placement | `mabrid.yaml` | Restart-applied process settings |
-| Upstreams, endpoints, Host connection settings, and selected credentials | `runtime/mabrid.runtime.yaml` | Saved desired settings; explicit component application |
-| Optional environment credential values such as `API_SERVER_KEY` | `.env` | Host-side input; injected only at container creation |
+| Upstreams, endpoints, Host connection settings, and `apiKey` | `runtime/mabrid.runtime.yaml` | Saved desired settings; explicit component application |
+| Optional process/container environment | `.env` | Host-side input; injected only at container creation, never a Host key source |
 | Product and runtime state | Named volume | Written by the application and required across restarts |
 | Diagnostics | Standard error | Owned by the container runtime |
 
-Host credentials select either an environment name or a literal value, never both. For example,
-the Host runtime section can contain:
+The Host key has one configuration field:
 
 ```yaml
 agentHost:
   runtime:
-    apiKeyEnv: API_SERVER_KEY
+    apiKey: replace-with-your-Hermes-key
 ```
 
-Alternatively, remove `apiKeyEnv` and set `apiKey` in that section. Host Settings can switch sources
-and write a replacement key without reading the current value back. Ordinary saves preserve the
-existing key; an empty replacement is invalid. The runtime file contains the literal plaintext:
-protect its directory, backups, and access, and never commit real configuration or credentials.
-Management reads expose source/configured metadata only, not the value or resolved environment key.
+Host Settings offers one password input and writes a replacement without reading the current value
+back. Ordinary saves preserve the existing key; an empty replacement is invalid. The runtime file
+contains plaintext: protect its directory, backups, and access, and never commit real configuration
+or credentials. Management reads expose configured state only, never the key.
 
-Do not treat `.env` as a second configuration file. The application reads environment variables
-only for the secrets named by `apiKeyEnv` and for `MABRID_FRONTEND_DIST`, which the image sets. An
-unrelated variable added to `.env` has no effect on the server. Environment injection also lacks
-structure, type validation, nesting, and review history, and changing it requires container
-recreation rather than a restart.
+An enabled Host requires a valid file key even if an old environment variable still exists.
+`apiKeyEnv` is rejected; explicitly replace it with `apiKey` before adopting this contract. The
+application and launcher do not migrate credentials, search for values, or fall back to `.env`.
+
+Do not treat `.env` as a second configuration file. An injected variable has an effect only when
+the process, a library, or an explicitly configured subprocess consumes it. The image sets
+`MABRID_FRONTEND_DIST` for frontend assets; future environment-owned settings require an explicit
+contract. There is no YAML environment interpolation or implicit override. Changing injected values
+requires container recreation; restarting a directly launched process reloads its adjacent `.env`.
 
 Upstream `headers` and `env` may contain literal values. Treat runtime YAML, upstream URLs, and the
 SQLite revision ledger as sensitive if they contain credentials. Host literal keys are not added
@@ -237,7 +239,7 @@ not application settings. The default source directory is the repository root.
 ## Verification Boundary
 
 Controlled tests run the native Unix and PowerShell scripts with Docker doubles and check the
-root examples, permissions, source selection, API writes, and application against controlled files
+root examples, permissions, file-owned credentials, API writes, and application against controlled files
 and runtime fixtures. Real image builds, Docker launches, Windows ACLs, shutdown, and persistence
 still require deployment acceptance. No actual Docker acceptance is claimed.
 

@@ -128,10 +128,8 @@ class HostSettings(HostIdentityConfig):
 
 
 class HostCredentialView(EditorModel):
-    """Expose credential selection and presence, never plaintext or secret-derived hashes."""
+    """Expose only credential presence, never plaintext or secret-derived hashes."""
 
-    source: Literal["environment", "value", "none"]
-    variable: str | None = None
     configured: bool
 
 
@@ -155,20 +153,13 @@ class ReplaceHostCredential(EditorModel):
         return self
 
 
-class EnvironmentHostCredential(EditorModel):
-    """Explicitly select one process-environment credential without fallback."""
-
-    action: Literal["environment"]
-    variable: str = Field(min_length=1)
-
-
 class HostRuntimeEditRequest(EditorModel):
     """Edit Host settings and apply an explicit write-only credential operation."""
 
     expected_hash: str | None = Field(pattern=r"^[a-f0-9]{64}$")
     agent_host: HostSettings
     credential: Annotated[
-        PreserveHostCredential | ReplaceHostCredential | EnvironmentHostCredential,
+        PreserveHostCredential | ReplaceHostCredential,
         Field(discriminator="action"),
     ] = Field(default_factory=PreserveHostCredential)
 
@@ -215,11 +206,7 @@ class RuntimeFileEditor:
         self._merge_host(node, request.agent_host.model_dump(mode="json", by_alias=True))
         runtime = node["runtime"]
         if isinstance(request.credential, ReplaceHostCredential):
-            runtime.pop("apiKeyEnv", None)
             runtime["apiKey"] = request.credential.value.get_secret_value()
-        elif isinstance(request.credential, EnvironmentHostCredential):
-            runtime.pop("apiKey", None)
-            runtime["apiKeyEnv"] = request.credential.variable
         stream = StringIO()
         self._yaml().dump(document, stream)
         content = stream.getvalue().encode("utf-8")
@@ -419,22 +406,11 @@ class RuntimeFileEditor:
     def _host_view(self, document: CommentedMap, content_hash: str | None) -> HostRuntimeEditView:
         config = self._validate(document).agent_host
         runtime = config.runtime
-        credential = HostCredentialView(
-            source="value"
-            if runtime.api_key is not None
-            else "environment"
-            if runtime.api_key_env is not None
-            else "none",
-            variable=runtime.api_key_env,
-            configured=runtime.api_key is not None
-            or bool(runtime.api_key_env and os.environ.get(runtime.api_key_env)),
-        )
+        credential = HostCredentialView(configured=runtime.api_key is not None)
         return HostRuntimeEditView(
             content_hash=content_hash,
             agent_host=HostSettings.model_validate(
-                config.model_dump(
-                    mode="json", by_alias=True, exclude={"runtime": {"api_key", "api_key_env"}}
-                )
+                config.model_dump(mode="json", by_alias=True, exclude={"runtime": {"api_key"}})
             ),
             credential=credential,
         )

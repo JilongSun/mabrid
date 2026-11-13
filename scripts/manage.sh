@@ -60,9 +60,9 @@ if [ "$action" = setup ]; then
     else
         umask 077
         printf '%s\n' \
-            '# Container runtime secrets. Values are injected as environment variables,' \
-            '# not mounted as a file. Set variables referenced by Host apiKeyEnv, for example:' \
-            '# API_SERVER_KEY=' >"$env_target"
+            '# Optional process/container environment. Values are injected at container creation,' \
+            '# not mounted as a file. Changes require container recreation.' \
+            '# Agent Host credentials belong to runtime apiKey, not environment variables.' >"$env_target"
         printf 'Created %s\n' "$env_target"
     fi
     printf '%s\n' 'Configure mabrid.yaml and runtime/mabrid.runtime.yaml. Existing files and permissions are preserved; the runtime directory must permit group writes and setgid for the non-root container.'

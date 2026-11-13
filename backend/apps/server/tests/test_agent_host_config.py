@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -34,7 +35,7 @@ agentHost:
     integration: hermes
     interface: openai-chat-completions
     baseUrl: http://hermes.test:8642/v1
-    apiKeyEnv: FIXTURE_HERMES_KEY
+    apiKey: fixture-secret
     sessions:
       apiRoot: http://hermes.test:8642/prefix
       bindingId: fixture-deployment
@@ -99,12 +100,12 @@ def test_runtime_file_placement_preserves_static_path_bases(tmp_path: Path, abso
     assert load_runtime_candidate(configuration).content_hash == configuration.runtime_hash
 
 
-def test_enabled_agent_host_resolves_api_key_from_environment(
+def test_enabled_agent_host_uses_file_key_without_environment_override(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "fixture.yaml"
     _write_config(config_path)
-    monkeypatch.setenv("FIXTURE_HERMES_KEY", "fixture-secret")
+    monkeypatch.setenv("API_SERVER_KEY", "environment-fixture-secret")
 
     configuration = resolve_runtime_configuration(str(config_path))
 
@@ -132,15 +133,16 @@ def test_enabled_agent_host_resolves_api_key_from_environment(
         "apiKey: literal-fixture-secret",
         "apiKey: ''",
         "apiKey: literal-fixture-secret\n    apiKeyEnv: FIXTURE_HERMES_KEY",
+        "apiKeyEnv: FIXTURE_HERMES_KEY",
     ],
 )
-def test_literal_host_credential_resolution_is_exclusive_and_safe(
+def test_file_host_credential_rejects_empty_or_obsolete_fields_safely(
     tmp_path: Path, credential: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("FIXTURE_HERMES_KEY", "environment-fixture-secret")
     config_path = tmp_path / "mabrid.yaml"
     _write_config(
-        config_path, topology=TOPOLOGY + HOST.replace("apiKeyEnv: FIXTURE_HERMES_KEY", credential)
+        config_path, topology=TOPOLOGY + HOST.replace("apiKey: fixture-secret", credential)
     )
     configuration = resolve_runtime_configuration(str(config_path))
     if credential == "apiKey: literal-fixture-secret":
@@ -178,15 +180,16 @@ def test_mcp_apps_workflow_requires_enabled_agent_host(tmp_path: Path) -> None:
     assert not configuration.agent_host.enabled and configuration.upstreams
 
 
-def test_enabled_agent_host_requires_configured_api_key_environment(
+def test_enabled_agent_host_requires_configured_file_key(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "fixture.yaml"
-    _write_config(config_path)
-    monkeypatch.delenv("FIXTURE_HERMES_KEY", raising=False)
+    _write_config(config_path, topology=TOPOLOGY + HOST.replace("    apiKey: fixture-secret\n", ""))
+    monkeypatch.setenv("API_SERVER_KEY", "environment-fixture-secret")
     configuration = resolve_runtime_configuration(str(config_path))
     assert configuration.runtime_error is None and configuration.host_error is not None
-    assert "FIXTURE_HERMES_KEY" in configuration.host_error
+    assert "requires a configured credential" in configuration.host_error
+    assert "environment-fixture-secret" not in configuration.host_error
     assert configuration.runtime_hash is not None
     assert not configuration.agent_host.enabled and configuration.endpoints
 
@@ -199,7 +202,7 @@ def test_enabled_agent_host_requires_configured_api_key_environment(
         ("process-secret", "dotenv-secret", "process-secret"),
     ],
 )
-def test_agent_host_default_secret_and_dotenv_precedence(
+def test_dotenv_preserves_environment_precedence_without_supplying_host_key(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     environment_key: str | None,
@@ -219,8 +222,11 @@ def test_agent_host_default_secret_and_dotenv_precedence(
     else:
         monkeypatch.setenv("API_SERVER_KEY", environment_key)
     configuration = resolve_runtime_configuration(str(config_path))
-    assert configuration.agent_host.runtime.api_key is not None
-    assert configuration.agent_host.runtime.api_key.get_secret_value() == expected
+    assert configuration.host_error is not None
+    assert "requires a configured credential" in configuration.host_error
+    assert not configuration.agent_host.enabled
+    assert configuration.agent_host.runtime.api_key is None
+    assert os.environ.get("API_SERVER_KEY") == expected
     assert configuration.agent_host.mcp_apps_enabled is False
 
 
