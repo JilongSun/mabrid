@@ -19,7 +19,7 @@ help:
 
 install:
 	cd backend && uv sync --all-packages
-	cd frontend && pnpm install
+	cd frontend && pnpm install --reporter=append-only
 
 dev:
 	cd backend && uv run --all-packages python ../scripts/dev.py

@@ -12,12 +12,12 @@ config_dir := "."
 [unix]
 install:
     uv sync --directory backend --all-packages
-    pnpm --dir frontend install
+    pnpm --dir frontend install --reporter=append-only
 
 [windows]
 install:
     uv sync --directory backend --all-packages
-    pnpm.cmd --dir frontend install
+    pnpm.cmd --dir frontend install --reporter=append-only
 
 dev:
     uv run --directory backend --all-packages python ../scripts/dev.py
