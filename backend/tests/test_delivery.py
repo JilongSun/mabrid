@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -161,6 +162,7 @@ def test_preparation_uses_real_uv_and_updates_only_expected_sources(
         if arguments[:2] == ["git", "show-ref"]:
             return subprocess.CompletedProcess(arguments, 1, "")
         if arguments[:2] == ["uv", "lock"]:
+            assert arguments == ["uv", "lock", "--directory", "backend"]
             write_lock(
                 repository,
                 [project["name"] for project in delivery.projects(repository).values()],
@@ -198,6 +200,13 @@ def test_preparation_refreshes_installed_versions_and_contract_in_isolation(
     )
     (tmp_path / "scripts").mkdir()
     shutil.copyfile(ROOT / "scripts/release.py", tmp_path / "scripts/release.py")
+    lockfile = tmp_path / "backend/uv.lock"
+    dependencies = {
+        package["name"]: package["version"]
+        for package in tomllib.loads(lockfile.read_text(encoding="utf-8"))["package"]
+        if "registry" in package["source"]
+    }
+    monkeypatch.setenv("UV_CACHE_DIR", str(tmp_path / "uv-cache"))
     monkeypatch.setenv("UV_PROJECT_ENVIRONMENT", str(tmp_path / "backend/.venv"))
     monkeypatch.setenv("UV_PYTHON", sys.executable)
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
@@ -216,6 +225,11 @@ def test_preparation_refreshes_installed_versions_and_contract_in_isolation(
     target = f"{current[0]}.{current[1]}.{current[2] + 1}"
     delivery.prepare_version(tmp_path, target)
     assert delivery.check_versions(tmp_path, installed=False) == target
+    assert {
+        package["name"]: package["version"]
+        for package in tomllib.loads(lockfile.read_text(encoding="utf-8"))["package"]
+        if "registry" in package["source"]
+    } == dependencies
     installed = original(
         [
             "uv",

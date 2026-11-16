@@ -80,8 +80,9 @@ make prepare-version VERSION=X.Y.Z
 
 The target must be greater than the current version and must not already have a local release tag.
 The tool uses `uv version --frozen` for each Python project, updates the frontend JSON structurally,
-refreshes the existing uv lock offline without upgrading dependencies, syncs package metadata, and
-regenerates the version-bearing API snapshot. The pnpm lock does not contain the root package's
+refreshes the existing uv lock while retaining pinned dependencies, syncs package metadata, and
+regenerates the version-bearing API snapshot. Lock refresh may fetch registry metadata; it does not
+require a prewarmed cache. The pnpm lock does not contain the root package's
 version and does not need a version-only rewrite. Preparation never commits, pushes, or tags.
 If preparation fails, inspect the diff and fix the cause before committing; do not publish partially
 prepared source. The tool does not reset or discard working-tree changes.

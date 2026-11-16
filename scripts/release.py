@@ -89,7 +89,7 @@ def prepare_version(root: Path, target: str) -> None:
     document = json.loads(frontend.read_text(encoding="utf-8"))
     document["version"] = target
     frontend.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    run(["uv", "lock", "--directory", "backend", "--offline"], root)
+    run(["uv", "lock", "--directory", "backend"], root)
     run(["uv", "sync", "--directory", "backend", "--all-packages", "--locked"], root)
     run(
         [
