@@ -1,0 +1,321 @@
+{
+  "$defs": {
+    "AgentHostFileConfig": {
+      "additionalProperties": false,
+      "description": "Add credential-bearing Hermes settings to the file-owned Host identity.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "endpointSlug": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpointslug"
+        },
+        "mcpAppsEnabled": {
+          "default": false,
+          "title": "Mcpappsenabled",
+          "type": "boolean"
+        },
+        "runtime": {
+          "$ref": "#/$defs/HermesAgentRuntimeFileConfig"
+        },
+        "targetId": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Targetid"
+        }
+      },
+      "title": "AgentHostFileConfig",
+      "type": "object"
+    },
+    "EndpointBindingFileConfig": {
+      "additionalProperties": false,
+      "description": "Declare a runtime binding by upstream name, namespace, order, and enablement.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "namespace": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Namespace"
+        },
+        "priority": {
+          "default": 0,
+          "title": "Priority",
+          "type": "integer"
+        },
+        "upstream": {
+          "title": "Upstream",
+          "type": "string"
+        }
+      },
+      "required": [
+        "upstream"
+      ],
+      "title": "EndpointBindingFileConfig",
+      "type": "object"
+    },
+    "EndpointFileConfig": {
+      "additionalProperties": false,
+      "description": "Validate one runtime endpoint and its explicit upstream bindings.",
+      "properties": {
+        "bindings": {
+          "items": {
+            "$ref": "#/$defs/EndpointBindingFileConfig"
+          },
+          "title": "Bindings",
+          "type": "array"
+        },
+        "displayName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Displayname"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "mode": {
+          "default": "passthrough",
+          "enum": [
+            "passthrough",
+            "aggregate"
+          ],
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bindings"
+      ],
+      "title": "EndpointFileConfig",
+      "type": "object"
+    },
+    "HermesAgentRuntimeFileConfig": {
+      "additionalProperties": false,
+      "description": "Validate file-owned Hermes settings without an environment credential source.",
+      "properties": {
+        "apiKey": {
+          "anyOf": [
+            {
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Apikey"
+        },
+        "baseUrl": {
+          "default": "http://127.0.0.1:8642/v1",
+          "format": "uri",
+          "minLength": 1,
+          "title": "Baseurl",
+          "type": "string"
+        },
+        "integration": {
+          "const": "hermes",
+          "default": "hermes",
+          "title": "Integration",
+          "type": "string"
+        },
+        "interface": {
+          "const": "openai-chat-completions",
+          "default": "openai-chat-completions",
+          "title": "Interface",
+          "type": "string"
+        },
+        "sessions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HermesSessionFileConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timeoutSeconds": {
+          "default": 120.0,
+          "exclusiveMinimum": 0,
+          "title": "Timeoutseconds",
+          "type": "number"
+        }
+      },
+      "title": "HermesAgentRuntimeFileConfig",
+      "type": "object"
+    },
+    "HermesSessionFileConfig": {
+      "additionalProperties": false,
+      "description": "Declare native API root and stable deployment binding for remote Session references.",
+      "properties": {
+        "apiRoot": {
+          "format": "uri",
+          "minLength": 1,
+          "title": "Apiroot",
+          "type": "string"
+        },
+        "bindingId": {
+          "minLength": 1,
+          "title": "Bindingid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiRoot",
+        "bindingId"
+      ],
+      "title": "HermesSessionFileConfig",
+      "type": "object"
+    },
+    "UpstreamFileConfig": {
+      "additionalProperties": false,
+      "description": "Validate file-backed upstream settings before resolving their transport.",
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command"
+        },
+        "cwd": {
+          "anyOf": [
+            {
+              "format": "path",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cwd"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Env",
+          "type": "object"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Headers",
+          "type": "object"
+        },
+        "transport": {
+          "enum": [
+            "stdio",
+            "sse",
+            "streamable-http"
+          ],
+          "title": "Transport",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "required": [
+        "transport"
+      ],
+      "title": "UpstreamFileConfig",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Validate the runtime file's Gateway topology and Agent Host settings as one candidate.\n\nCross-file rules, such as the Host's need for an advertised base URL, are checked by the loader.",
+  "properties": {
+    "agentHost": {
+      "$ref": "#/$defs/AgentHostFileConfig"
+    },
+    "endpoints": {
+      "additionalProperties": {
+        "$ref": "#/$defs/EndpointFileConfig"
+      },
+      "title": "Endpoints",
+      "type": "object"
+    },
+    "upstreams": {
+      "additionalProperties": {
+        "$ref": "#/$defs/UpstreamFileConfig"
+      },
+      "title": "Upstreams",
+      "type": "object"
+    }
+  },
+  "title": "RuntimeFileConfig",
+  "type": "object"
+}

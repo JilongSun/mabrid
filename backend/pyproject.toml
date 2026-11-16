@@ -7,6 +7,7 @@ dependencies = []
 
 [dependency-groups]
 dev = [
+  "jsonschema>=4.23",
   "pyright>=1.1.390",
   "pytest>=8.3.0",
   "pytest-asyncio>=0.24.0",
@@ -30,7 +31,7 @@ target-version = "py312"
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
-include = ["packages", "apps"]
+include = ["packages", "apps", "../scripts/check.py", "../scripts/release.py"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

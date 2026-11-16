@@ -9,6 +9,7 @@ from fastapi import APIRouter, Query
 from mabrid.application.gateway.inspection import SessionEventPageRequest
 from mabrid.application.gateway.sessions import BridgeSessionStatus, SessionPageRequest
 
+from mabrid.server import __version__
 from mabrid.server.composition import GatewayManagementComposition
 from mabrid.server.composition.configuration import (
     ConfigurationApplyError,
@@ -66,7 +67,7 @@ def create_gateway_management_router(
     async def get_status() -> GatewayStatusResponse:
         slugs = management.current_published_endpoint_slugs()
         return GatewayStatusResponse(
-            version="0.1.0",
+            version=__version__,
             advertised_base_url=management.advertised_base_url,
             published_endpoint_count=len(slugs),
             published_endpoint_slugs=slugs,

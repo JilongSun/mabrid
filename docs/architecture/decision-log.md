@@ -35,8 +35,8 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 
 - Review identifier: `managed-config-foundations`.
 - Workstream: `feat/managed-config-and-recovery`.
-- Review state: **Draft for the CI, version preparation, and release design below**, with the
-	owner-approved release choices recorded separately. Earlier configuration batches retain their
+- Review state: **Approved for the bounded CI, contract, version preparation, and release batch
+	below on 2026-11-13**. Earlier configuration batches retain their
 	approvals and delivery evidence. The owner accepted
 	[ADR 0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md)
 	and the dated amendments below, including component-scoped application, the existing Hermes
@@ -52,8 +52,9 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 
 #### CI, Version Preparation, And Tag-Triggered Releases (2026-11-13)
 
-Review state: **Draft**, with the following owner-approved choices. These choices do not approve
-the remaining detailed design or authorize workflow implementation or repository-setting changes.
+Review state: **Approved on 2026-11-13**. The owner authorized local implementation of the following
+bounded batch after confirming the version convention. Actual pushes, repository-setting changes,
+merges, tags, and publication require separate authorization.
 
 - Before a release, the owner selects the target version once. Automation prepares a version PR
 	containing the required version metadata and lockfile updates. CI and review precede its merge;
@@ -75,14 +76,74 @@ the remaining detailed design or authorize workflow implementation or repository
 	of long-lived workstreams. The maintainer decides when to merge; automatic merge and a merge queue
 	are outside the initial design. Disallow force pushes and deletion of `main`; do not require
 	approval from an additional maintainer for the initial workflow.
+- Run backend tests, typing, formatting, and lint checks and frontend tests, typing, lint, and
+	production builds on Linux with Python 3.12 and Node 24. Check version consistency and the three
+	generated contract artifacts. Verify POSIX and Windows deployment scripts with Docker doubles,
+	not real containers or live Agent/MCP services. Use a stable aggregate required check that rejects
+	failed, cancelled, or unexpectedly skipped dependencies; omit path filtering initially.
+- Maintain the existing generated frontend contract bundle and add separate JSON Schemas derived
+	from `ProcessFileConfig` and `RuntimeFileConfig`. Generate them offline from the authoritative
+	FastAPI/Pydantic definitions, review committed snapshots, detect drift, validate controlled
+	examples, and retain semantic/application tests. Provide YAML editor association without adding
+	an unsupported configuration field. Generation must not read operator configuration or secrets,
+	open databases, or contact runtimes.
+- Use the repository-provided `GITHUB_TOKEN`, without adding a PAT or GitHub App. Accept the explicit
+	workflow-run approval required for CI on bot-created version PRs. Ordinary PR checks remain
+	read-only; version preparation and release publication receive only their required write
+	permissions. Automation does not merge PRs or create release tags.
+- Limit the initial version format to plain `X.Y.Z` package metadata and matching `vX.Y.Z` tags;
+	alpha, beta, release-candidate, and build-metadata variants are outside this batch. During `0.x`,
+	compatible fixes increment patch; new features or incompatible changes increment minor and reset
+	patch. The product may remain in `0.x` without a stable API guarantee; adopting `1.0.0` is a
+	separate compatibility decision, not an automatic consequence of CI success. The maintainer
+	selects the target version; automation validates and propagates it, not infers it from commits.
+- Keep the three contract artifacts internal to repository development and CI; do not attach them
+	to GitHub Releases. Release notes address product users, not internal contract bookkeeping.
+	Python and Node package publication remain outside scope; this review makes no additional
+	distribution commitments.
+- Use the recent feature integration PR to verify the first CI run, configure required checks only
+	after their names have appeared, then verify the maintainer-selected Merge commit on `main`.
+	Retain the long-lived feature branch. This is merge-CI evidence, not release-chain acceptance or
+	authorization to push, merge, change repository settings, or publish from this workspace.
 - Automatic container builds and image publication are deferred, not prerequisites for this batch.
 
-Required CI checks and runners, version-tool integration, tag/prerelease formats, release
-artifacts/notes, automation permissions and event chaining, and failure/rerun behavior remain
-subject to the focused design review. Approval of the merge policy does not authorize applying
-repository settings yet; bot-created tags and package-registry publication remain out of scope.
+- Release tags must identify prepared, version-consistent commits in `main` history. Reuse the
+	read-only checks on the tagged source before publication. Fail on mismatches rather than moving
+	tags or repairing source. Repeated publication must not duplicate or silently alter an existing
+	public release. Cancel superseded PR checks, but do not cancel another in-progress release.
 
-Delivery: **Pending**. No CI, version-preparation, or release workflow has been implemented.
+Bounded implementation: generated configuration schemas and drift/example checks; metadata-derived
+runtime versions and a tested version-preparation command; aligned thin Make/just check entry points;
+read-only PR/main CI, a manually dispatched version-PR workflow, and tag-triggered GitHub Release
+publication. Use controlled tests for automation safety and document the first GitHub acceptance
+steps. Do not select the next product version or perform real publication as implementation tests.
+Repository settings, actual integration, and release-chain acceptance remain separate from local
+implementation and checks.
+
+Delivery: **Implemented locally on 2026-11-13**. The three generated contracts, metadata-derived
+runtime versions, tested version-preparation command, shared Make/just gates, and three pinned
+Actions workflows are in place. The source version remains `0.1.0`; implementation does not select
+the next release version. See [CI and Release Automation](../development/automation.md) for entry
+points, ownership, permissions, and first GitHub acceptance steps.
+
+Verification evidence:
+
+- The shared backend gate passed: **530 tests passed, 1 intentional Windows directory-ACL
+	acceptance skip**; Pyright, Ruff lint/format, all three contract snapshots, and unified version
+	checks passed.
+- The shared frontend gate passed: **191 tests passed**; TypeScript, oxlint, and the production
+	build passed. The existing main-chunk size warning remains; no UI behavior was redesigned.
+- Controlled automation tests cover strict versions, dirty-source/existing-tag rejection, exact
+	tag/main ancestry, publication failure/rerun handling, fail-closed aggregate results, and workflow
+	permissions/triggers. A temporary source copy also verified real uv version changes, lock refresh,
+	package installation, and version-bearing contract regeneration without changing product source.
+- Official actionlint **1.7.7** passed all three workflows. No actual GitHub publication or repository
+	setting change was used as a local test.
+
+GitHub acceptance: **Pending**. Required-check and merge settings, the first feature PR/main run,
+bot-version-PR approval, hosted Windows execution, and a real tag/release/rerun still require the
+documented separate acceptance. Local checks do not establish those outcomes. OCI automation and
+real deployment acceptance remain outside this delivery batch.
 
 #### Configuration-Owned Host Credential (2026-11-13)
 

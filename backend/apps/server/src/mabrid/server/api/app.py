@@ -20,6 +20,7 @@ from mabrid.application.gateway.sessions import GatewaySessionCoordinator
 from mabrid.application.gateway import GatewayMcpSessionBroker
 from mabrid.application.host import HostEventStream, HostSessionEventStream
 
+from mabrid.server import __version__
 from mabrid.server.api.management.agent_host import create_agent_host_management_router
 from mabrid.server.api.management.errors import (
     ManagementProblem,
@@ -59,7 +60,7 @@ def create_app(
             yield
         logger.info("FastAPI application shutting down (lifespan exit)")
 
-    app = FastAPI(title="Mabrid", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Mabrid", version=__version__, lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],

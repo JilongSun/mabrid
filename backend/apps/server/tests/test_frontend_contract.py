@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from importlib.metadata import version
 from pathlib import Path
 from typing import cast
 
@@ -19,6 +20,7 @@ from mabrid.application.agent_host import (
     EffectiveCapability,
 )
 from mabrid.server.api import create_app
+from mabrid.server import __version__
 from mabrid.server.composition import GatewayManagementComposition
 from mabrid.server.api.capabilities import ProductCapabilitiesResponse
 from mabrid.server.api.host_contracts import (
@@ -116,6 +118,7 @@ def test_examples_cover_every_stream_payload_and_effective_availability() -> Non
 def test_committed_contract_matches_current_schemas_and_has_no_dangling_references() -> None:
     document = json.loads((CONTRACT_ROOT / "frontend-contract.json").read_text(encoding="utf-8"))
     assert document == frontend_contract()
+    assert document["openapi"]["info"]["version"] == __version__ == version("mabrid-server")
 
     def verify(value: object, root: dict) -> None:
         if isinstance(value, dict):
