@@ -5,7 +5,7 @@ import { RotateCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { prepareAppResource, type HostWidget } from './app-resource'
 
-const hostInfo = { name: 'Mabrid', version: '0.1.0' }
+const hostInfo = { name: 'Mabrid', version: import.meta.env.VITE_APP_VERSION }
 const hostCapabilities = {}
 const unsupported = async () => { throw new McpError(ErrorCode.MethodNotFound, 'This App Host method is not supported.') }
 
