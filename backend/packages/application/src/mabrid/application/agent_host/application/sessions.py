@@ -71,6 +71,7 @@ class AgentSessionService:
         self,
         *,
         target_id: str,
+        integration_kind: str,
         runtime_binding_id: str,
         repository: AgentSessionRepository,
         catalog: RuntimeSessionCatalog,
@@ -81,6 +82,7 @@ class AgentSessionService:
         settlement: AgentRunSettlement | None = None,
     ) -> None:
         self.target_id = target_id
+        self.integration_kind = integration_kind
         self.runtime_binding_id = runtime_binding_id
         self._repository = repository
         self._catalog = catalog
@@ -97,6 +99,7 @@ class AgentSessionService:
         remote = await self._catalog.create_session(command)
         session = AgentSessionRecord(
             target_id=self.target_id,
+            integration_kind=self.integration_kind,
             runtime_session=RuntimeSessionReference(
                 runtime_binding_id=self.runtime_binding_id,
                 remote_session_id=remote.remote_session_id,
@@ -111,7 +114,10 @@ class AgentSessionService:
         self, *, limit: int = 20, offset: int = 0
     ) -> tuple[AgentSessionRecord, ...]:
         return await self._repository.list_sessions(
-            target_id=self.target_id, limit=limit, offset=offset
+            target_id=self.target_id,
+            integration_kind=self.integration_kind,
+            limit=limit,
+            offset=offset,
         )
 
     async def get_target_run(self) -> AgentSessionRunStatus | None:
@@ -126,7 +132,11 @@ class AgentSessionService:
 
     async def _load(self, session_id: UUID) -> AgentSessionRecord:
         session = await self._repository.get(session_id)
-        if session is None or session.target_id != self.target_id:
+        if (
+            session is None
+            or session.target_id != self.target_id
+            or session.integration_kind != self.integration_kind
+        ):
             raise AgentSessionError("session_not_found", "Agent Session was not found")
         if session.runtime_session.runtime_binding_id != self.runtime_binding_id:
             raise AgentSessionError(

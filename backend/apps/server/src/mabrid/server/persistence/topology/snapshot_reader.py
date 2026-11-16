@@ -34,7 +34,7 @@ class SqlAlchemyTopologySnapshotReader:
     `read_snapshot` structurally implements the management read port and redacts
     connection values through explicit mapping; runtime publication is separate.
     Contract: [TopologySnapshotReader](../../../../../../../packages/application/src/mabrid/application/gateway/topology/ports.py:30).
-    Composition: [compose_gateway](../../composition/gateway.py:78).
+    Composition: [compose_gateway](../../composition/gateway.py:73).
     """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:

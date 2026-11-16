@@ -7,7 +7,7 @@ stores application lifecycle history, never MCP SDK transport state that cannot 
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -28,7 +28,7 @@ from ..topology.revisions import EndpointTopologyRevision
 from .models import BridgeSessionRecord, BridgeSessionStatus
 from .observers import BridgeSessionObserverFactory, CompositeBridgeObserver
 from .ports import BridgeSessionRepository
-from .publication import PublishedEndpoint, PublishedTopology
+from .publication import PublishedEndpoint, PublishedTopology, PublishedTopologySnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ class BridgeSessionRuntime:
 
     session_id: UUID
     endpoint_id: UUID
+    endpoint_slug: str
     bridge_session: BridgeSession
     stop_event: anyio.Event
     closed_event: anyio.Event
@@ -89,6 +90,14 @@ class GatewaySessionCoordinator:
 
     async def load_published_endpoints(self) -> None:
         await self._published_topology.load()
+
+    def prepare_publication(
+        self, revisions: Sequence[EndpointTopologyRevision]
+    ) -> PublishedTopologySnapshot:
+        return self._published_topology.prepare(revisions)
+
+    def publish(self, snapshot: PublishedTopologySnapshot) -> None:
+        self._published_topology.publish(snapshot)
 
     def resolve_published_endpoint(self, slug: str) -> PublishedEndpoint | None:
         return self._published_topology.resolve(slug)
@@ -154,6 +163,7 @@ class GatewaySessionCoordinator:
         active = BridgeSessionRuntime(
             session_id=session.session_id,
             endpoint_id=endpoint.revision.endpoint_id,
+            endpoint_slug=endpoint.revision.slug,
             bridge_session=bridge_session,
             stop_event=anyio.Event(),
             closed_event=anyio.Event(),
@@ -165,14 +175,11 @@ class GatewaySessionCoordinator:
         endpoint_slug: str,
         transport_session_id: str,
     ) -> BridgeSessionRuntime | None:
-        endpoint = self.resolve_published_endpoint(endpoint_slug)
-        if endpoint is None:
-            return None
         session_id = self._transport_sessions.get(transport_session_id)
         if session_id is None:
             return None
         active = self._active_sessions.get(session_id)
-        if active is None or active.endpoint_id != endpoint.revision.endpoint_id:
+        if active is None or active.endpoint_slug != endpoint_slug:
             return None
         await self._touch_session(active.session_id)
         return active

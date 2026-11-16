@@ -313,7 +313,7 @@ class SqlAlchemyBridgeSessionStoreFactory:
     """Cache Session-scoped SQL stores and their process-local notification state.
 
     `create`/`get`/`remove` structurally implement the store factory injected by
-    [compose_gateway](../../composition/gateway.py:78). `remove` evicts the live
+    [compose_gateway](../../composition/gateway.py:73). `remove` evicts the live
     cache entry; it does not delete persisted event or snapshot history.
     Contract: [BridgeSessionStoreFactory](../../../../../../../packages/application/src/mabrid/application/gateway/inspection/ports.py:80).
     """

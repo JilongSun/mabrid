@@ -142,6 +142,7 @@ async def test_first_party_session_list_uses_one_row_lookahead_at_page_limit(
             await repository.add(
                 AgentSessionRecord(
                     target_id=TARGET.target_id,
+                    integration_kind=TARGET.runtime_profile.integration_kind,
                     runtime_session=RuntimeSessionReference(
                         runtime_binding_id="fixture-deployment",
                         remote_session_id=f"remote-{uuid4()}",
@@ -372,6 +373,7 @@ async def test_first_party_host_maps_safe_http_and_stream_failures(
         repository.list_sessions.side_effect = RuntimeError("private-runtime-url-and-secret")
         service = AgentSessionService(
             target_id=TARGET.target_id,
+            integration_kind=TARGET.runtime_profile.integration_kind,
             runtime_binding_id="fixture-deployment",
             repository=repository,
             catalog=adapter,
@@ -794,10 +796,12 @@ def session_service(
     coordinator: AgentRunCoordinator | None = None,
     *,
     binding_id: str = "fixture-deployment",
+    integration_kind: str = TARGET.runtime_profile.integration_kind,
     settlement: AgentRunSettlement | None = None,
 ) -> AgentSessionService:
     return AgentSessionService(
         target_id=TARGET.target_id,
+        integration_kind=integration_kind,
         runtime_binding_id=binding_id,
         repository=SqliteAgentSessionRepository(database.session_factory),
         catalog=adapter,
@@ -1074,6 +1078,38 @@ async def test_unresolved_native_execution_blocks_restart_until_remote_terminal(
         await adapter.close()
 
 
+async def test_integration_change_cannot_reopen_or_list_old_sessions(tmp_path: Path) -> None:
+    fixture = NativeHermesFixture()
+    requests: list[str] = []
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        requests.append(request.url.path)
+        return await fixture.handle(request)
+
+    adapter = HermesSessionAdapter(
+        api_root="http://hermes.test/",
+        api_key="fixture",
+        runtime_binding_id="fixture-deployment",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+    )
+    database = SqliteDatabase(tmp_path / "identity.db")
+    await database.migrate()
+    try:
+        original = session_service(database, adapter)
+        session = await original.create_session(CreateAgentSessionCommand())
+        before = len(requests)
+        changed = session_service(database, adapter, integration_kind="different-integration")
+        assert await changed.list_sessions() == ()
+        with pytest.raises(AgentSessionError) as failure:
+            await changed.reopen_session(session.session_id)
+        assert failure.value.code == "session_not_found"
+        assert len(requests) == before
+        assert (await original.reopen_session(session.session_id)).session_id == session.session_id
+    finally:
+        await adapter.close()
+        await database.close()
+
+
 async def test_native_binding_and_unsettled_ownership_survive_database_reopen(
     tmp_path: Path,
 ) -> None:
@@ -1082,6 +1118,7 @@ async def test_native_binding_and_unsettled_ownership_survive_database_reopen(
     await database.migrate()
     session = AgentSessionRecord(
         target_id="fixture-target",
+        integration_kind=TARGET.runtime_profile.integration_kind,
         runtime_session=RuntimeSessionReference(
             runtime_binding_id="fixture-deployment", remote_session_id="api_fixture"
         ),
@@ -1107,9 +1144,12 @@ async def test_native_binding_and_unsettled_ownership_survive_database_reopen(
         pending = await repository.get_unsettled_run(session.target_id)
         assert pending is not None and pending.run_id == run_id
         assert pending.remote_run_id == "run_fixture"
-        assert await repository.list_sessions(target_id=session.target_id, limit=10, offset=0) == (
-            session,
-        )
+        assert await repository.list_sessions(
+            target_id=session.target_id,
+            integration_kind=session.integration_kind,
+            limit=10,
+            offset=0,
+        ) == (session,)
         replacement = session.runtime_session.model_copy(
             update={"remote_session_id": "api_resumed"}
         )

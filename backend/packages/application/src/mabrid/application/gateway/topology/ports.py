@@ -10,7 +10,7 @@ from .revisions import EndpointTopologyRevision
 
 
 class TopologyReader(Protocol):
-    """Load executable endpoint revisions for [GatewaySessionCoordinator](../sessions/service.py:51).
+    """Load executable endpoint revisions for [GatewaySessionCoordinator](../sessions/service.py:52).
 
     `list_current_revisions` selects enabled publication; slug and revision lookups
     support Session creation. Server persistence supplies this port structurally,

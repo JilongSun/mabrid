@@ -68,17 +68,16 @@ cd mabrid
 make setup # 或：just setup
 ```
 
-编辑生成的 `mabrid.yaml`，填入你的 MCP 服务器地址。示例中的地址需要替换。
-如需启用 Agent Host，还需配置 Agent 运行时连接。
+初始化会生成静态配置 `mabrid.yaml` 和动态配置 `runtime/mabrid.runtime.yaml`。
+在动态配置文件中填写 MCP 服务器、端点和 Agent Host 连接，也可以通过网关设置
+（Gateway Settings）和 Host 设置（Host Settings）修改界面支持的字段。
+保存与应用是两个独立操作；应用 Host 配置时，Host 必须空闲，且没有活动或尚未结算的 Run。
 
-API Key 写在 `mabrid.yaml` 同目录的 `.env` 文件中，例如：
-
-```dotenv
-API_SERVER_KEY=your-api-key
-```
-
-`mabrid.yaml` 中的 `apiKeyEnv` 填写对应的环境变量名，而不是密钥本身。
-不要将 `.env` 提交到版本控制中。
+Host 密钥通过 Host 设置或动态配置文件中的 `agentHost.runtime.apiKey` 配置，
+而不是通过 `.env` 或 `apiKeyEnv`。设置界面允许写入密钥，但不会返回密钥；
+动态配置文件以明文存储密钥，需保护其目录权限，并避免将凭据提交到版本控制。
+`.env` 可按需用于进程或容器启动时的环境变量，不提供或覆盖 Host 密钥。
+详见[英文配置说明](README.md#get-the-code-and-configure)。
 
 ### 本地运行
 
@@ -106,12 +105,10 @@ make run   # 或：just run
 
 ## 使用前须知
 
-Mabrid 正在准备 **v0.1 开发者预览版**，适合在可信环境中自行部署和试用，
-不适合作为面向公众的多用户服务。
-
 - 请仅在可信网络中使用。管理 API 尚无身份验证，会话诊断信息可能包含工具输入和结果。
-- 网页界面只支持查看网关配置。MCP 服务器和端点配置会在首次启动时导入空数据库，
-  之后修改 YAML 不会更新数据库中已有的配置。
+- Compose 以只读方式挂载静态配置文件，并以可写方式挂载动态配置目录。
+  网关和 Host 配置分别应用；文件布局、密钥配置及重启要求见
+  [英文配置说明](README.md#get-the-code-and-configure)。
 - MCP Apps 支持展示和交换工具数据。v0.1 不支持由 App 发起后续消息或工具调用。
 - 桌面客户端和多 worker 部署不在 v0.1 范围内。
 

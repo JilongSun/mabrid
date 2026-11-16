@@ -12,15 +12,27 @@ config_dir := "."
 [unix]
 install:
     uv sync --directory backend --all-packages
-    pnpm --dir frontend install
+    pnpm --dir frontend install --reporter=append-only
 
 [windows]
 install:
     uv sync --directory backend --all-packages
-    pnpm.cmd --dir frontend install
+    pnpm.cmd --dir frontend install --reporter=append-only
 
 dev:
     uv run --directory backend --all-packages python ../scripts/dev.py
+
+check scope="all":
+    uv run --directory backend --all-packages --locked python ../scripts/check.py "{{scope}}"
+
+contracts:
+    uv run --directory backend --all-packages --locked python ../scripts/check.py contracts
+
+version-check:
+    uv run --directory backend --all-packages --locked python ../scripts/check.py versions
+
+prepare-version version:
+    uv run --directory backend --all-packages --locked python ../scripts/release.py prepare "{{version}}"
 
 [unix]
 setup:

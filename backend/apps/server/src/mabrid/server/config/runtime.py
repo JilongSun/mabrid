@@ -47,6 +47,7 @@ class RuntimeUpstreamConfig(BaseModel):
     """Resolved transport settings after relative paths and environment references are applied."""
 
     transport: Literal["stdio", "sse", "streamable-http"] = "stdio"
+    enabled: bool = True
     command: str | None = None
     args: list[str] = Field(default_factory=list)
     cwd: Path | None = None
@@ -58,7 +59,11 @@ class RuntimeUpstreamConfig(BaseModel):
 
 @dataclass(frozen=True)
 class RuntimeConfiguration:
-    """Typed deployment assembly input, not authoritative product topology storage."""
+    """Typed startup settings plus the runtime-file Gateway topology and Agent Host selection.
+
+    Startup owns static settings and runtime-file placement. The configuration manager owns
+    subsequent component application; these initial Host values are not the active-client store.
+    """
 
     config_path: Path
     bridge: BridgeRuntimeConfig
@@ -67,3 +72,14 @@ class RuntimeConfiguration:
     endpoints: dict[str, EndpointFileConfig]
     diagnostic_upstream: str | None
     agent_host: RuntimeAgentHostConfig = field(default_factory=RuntimeAgentHostConfig)
+    agent_host_signature: str | None = None
+    runtime_source: Literal["runtime_file", "unconfigured", "provided"] = "provided"
+    runtime_hash: str | None = None
+    runtime_error: str | None = None
+    static_signature: str | None = None
+    host_error: str | None = None
+    runtime_config_file: Path | None = None
+
+    @property
+    def runtime_path(self) -> Path:
+        return self.runtime_config_file or self.config_path.with_name("mabrid.runtime.yaml")

@@ -1,0 +1,115 @@
+{
+  "$defs": {
+    "BridgeRuntimeConfig": {
+      "additionalProperties": false,
+      "description": "Configure listener, advertised origin, identity, diagnostics, and transport timeout.",
+      "properties": {
+        "advertisedBaseUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advertisedbaseurl"
+        },
+        "apiHost": {
+          "default": "0.0.0.0",
+          "title": "Apihost",
+          "type": "string"
+        },
+        "apiPort": {
+          "default": 8765,
+          "title": "Apiport",
+          "type": "integer"
+        },
+        "diagnosticUpstream": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Diagnosticupstream"
+        },
+        "httpxTimeoutSeconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Httpxtimeoutseconds"
+        },
+        "proxyName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proxyname"
+        }
+      },
+      "title": "BridgeRuntimeConfig",
+      "type": "object"
+    },
+    "StorageConfig": {
+      "additionalProperties": false,
+      "description": "Select the local SQLite path and startup migration policy.",
+      "properties": {
+        "autoMigrate": {
+          "default": true,
+          "title": "Automigrate",
+          "type": "boolean"
+        },
+        "sqlitePath": {
+          "default": "backend/var/mabrid.db",
+          "format": "path",
+          "title": "Sqlitepath",
+          "type": "string"
+        }
+      },
+      "title": "StorageConfig",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Validate restart-applied process settings from the static configuration file.",
+  "properties": {
+    "bridge": {
+      "$ref": "#/$defs/BridgeRuntimeConfig"
+    },
+    "runtimeConfigFile": {
+      "anyOf": [
+        {
+          "format": "path",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Runtimeconfigfile"
+    },
+    "storage": {
+      "$ref": "#/$defs/StorageConfig"
+    }
+  },
+  "title": "ProcessFileConfig",
+  "type": "object"
+}

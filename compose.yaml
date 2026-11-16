@@ -13,6 +13,8 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+    group_add:
+      - ${MABRID_CONFIG_GID:-10001}
     tmpfs:
       - /tmp:rw,nosuid,noexec,size=64m
     env_file:
@@ -25,6 +27,12 @@ services:
         source: ${MABRID_CONFIG_DIR}/mabrid.yaml
         target: /var/lib/mabrid/mabrid.yaml
         read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MABRID_CONFIG_DIR}/runtime
+        target: /var/lib/mabrid/runtime
+        read_only: false
         bind:
           create_host_path: false
     stop_grace_period: 20s

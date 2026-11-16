@@ -82,11 +82,13 @@ belong to the product.
 
 ## Configuration and Execution Safety
 
-- Follow the accepted restart-applied baseline: saving configuration does not update the running
-	topology or silently switch active Sessions to another runtime deployment.
-- Evolve released databases non-destructively. Preserve stable identities, historical revision
-	references, Session bindings, and unsettled Run ownership; pre-release reset permissions do not
-	authorize destructive updates of released user data.
+- Follow ADR 0018's configuration boundary: static process settings require restart; dynamic
+	configuration applies through validated generations without silently switching existing Sessions.
+- The product remains a developer preview without stable interface or database-upgrade guarantees.
+	Remove obsolete compatibility paths rather than retaining transitional implementations.
+	Normal configuration application must still preserve stable identities, revision references,
+	Session bindings, and unsettled Run ownership. Preview schema changes never authorize automatic
+	deletion or reset of an operator's database.
 - Connection recovery is not business-operation retry. A timeout, disconnect, cancellation, or
 	accepted stop receipt does not prove remote non-execution or termination. Do not automatically
 	replay side-effecting or unknown-outcome tool calls or Runs.

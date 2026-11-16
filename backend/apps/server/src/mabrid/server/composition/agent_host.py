@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import anyio
 from typing import Literal
 from uuid import UUID
+from sqlalchemy import or_, select
 
 from mabrid.application.agent_host import (
     AgentEndpointAssignment,
@@ -40,8 +41,13 @@ from mabrid.server.config import (
 from mabrid.server.logging import get_logger
 from mabrid.server.persistence import SqliteDatabase
 from mabrid.server.persistence.agent_host import SqliteAgentSessionRepository
+from mabrid.server.persistence.schema import AgentSessionRow, UnsettledAgentRunRow
 
 logger = get_logger(__name__)
+
+
+class HostConfigurationError(ValueError):
+    """Keep the Gateway available when durable execution belongs to another Host."""
 
 
 @dataclass(frozen=True)
@@ -60,7 +66,7 @@ class AgentHostManagementView:
 class AgentHostComposition:
     """Own configured runtime clients and expose typed application/presentation capabilities.
 
-    [compose_agent_host](agent_host.py:87) injects structurally compatible adapters;
+    [compose_agent_host](agent_host.py:93) injects structurally compatible adapters;
     `close` releases native then compatibility clients under cancellation shielding.
     This deployment container does not own the remote runtime's conversation loop.
     """
@@ -101,18 +107,36 @@ async def compose_agent_host(
     if not config.enabled:
         return None
     if config.target_id is None:
-        raise ValueError("Enabled Agent Host configuration has no target ID")
+        raise HostConfigurationError("Enabled Agent Host configuration has no target ID")
     if config.endpoint_slug is None:
-        raise ValueError("Enabled Agent Host configuration has no endpoint assignment")
+        raise HostConfigurationError("Enabled Agent Host configuration has no endpoint assignment")
     endpoint = gateway.resolve_published_endpoint(config.endpoint_slug)
     if endpoint is None:
-        raise ValueError(
+        raise HostConfigurationError(
             f"Agent Target '{config.target_id}' references endpoint "
             f"'{config.endpoint_slug}', which is not published and enabled"
         )
     advertised_base_url = configuration.bridge.advertised_base_url
     if advertised_base_url is None:
-        raise ValueError("Enabled Agent Host configuration has no advertised base URL")
+        raise HostConfigurationError("Enabled Agent Host configuration has no advertised base URL")
+    async with database.session_factory() as session:
+        incompatible = await session.scalar(
+            select(AgentSessionRow)
+            .join(
+                UnsettledAgentRunRow, UnsettledAgentRunRow.session_id == AgentSessionRow.session_id
+            )
+            .where(
+                or_(
+                    AgentSessionRow.target_id != config.target_id,
+                    AgentSessionRow.integration_kind != config.runtime.integration,
+                )
+            )
+            .limit(1)
+        )
+    if incompatible is not None:
+        raise HostConfigurationError(
+            "An unsettled Run belongs to another Host identity. Restore its owning Host at startup and reconcile it."
+        )
     runtime = _build_agent_runtime(config.runtime)
     session_runtime: HermesSessionAdapter | None = None
     try:

@@ -6,29 +6,11 @@ bridge:
   # advertisedBaseUrl: http://127.0.0.1:8765
   # httpxTimeoutSeconds: 30  # HTTP request timeout in seconds (default: 30)
 
+runtimeConfigFile: runtime/mabrid.runtime.yaml
+
 storage:
   sqlitePath: ./backend/var/mabrid.db
   autoMigrate: true
 
-endpoints:
-  test-endpoint:
-    displayName: Test Endpoint
-    mode: aggregate
-    bindings:
-      - upstream: enterprise-ops-hub-http-1
-        namespace: ops-one
-        priority: 10
-      - upstream: enterprise-ops-hub-http-2
-        namespace: ops-two
-        priority: 20
-
-upstreams:
-  enterprise-ops-hub-http-1:
-    transport: streamable-http
-    url: http://localhost:8760/mcp
-    # headers: {}
-
-  enterprise-ops-hub-http-2:
-    transport: streamable-http
-    url: http://localhost:8759/mcp
-    # headers: {}
+# Gateway upstreams, endpoints, and Agent Host settings belong only in runtimeConfigFile.
+# Relative database and stdio paths remain relative to this static file's directory.

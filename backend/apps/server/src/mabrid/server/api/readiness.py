@@ -18,7 +18,7 @@ def create_readiness_router(management: GatewayManagementComposition) -> APIRout
 
     @router.get("/ready", response_model=ReadinessResponse)
     async def ready() -> ReadinessResponse:
-        if not management.published_endpoint_slugs:
+        if not management.current_published_endpoint_slugs():
             raise ManagementProblem(
                 problem(
                     code="not_ready",

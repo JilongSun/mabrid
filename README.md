@@ -76,18 +76,22 @@ cd mabrid
 make setup # or: just setup
 ```
 
-Edit the generated `mabrid.yaml` to point to your MCP servers. The sample
-addresses need to be replaced. To enable Agent Host, also configure its runtime
-connection.
+Setup creates static `mabrid.yaml` and dynamic `runtime/mabrid.runtime.yaml`.
+The static file selects that runtime path through `runtimeConfigFile`; MCP servers,
+endpoints, and Agent Host connections belong in the runtime file. Replace the sample
+addresses before use.
 
-Use the `.env` file beside `mabrid.yaml` for API keys. For example:
+Gateway Settings and Host Settings edit their supported runtime fields. Saving writes
+the file; use the corresponding **Apply Gateway** or **Apply Host** action to activate
+changes. Existing Gateway Sessions retain their bindings. Host application requires
+an idle Host with no active or unsettled Run. Stdio process definitions remain
+file-managed. Listener, storage, and other static process settings require a restart.
 
-```dotenv
-API_SERVER_KEY=your-api-key
-```
-
-In `mabrid.yaml`, `apiKeyEnv` names the environment variable to read, not the key
-itself. Keep `.env` out of version control.
+Configure the Host key through Host Settings or `agentHost.runtime.apiKey` in the
+runtime file. The UI never returns the key, but it is plaintext on disk: protect the
+runtime directory and keep credentials out of version control. The optional `.env`
+beside `mabrid.yaml` is only for startup process/container environment; it does not
+supply or override the Host key.
 
 ### Run locally
 
@@ -115,14 +119,15 @@ See the [container guide](docs/deployment/container.md) for more deployment opti
 
 ## Before you use it
 
-Mabrid is preparing for its **v0.1 developer preview**. It is intended for
-trusted, self-hosted use, not a public multi-user service.
+Mabrid is intended for trusted, self-hosted use, not a public multi-user service.
 
 - Keep it on a trusted network. Management APIs have no authentication, and
   session diagnostics may contain tool inputs and results.
-- Gateway configuration is read-only in the web interface. The MCP server and
-  endpoint configuration is imported into an empty database on first startup.
-  Later YAML edits do not update that stored configuration.
+- The web interface edits supported Gateway and Host settings, not arbitrary YAML
+  or stdio process definitions. Management authentication remains deferred.
+- Compose mounts `mabrid.yaml` read-only and the `runtime/` directory writable for
+  managed edits. Runtime changes use the separate Apply actions; static settings
+  and process/container environment changes still require restart or recreation.
 - MCP Apps can display and exchange tool data. App-triggered follow-up messages
   and tool calls are not supported in v0.1.
 - Desktop packaging and multi-worker deployments are outside v0.1.

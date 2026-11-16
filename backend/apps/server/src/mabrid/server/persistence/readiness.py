@@ -14,7 +14,7 @@ class SqliteReadinessProbe:
     """Check local SQLite availability without querying remote agents or upstreams.
 
     Async `is_ready` provides a bound-method callable returning an awaitable bool;
-    the object itself has no `__call__`. [GatewayManagementComposition](../composition/gateway.py:51)
+    the object itself has no `__call__`. [GatewayManagementComposition](../composition/gateway.py:38)
     combines this evidence with local publication before serving readiness.
     """
 

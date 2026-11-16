@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { AppRendererProps } from '@mcp-ui/client'
+import packageMetadata from '../../../package.json' with { type: 'json' }
 import { prepareAppResource, type HostWidget } from './app-resource'
 import { appSecurityPolicy } from './app-policy'
 import { WidgetRenderer } from './app-renderer'
@@ -93,6 +94,7 @@ describe('Ephemeral App lifecycle', () => {
     const props = renderer.props!
     expect(props.client).toBeUndefined()
     expect(props.html).toBe(widget.resource_contents[0].text)
+    expect(props.hostInfo).toEqual({ name: 'Mabrid', version: packageMetadata.version })
     expect(props.hostCapabilities).toEqual({})
     expect(props.toolInput).toEqual({ value: 42 })
     expect(props.toolResult).toMatchObject({ structuredContent: { value: 42 }, isError: false })

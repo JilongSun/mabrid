@@ -1,10 +1,38 @@
 # ADR 0014: Read-Only v0.1 Management Plane
 
-- Status: Accepted
+- Status: Accepted; post-v0.1 configuration ownership, application, and bounded Gateway/Host writes amended by ADR 0018
 - Date: 2026-09-11
 - Clarified: 2026-10-10; post-v0.1 product-configuration ownership
 - Amends: ADR 0001, ADR 0002, ADR 0003, ADR 0004, ADR 0008, ADR 0010, and ADR 0011 for
   v0.1 scope only; clarifies the future configuration surface described by ADR 0011 and ADR 0012
+
+ADR 0018 changes the post-v0.1 configuration authority and application direction, not the
+historical v0.1 read-only release. The requirements to preserve history, protect Session and Run
+ownership, and design access protection for general configuration writes continue to apply.
+ADR 0018's 2026-11-03 developer-preview amendment removes old-database upgrade and YAML import
+compatibility. Current-schema history and Session/Run ownership remain protected. Read contracts
+remain useful validation boundaries, not promises of stable developer-preview interfaces.
+
+ADR 0018's owner-approved 2026-11-10 amendment permits bounded Gateway runtime-file editing with
+write-only literal header operations and explicitly defers authentication, RBAC, and durable
+secret-reference design beyond that batch. This is a scoped exception to the pre-write design gate
+below, not approval for untrusted deployment or general Host editing. Runtime-file edit payloads
+reuse file-shaped endpoint fields; the historical v0.1 read contracts remain unchanged.
+
+The owner-approved 2026-11-11 amendment explicitly extends that access-hardening deferral to bounded
+Host settings reads, writes, and application. Host writes retain environment-secret references and
+modify only the Host section; Gateway and Host application are separate. This does not authorize
+untrusted management access, new integrations, or general remote runtime administration.
+
+The owner-approved 2026-11-12 amendment adds write-only literal Host credentials alongside explicit
+environment-variable references. Ordinary reads never expose either resolved or stored values;
+credential updates use preserve/replace semantics and the existing idle-only Host application guard.
+This does not change the trusted-only access-hardening deferral or add general secret providers.
+
+The owner-approved 2026-11-13 amendment removes the environment credential source. Host credentials
+are owned only by runtime `apiKey`; reads expose configured state, and writes preserve or replace
+the value without returning it. `.env` remains process/container environment, not a Host credential
+fallback. Idle-only application and the trusted-only access-hardening deferral are unchanged.
 
 ## Context
 

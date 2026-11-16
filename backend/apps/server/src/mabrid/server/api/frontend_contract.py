@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 from fastapi import FastAPI
@@ -34,7 +35,9 @@ def frontend_contract(app: FastAPI | None = None) -> dict[str, JsonValue]:
     if app is None:
         app = create_app(
             cast(GatewaySessionCoordinator, object()),
-            gateway_management=cast(GatewayManagementComposition, object()),
+            gateway_management=cast(
+                GatewayManagementComposition, SimpleNamespace(configuration=None)
+            ),
         )
     document = app.openapi()
     paths = {

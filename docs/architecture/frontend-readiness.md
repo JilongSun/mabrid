@@ -8,6 +8,13 @@
 
 ## Frozen Contract
 
+The managed-configuration preview deliberately evolves this snapshot: `topology_mode` is now
+`generation_applied`; Gateway and Host configuration reads, writes, status, and explicit component
+apply routes are included. Component `applied_hash` and `desired_hash` identify effective settings;
+`file_hash` and editor `content_hash` identify the complete file used for concurrency checks, not
+cross-component application. The owner accepted these preview API compatibility changes; the
+snapshot reflects the current contract rather than preserving obsolete constants or restart gates.
+
 The reviewed v0.1 baseline consists of:
 
 - [The machine-readable contract](../contracts/v0.1/frontend-contract.json): first-party OpenAPI,
@@ -44,8 +51,9 @@ JavaScript SDK, an OpenAI wire replacement, or an MCP transport schema.
 | --- | --- |
 | Agent workspace | `/api/v1/host`: local Sessions, runtime-owned history, new-input SSE, cancel/reconcile; safe JSON errors before admission |
 | Product capability status | `/api/v1/capabilities`: local/deployment/remote/effective facts, not Run admission or a remote execution health test |
-| Gateway topology and inspection | `/api/v1/gateway`: read-only status/topology and Gateway Session pages/snapshots/events; RFC 9457 errors |
+| Gateway topology and inspection | `/api/v1/gateway`: status/topology, explicit file application, and Gateway Session pages/snapshots/events; RFC 9457 errors |
 | Target assignment | `/api/v1/agent-host/target`: read-only configured Target and endpoint assignment; not per-Run provider selection |
+| Host configuration | `/api/v1/agent-host/configuration`: trusted-only status, Host-only runtime-file read/write, and separate idle-only apply; RFC 9457 errors |
 | Compatibility | `/v1/models`, `/v1/chat/completions`: standard OpenAI shapes, no private tool/widget envelopes or simulated native continuity |
 | MCP | `/mcp/{endpoint_slug}` and its legacy SSE transport: protocol-owned Gateway ingress, independent of Agent Session history |
 | Local status | `/health`, `/ready`: local process/persistence/publication status; remote Host outages do not make Gateway unready |
@@ -54,6 +62,17 @@ Gateway Session IDs and Agent Session IDs are different identities. Gateway even
 Host SSE replay. Diagnostic inspection remains intentionally separate from model-visible MCP
 descriptions and public Host presentation. Management errors use `application/problem+json`; Host
 errors use `application/json`; successful Host Run delivery uses `text/event-stream`.
+
+Saving Host settings does not require idle and does not apply either component. Host application
+rejects in-flight operations and active or unsettled Runs; it does not apply pending Gateway
+settings. Endpoint migration publishes the new Gateway endpoint while retaining the old one,
+applies the Host assignment, then removes the old endpoint. Host management exposes only credential
+configured state, never the stored value. The runtime file's `apiKey` is the only credential source;
+Host writes preserve or replace it, and ordinary edits never round-trip the key. Settings has one
+password input and no environment-source selector. Rotation uses the same idle-only Apply Host.
+This surface retains the explicitly deferred access hardening boundary and must not be exposed
+to untrusted clients. The scoped delivery evidence is
+recorded in the [active decision review](decision-log.md#managed-configuration-and-release-foundations).
 
 ## Contract Readiness Evidence
 

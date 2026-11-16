@@ -17,7 +17,7 @@ class GatewayMcpSessionBroker:
 
     `open_session`, `resolve_session`, `bind_transport_session`, `close_session`,
     and `transport` structurally implement the generic MCP Session broker.
-    [GatewaySessionCoordinator](service.py:51) owns the Session; the returned transport
+    [GatewaySessionCoordinator](service.py:52) owns the Session; the returned transport
     is its downstream server, not an application-owned HTTP implementation.
     Contract: [McpSessionBroker](../../../../../../bridge/src/mabrid/bridge/downstream/asgi.py:52).
     """

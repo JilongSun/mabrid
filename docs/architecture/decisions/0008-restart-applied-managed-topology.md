@@ -1,8 +1,14 @@
 # ADR 0008: Restart-Applied Managed Topology
 
-- Status: Accepted; v0.1 scope amended by ADR 0014
+- Status: Superseded by ADR 0018
 - Date: 2026-08-21
 - Amends: ADR 0001, ADR 0002, ADR 0003, and ADR 0004
+- Archived: 2026-11-03; see the [decision log](../decision-log.md#archived-adrs)
+
+ADR 0018 fully replaces this decision as of 2026-11-03. It explicitly preserves immutable and
+dependent revisions, non-destructive runtime removal, pinned Sessions, management/data-plane
+separation, redaction, and external restart ownership. The text below is historical rationale,
+not an instruction to implement seed compatibility or restart-applied topology.
 
 ADR 0014 moves this write-management design beyond v0.1. The v0.1 topology is seeded once and
 exposed through read-only management and inspection APIs; the mutation model below remains the
@@ -13,6 +19,10 @@ Agent Host/Target/runtime settings and records first-run setup, non-destructive 
 databases, and explicit YAML migration as pending requirements. `seed-if-empty` is not a permanent
 management write lock. Restart-applied topology remains the baseline; safe Agent Host configuration
 application needs a separate detailed contract and does not imply runtime hot reload.
+
+ADR 0018 subsequently amends the ownership and restart-applied publication clauses for the
+post-v0.1 configuration milestone. Dynamic configuration is intended to apply by generation;
+immutable revisions, dependent endpoint revisions, and existing Session ownership remain.
 
 ## Context
 

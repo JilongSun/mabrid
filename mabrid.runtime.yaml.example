@@ -1,0 +1,45 @@
+# Gateway topology and Agent Host settings are loaded from the static runtimeConfigFile path.
+# Setup places this file in runtime/. Saving and component application are separate.
+# Missing or empty runtime configuration publishes no endpoints and keeps Agent Host disabled.
+# Apply Host only when no Host operation or active/unsettled Run owns its clients.
+# Stdio launch settings remain file-managed; stdio enablement is editable.
+# Headers, subprocess environment, and literal Host credentials may contain secrets.
+# Protect this file and its backups; management reads never return credential values.
+endpoints:
+  test-endpoint:
+    displayName: Test Endpoint
+    mode: aggregate
+    bindings:
+      - upstream: enterprise-ops-hub-http-1
+        namespace: ops-one
+        priority: 10
+      - upstream: enterprise-ops-hub-http-2
+        namespace: ops-two
+        priority: 20
+
+upstreams:
+  enterprise-ops-hub-http-1:
+    transport: streamable-http
+    url: http://localhost:8760/mcp
+    # headers: {}
+
+  enterprise-ops-hub-http-2:
+    transport: streamable-http
+    url: http://localhost:8759/mcp
+    # headers: {}
+
+# agentHost:
+#   enabled: true
+#   mcpAppsEnabled: true
+#   targetId: hermes-agent
+#   endpointSlug: test-endpoint
+#   runtime:
+#     integration: hermes
+#     interface: openai-chat-completions
+#     baseUrl: http://127.0.0.1:8642/v1
+#     apiKey: replace-with-your-Hermes-key
+#     # Settings preserves or replaces this value without returning it in reads.
+#     timeoutSeconds: 120
+#     sessions:
+#       apiRoot: http://127.0.0.1:8642
+#       bindingId: local-hermes

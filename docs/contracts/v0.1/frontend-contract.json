@@ -1045,6 +1045,29 @@
           "title": "AgentTargetResponse",
           "type": "object"
         },
+        "ApplyGatewayConfigurationRequest": {
+          "additionalProperties": false,
+          "description": "Require the file identity observed by the caller before an explicit apply.",
+          "properties": {
+            "expected_hash": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-f0-9]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Hash"
+            }
+          },
+          "required": [
+            "expected_hash"
+          ],
+          "title": "ApplyGatewayConfigurationRequest",
+          "type": "object"
+        },
         "BridgeSessionStatus": {
           "description": "Durable lifecycle states maintained by the Gateway Session coordinator.",
           "enum": [
@@ -1154,6 +1177,86 @@
           "title": "EffectiveCapability",
           "type": "object"
         },
+        "EndpointBindingFileConfig": {
+          "additionalProperties": false,
+          "description": "Declare a runtime binding by upstream name, namespace, order, and enablement.",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "namespace": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z][a-z0-9-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Namespace"
+            },
+            "priority": {
+              "default": 0,
+              "title": "Priority",
+              "type": "integer"
+            },
+            "upstream": {
+              "title": "Upstream",
+              "type": "string"
+            }
+          },
+          "required": [
+            "upstream"
+          ],
+          "title": "EndpointBindingFileConfig",
+          "type": "object"
+        },
+        "EndpointFileConfig": {
+          "additionalProperties": false,
+          "description": "Validate one runtime endpoint and its explicit upstream bindings.",
+          "properties": {
+            "bindings": {
+              "items": {
+                "$ref": "#/components/schemas/EndpointBindingFileConfig"
+              },
+              "title": "Bindings",
+              "type": "array"
+            },
+            "displayName": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Displayname"
+            },
+            "enabled": {
+              "default": true,
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "mode": {
+              "default": "passthrough",
+              "enum": [
+                "passthrough",
+                "aggregate"
+              ],
+              "title": "Mode",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bindings"
+          ],
+          "title": "EndpointFileConfig",
+          "type": "object"
+        },
         "EndpointMode": {
           "description": "Select transparent single-upstream or namespaced aggregate routing.",
           "enum": [
@@ -1244,6 +1347,126 @@
           "title": "GatewayCapabilities",
           "type": "object"
         },
+        "GatewayConfigurationResponse": {
+          "additionalProperties": false,
+          "description": "Expose applied and desired configuration identity without connection values.",
+          "properties": {
+            "applied_at": {
+              "format": "date-time",
+              "title": "Applied At",
+              "type": "string"
+            },
+            "applied_hash": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-f0-9]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Applied Hash"
+            },
+            "applied_source": {
+              "enum": [
+                "runtime_file",
+                "unconfigured",
+                "provided",
+                "ledger"
+              ],
+              "title": "Applied Source",
+              "type": "string"
+            },
+            "desired_hash": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-f0-9]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Desired Hash"
+            },
+            "desired_source": {
+              "enum": [
+                "runtime_file",
+                "unconfigured",
+                "provided",
+                "unknown"
+              ],
+              "title": "Desired Source",
+              "type": "string"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            },
+            "file_hash": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-f0-9]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "File Hash"
+            },
+            "file_valid": {
+              "title": "File Valid",
+              "type": "boolean"
+            },
+            "generation": {
+              "minimum": 1.0,
+              "title": "Generation",
+              "type": "integer"
+            },
+            "host_unavailable": {
+              "title": "Host Unavailable",
+              "type": "boolean"
+            },
+            "pending": {
+              "title": "Pending",
+              "type": "boolean"
+            },
+            "recovery_required": {
+              "title": "Recovery Required",
+              "type": "boolean"
+            },
+            "restart_required": {
+              "title": "Restart Required",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "generation",
+            "applied_at",
+            "applied_hash",
+            "applied_source",
+            "desired_hash",
+            "file_hash",
+            "desired_source",
+            "file_valid",
+            "pending",
+            "error",
+            "restart_required",
+            "host_unavailable",
+            "recovery_required"
+          ],
+          "title": "GatewayConfigurationResponse",
+          "type": "object"
+        },
         "GatewayStatusResponse": {
           "additionalProperties": false,
           "description": "Summarize local process publication separately from the saved topology snapshot.",
@@ -1277,8 +1500,8 @@
               "type": "array"
             },
             "topology_mode": {
-              "const": "frozen_seeded",
-              "default": "frozen_seeded",
+              "const": "generation_applied",
+              "default": "generation_applied",
               "title": "Topology Mode",
               "type": "string"
             },
@@ -1294,6 +1517,62 @@
             "published_endpoint_slugs"
           ],
           "title": "GatewayStatusResponse",
+          "type": "object"
+        },
+        "HeaderEdit": {
+          "additionalProperties": false,
+          "description": "Express a write-only value operation without round-tripping the old value.",
+          "properties": {
+            "action": {
+              "enum": [
+                "preserve",
+                "replace",
+                "remove"
+              ],
+              "title": "Action",
+              "type": "string"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Value"
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "title": "HeaderEdit",
+          "type": "object"
+        },
+        "HermesSessionFileConfig": {
+          "additionalProperties": false,
+          "description": "Declare native API root and stable deployment binding for remote Session references.",
+          "properties": {
+            "apiRoot": {
+              "format": "uri",
+              "minLength": 1,
+              "title": "Apiroot",
+              "type": "string"
+            },
+            "bindingId": {
+              "minLength": 1,
+              "title": "Bindingid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "apiRoot",
+            "bindingId"
+          ],
+          "title": "HermesSessionFileConfig",
           "type": "object"
         },
         "HistoryPageQuery": {
@@ -1405,6 +1684,151 @@
           "title": "HistoryUnsupportedContent",
           "type": "object"
         },
+        "HostConfigurationResponse": {
+          "additionalProperties": false,
+          "description": "Expose process-local Host application state without configuration history.",
+          "properties": {
+            "applied_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Applied At"
+            },
+            "applied_hash": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Applied Hash"
+            },
+            "busy": {
+              "title": "Busy",
+              "type": "boolean"
+            },
+            "desired_hash": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Desired Hash"
+            },
+            "enabled": {
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            },
+            "file_hash": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "File Hash"
+            },
+            "file_valid": {
+              "title": "File Valid",
+              "type": "boolean"
+            },
+            "pending": {
+              "title": "Pending",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "applied_hash",
+            "desired_hash",
+            "file_hash",
+            "applied_at",
+            "enabled",
+            "file_valid",
+            "pending",
+            "busy",
+            "error"
+          ],
+          "title": "HostConfigurationResponse",
+          "type": "object"
+        },
+        "HostCredentialView": {
+          "additionalProperties": false,
+          "description": "Expose only credential presence, never plaintext or secret-derived hashes.",
+          "properties": {
+            "configured": {
+              "title": "Configured",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "configured"
+          ],
+          "title": "HostCredentialView",
+          "type": "object"
+        },
+        "HostEditView": {
+          "additionalProperties": false,
+          "description": "Summarize the preserved, read-only Host configuration.",
+          "properties": {
+            "enabled": {
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "endpoint_slug": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Endpoint Slug"
+            },
+            "target_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Id"
+            }
+          },
+          "required": [
+            "enabled",
+            "target_id",
+            "endpoint_slug"
+          ],
+          "title": "HostEditView",
+          "type": "object"
+        },
         "HostErrorResponse": {
           "additionalProperties": false,
           "description": "Expose an allowlisted Host failure code/message and optional local correlation IDs.",
@@ -1487,6 +1911,132 @@
             "settled"
           ],
           "title": "HostReconcileResponse",
+          "type": "object"
+        },
+        "HostRuntimeEditRequest": {
+          "additionalProperties": false,
+          "description": "Edit Host settings and apply an explicit write-only credential operation.",
+          "properties": {
+            "agent_host": {
+              "$ref": "#/components/schemas/HostSettings"
+            },
+            "credential": {
+              "discriminator": {
+                "mapping": {
+                  "preserve": "#/components/schemas/PreserveHostCredential",
+                  "replace": "#/components/schemas/ReplaceHostCredential"
+                },
+                "propertyName": "action"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/PreserveHostCredential"
+                },
+                {
+                  "$ref": "#/components/schemas/ReplaceHostCredential"
+                }
+              ],
+              "title": "Credential"
+            },
+            "expected_hash": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-f0-9]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Hash"
+            }
+          },
+          "required": [
+            "expected_hash",
+            "agent_host"
+          ],
+          "title": "HostRuntimeEditRequest",
+          "type": "object"
+        },
+        "HostRuntimeEditView": {
+          "additionalProperties": false,
+          "description": "Expose the desired Host and current Gateway assignment choices separately.",
+          "properties": {
+            "agent_host": {
+              "$ref": "#/components/schemas/HostSettings"
+            },
+            "content_hash": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Content Hash"
+            },
+            "credential": {
+              "$ref": "#/components/schemas/HostCredentialView"
+            },
+            "published_endpoints": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Published Endpoints",
+              "type": "array"
+            }
+          },
+          "required": [
+            "content_hash",
+            "agent_host",
+            "credential"
+          ],
+          "title": "HostRuntimeEditView",
+          "type": "object"
+        },
+        "HostRuntimeSettings": {
+          "additionalProperties": false,
+          "description": "Editable Hermes settings, deliberately excluding all credential fields.",
+          "properties": {
+            "baseUrl": {
+              "default": "http://127.0.0.1:8642/v1",
+              "format": "uri",
+              "minLength": 1,
+              "title": "Baseurl",
+              "type": "string"
+            },
+            "integration": {
+              "const": "hermes",
+              "default": "hermes",
+              "title": "Integration",
+              "type": "string"
+            },
+            "interface": {
+              "const": "openai-chat-completions",
+              "default": "openai-chat-completions",
+              "title": "Interface",
+              "type": "string"
+            },
+            "sessions": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/HermesSessionFileConfig"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeoutSeconds": {
+              "default": 120.0,
+              "exclusiveMinimum": 0.0,
+              "title": "Timeoutseconds",
+              "type": "number"
+            }
+          },
+          "title": "HostRuntimeSettings",
           "type": "object"
         },
         "HostSessionPageResponse": {
@@ -1586,6 +2136,51 @@
           "title": "HostSessionResponse",
           "type": "object"
         },
+        "HostSettings": {
+          "additionalProperties": false,
+          "description": "Share Host identity validation without permitting credential round-tripping.",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "endpointSlug": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z][a-z0-9-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Endpointslug"
+            },
+            "mcpAppsEnabled": {
+              "default": false,
+              "title": "Mcpappsenabled",
+              "type": "boolean"
+            },
+            "runtime": {
+              "$ref": "#/components/schemas/HostRuntimeSettings"
+            },
+            "targetId": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Targetid"
+            }
+          },
+          "title": "HostSettings",
+          "type": "object"
+        },
         "HostStopResponse": {
           "additionalProperties": false,
           "description": "Acknowledge Session-bound cancellation while leaving execution settlement unconfirmed.",
@@ -1617,6 +2212,44 @@
             "accepted"
           ],
           "title": "HostStopResponse",
+          "type": "object"
+        },
+        "HttpUpstreamEdit": {
+          "additionalProperties": false,
+          "description": "Allow HTTP connection edits with explicit header operations.",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "headers": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/HeaderEdit"
+              },
+              "title": "Headers",
+              "type": "object"
+            },
+            "transport": {
+              "enum": [
+                "streamable-http",
+                "sse"
+              ],
+              "title": "Transport",
+              "type": "string"
+            },
+            "url": {
+              "format": "uri",
+              "minLength": 1,
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "transport",
+            "url"
+          ],
+          "title": "HttpUpstreamEdit",
           "type": "object"
         },
         "JsonValue": {},
@@ -1810,6 +2443,20 @@
           "title": "ManagedUpstreamResponse",
           "type": "object"
         },
+        "PreserveHostCredential": {
+          "additionalProperties": false,
+          "description": "Keep the stored credential unchanged during ordinary Host settings edits.",
+          "properties": {
+            "action": {
+              "const": "preserve",
+              "default": "preserve",
+              "title": "Action",
+              "type": "string"
+            }
+          },
+          "title": "PreserveHostCredential",
+          "type": "object"
+        },
         "ProductCapabilitiesResponse": {
           "additionalProperties": false,
           "description": "Combine independent Gateway and Agent Host capability/availability views.",
@@ -1840,6 +2487,29 @@
             }
           },
           "title": "ReadinessResponse",
+          "type": "object"
+        },
+        "ReplaceHostCredential": {
+          "additionalProperties": false,
+          "description": "Accept a write-only literal credential for the desired runtime file.",
+          "properties": {
+            "action": {
+              "const": "replace",
+              "title": "Action",
+              "type": "string"
+            },
+            "value": {
+              "format": "password",
+              "title": "Value",
+              "type": "string",
+              "writeOnly": true
+            }
+          },
+          "required": [
+            "action",
+            "value"
+          ],
+          "title": "ReplaceHostCredential",
           "type": "object"
         },
         "ResourceContentResponse": {
@@ -2032,6 +2702,102 @@
             "reason"
           ],
           "title": "RuntimeCapabilityObservation",
+          "type": "object"
+        },
+        "RuntimeEditRequest": {
+          "additionalProperties": false,
+          "description": "Replace editable Gateway definitions against one inspected file version.",
+          "properties": {
+            "endpoints": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/EndpointFileConfig"
+              },
+              "title": "Endpoints",
+              "type": "object"
+            },
+            "expected_hash": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-f0-9]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Hash"
+            },
+            "upstreams": {
+              "additionalProperties": {
+                "discriminator": {
+                  "mapping": {
+                    "sse": "#/components/schemas/HttpUpstreamEdit",
+                    "stdio": "#/components/schemas/StdioUpstreamEdit",
+                    "streamable-http": "#/components/schemas/HttpUpstreamEdit"
+                  },
+                  "propertyName": "transport"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/HttpUpstreamEdit"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StdioUpstreamEdit"
+                  }
+                ]
+              },
+              "title": "Upstreams",
+              "type": "object"
+            }
+          },
+          "required": [
+            "expected_hash",
+            "upstreams",
+            "endpoints"
+          ],
+          "title": "RuntimeEditRequest",
+          "type": "object"
+        },
+        "RuntimeEditView": {
+          "additionalProperties": false,
+          "description": "Return desired file definitions independently of the applied database heads.",
+          "properties": {
+            "agent_host": {
+              "$ref": "#/components/schemas/HostEditView"
+            },
+            "content_hash": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Content Hash"
+            },
+            "endpoints": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/EndpointFileConfig"
+              },
+              "title": "Endpoints",
+              "type": "object"
+            },
+            "upstreams": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/UpstreamEditView"
+              },
+              "title": "Upstreams",
+              "type": "object"
+            }
+          },
+          "required": [
+            "content_hash",
+            "upstreams",
+            "endpoints",
+            "agent_host"
+          ],
+          "title": "RuntimeEditView",
           "type": "object"
         },
         "RuntimeSupport": {
@@ -2526,6 +3292,27 @@
           "title": "StdioConnectionResponse",
           "type": "object"
         },
+        "StdioUpstreamEdit": {
+          "additionalProperties": false,
+          "description": "Only permit enablement changes to an existing file-managed process.",
+          "properties": {
+            "enabled": {
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "transport": {
+              "const": "stdio",
+              "title": "Transport",
+              "type": "string"
+            }
+          },
+          "required": [
+            "transport",
+            "enabled"
+          ],
+          "title": "StdioUpstreamEdit",
+          "type": "object"
+        },
         "StreamableHttpConnectionResponse": {
           "additionalProperties": false,
           "description": "Public streamable HTTP connection details with header values redacted.",
@@ -2992,6 +3779,49 @@
           "title": "UpstreamAvailabilityResponse",
           "type": "object"
         },
+        "UpstreamEditView": {
+          "additionalProperties": false,
+          "description": "Expose HTTP fields and header names, never process arguments or sensitive values.",
+          "properties": {
+            "enabled": {
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "headers": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Headers",
+              "type": "array"
+            },
+            "transport": {
+              "enum": [
+                "streamable-http",
+                "sse",
+                "stdio"
+              ],
+              "title": "Transport",
+              "type": "string"
+            },
+            "url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Url"
+            }
+          },
+          "required": [
+            "transport",
+            "enabled"
+          ],
+          "title": "UpstreamEditView",
+          "type": "object"
+        },
         "UpstreamInitializationResponse": {
           "additionalProperties": false,
           "description": "Present persisted initialization identity and capability evidence for inspection.",
@@ -3063,6 +3893,696 @@
     },
     "openapi": "3.1.0",
     "paths": {
+      "/api/v1/agent-host/configuration": {
+        "get": {
+          "operationId": "get_configuration_api_v1_agent_host_configuration_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HostConfigurationResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "404": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "422": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "503": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            }
+          },
+          "summary": "Get Configuration",
+          "tags": [
+            "agent-host-management"
+          ]
+        }
+      },
+      "/api/v1/agent-host/configuration/apply": {
+        "post": {
+          "operationId": "apply_configuration_api_v1_agent_host_configuration_apply_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyGatewayConfigurationRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HostConfigurationResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "404": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "409": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "422": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "503": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            }
+          },
+          "summary": "Apply Configuration",
+          "tags": [
+            "agent-host-management"
+          ]
+        }
+      },
+      "/api/v1/agent-host/configuration/runtime": {
+        "get": {
+          "operationId": "read_configuration_api_v1_agent_host_configuration_runtime_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HostRuntimeEditView"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "404": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "422": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "503": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            }
+          },
+          "summary": "Read Configuration",
+          "tags": [
+            "agent-host-management"
+          ]
+        },
+        "put": {
+          "operationId": "save_configuration_api_v1_agent_host_configuration_runtime_put",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostRuntimeEditRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HostRuntimeEditView"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "404": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "409": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "422": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "503": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            }
+          },
+          "summary": "Save Configuration",
+          "tags": [
+            "agent-host-management"
+          ]
+        }
+      },
       "/api/v1/agent-host/target": {
         "get": {
           "operationId": "get_target_api_v1_agent_host_target_get",
@@ -3186,6 +4706,1032 @@
           "summary": "Capabilities",
           "tags": [
             "Capabilities"
+          ]
+        }
+      },
+      "/api/v1/gateway/configuration": {
+        "get": {
+          "operationId": "get_configuration_api_v1_gateway_configuration_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/GatewayConfigurationResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "400": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "404": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "422": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "500": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "503": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            }
+          },
+          "summary": "Get Configuration",
+          "tags": [
+            "gateway-management"
+          ]
+        }
+      },
+      "/api/v1/gateway/configuration/apply": {
+        "post": {
+          "operationId": "apply_configuration_api_v1_gateway_configuration_apply_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyGatewayConfigurationRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/GatewayConfigurationResponse"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "400": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "404": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "409": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "422": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "500": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "503": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            }
+          },
+          "summary": "Apply Configuration",
+          "tags": [
+            "gateway-management"
+          ]
+        }
+      },
+      "/api/v1/gateway/configuration/runtime": {
+        "get": {
+          "operationId": "read_runtime_api_v1_gateway_configuration_runtime_get",
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RuntimeEditView"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "400": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "404": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "422": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "500": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "503": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            }
+          },
+          "summary": "Read Runtime",
+          "tags": [
+            "gateway-management"
+          ]
+        },
+        "put": {
+          "operationId": "save_runtime_api_v1_gateway_configuration_runtime_put",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeEditRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RuntimeEditView"
+                  }
+                }
+              },
+              "description": "Successful Response"
+            },
+            "400": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "404": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "409": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "422": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "500": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            },
+            "503": {
+              "content": {
+                "application/problem+json": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "description": "RFC 9457 management error document with a stable product failure code.",
+                    "properties": {
+                      "code": {
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "title": "Detail",
+                        "type": "string"
+                      },
+                      "status": {
+                        "title": "Status",
+                        "type": "integer"
+                      },
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "type": {
+                        "title": "Type",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "title",
+                      "status",
+                      "detail",
+                      "code"
+                    ],
+                    "title": "ProblemDetails",
+                    "type": "object"
+                  }
+                }
+              },
+              "description": "Management or readiness failure."
+            }
+          },
+          "summary": "Save Runtime",
+          "tags": [
+            "gateway-management"
           ]
         }
       },

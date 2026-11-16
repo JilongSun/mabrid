@@ -42,6 +42,7 @@ class SqliteAgentSessionRepository:
                 AgentSessionRow(
                     session_id=session.session_id,
                     target_id=session.target_id,
+                    integration_kind=session.integration_kind,
                     runtime_binding_id=session.runtime_session.runtime_binding_id,
                     remote_session_id=session.runtime_session.remote_session_id,
                     title=session.title,
@@ -56,7 +57,7 @@ class SqliteAgentSessionRepository:
             return _record(row) if row is not None else None
 
     async def list_sessions(
-        self, *, target_id: str, limit: int, offset: int
+        self, *, target_id: str, integration_kind: str, limit: int, offset: int
     ) -> tuple[AgentSessionRecord, ...]:
         """Implement [AgentSessionRepository.list_sessions](../../../../../../packages/application/src/mabrid/application/agent_host/application/ports.py:85)."""
         if not 1 <= limit <= _MAX_SESSION_READ_LIMIT or offset < 0:
@@ -64,7 +65,10 @@ class SqliteAgentSessionRepository:
         async with self._sessions() as transaction:
             rows = await transaction.scalars(
                 select(AgentSessionRow)
-                .where(AgentSessionRow.target_id == target_id)
+                .where(
+                    AgentSessionRow.target_id == target_id,
+                    AgentSessionRow.integration_kind == integration_kind,
+                )
                 .order_by(AgentSessionRow.created_at.desc(), AgentSessionRow.session_id)
                 .limit(limit)
                 .offset(offset)
@@ -161,6 +165,7 @@ def _record(row: AgentSessionRow) -> AgentSessionRecord:
     return AgentSessionRecord(
         session_id=row.session_id,
         target_id=row.target_id,
+        integration_kind=row.integration_kind,
         runtime_session=RuntimeSessionReference(
             runtime_binding_id=row.runtime_binding_id, remote_session_id=row.remote_session_id
         ),

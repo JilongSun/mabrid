@@ -7,6 +7,7 @@ from typing import cast
 from uuid import UUID
 
 import httpx
+from mabrid.server import __version__
 from mabrid.application.agent_host import (
     AgentCapability,
     AgentEndpointAssignment,
@@ -241,9 +242,9 @@ async def test_gateway_status_and_topology_contracts_hide_secret_values() -> Non
 
     assert status.status_code == 200
     assert status.json() == {
-        "version": "0.1.0",
+        "version": __version__,
         "lifecycle_state": "running",
-        "topology_mode": "frozen_seeded",
+        "topology_mode": "generation_applied",
         "advertised_base_url": "http://mabrid.test:8765",
         "published_endpoint_count": 1,
         "published_endpoint_slugs": ["fixture-endpoint"],

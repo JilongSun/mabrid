@@ -1,13 +1,15 @@
-"""Process-lifetime publication of immutable Gateway endpoint revisions.
+"""Publication of immutable Gateway endpoint revisions.
 
-Published topology is loaded once from the application reader and materialized into bridge-core
-plans. It owns slug lookup but no live sessions, transport correlation, or persistence mutation.
+Published topology owns atomic index replacement and slug lookup, but no live Sessions,
+transport correlation, or persistence mutation.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 from uuid import UUID
 
 from mabrid.bridge import EndpointPlan
@@ -30,30 +32,45 @@ class PublishedEndpoint:
         return f"/mcp/{self.revision.slug}"
 
 
+@dataclass(frozen=True)
+class PublishedTopologySnapshot:
+    """Keep a complete publication index together for an atomic replacement."""
+
+    endpoints: tuple[PublishedEndpoint, ...]
+    by_slug: Mapping[str, PublishedEndpoint]
+
+
 class PublishedTopology:
-    """Materialize enabled endpoint revisions into a process-lifetime publication index.
+    """Publish complete endpoint indexes without changing captured Session plans.
 
     Consume [TopologyReader](../topology/ports.py:12) structurally through
-    `list_current_revisions`; the coordinator owns startup loading. This is not a
-    live database view or the all-heads management topology snapshot.
+    `list_current_revisions`. Candidate snapshots are validated before publication;
+    this is not a live database view or the all-heads management topology snapshot.
     """
 
     def __init__(self, reader: TopologyReader) -> None:
         self._reader = reader
-        self._endpoints: dict[UUID, PublishedEndpoint] = {}
-        self._slug_index: dict[str, UUID] = {}
+        self._snapshot = PublishedTopologySnapshot((), MappingProxyType({}))
 
     @property
     def endpoints(self) -> list[PublishedEndpoint]:
-        return list(self._endpoints.values())
+        return list(self._snapshot.endpoints)
 
     async def load(self) -> None:
-        self._endpoints.clear()
-        self._slug_index.clear()
         revisions = await self._reader.list_current_revisions()
+        self.publish(self.prepare(revisions))
+
+    @classmethod
+    def prepare(cls, revisions: Sequence[EndpointTopologyRevision]) -> PublishedTopologySnapshot:
+        """Validate and materialize an entire candidate before it becomes visible."""
         logger.info("Loading %d published endpoint(s) from topology", len(revisions))
+        endpoints: list[PublishedEndpoint] = []
+        by_slug: dict[str, PublishedEndpoint] = {}
+        endpoint_ids: set[UUID] = set()
         for revision in revisions:
-            published = self._materialize(revision)
+            if revision.endpoint_id in endpoint_ids or revision.slug in by_slug:
+                raise ValueError(f"Duplicate published endpoint identity: {revision.slug}")
+            published = cls._materialize(revision)
             bindings = [binding for binding in revision.bindings if binding.enabled]
             logger.info(
                 "Published endpoint: slug=%s display_name=%s mode=%s upstreams=%s",
@@ -62,12 +79,16 @@ class PublishedTopology:
                 revision.mode.value,
                 [binding.upstream.display_name for binding in bindings],
             )
-            self._endpoints[revision.endpoint_id] = published
-            self._slug_index[revision.slug] = revision.endpoint_id
+            endpoint_ids.add(revision.endpoint_id)
+            endpoints.append(published)
+            by_slug[revision.slug] = published
+        return PublishedTopologySnapshot(tuple(endpoints), MappingProxyType(by_slug))
+
+    def publish(self, snapshot: PublishedTopologySnapshot) -> None:
+        self._snapshot = snapshot
 
     def resolve(self, slug: str) -> PublishedEndpoint | None:
-        endpoint_id = self._slug_index.get(slug)
-        return self._endpoints.get(endpoint_id) if endpoint_id is not None else None
+        return self._snapshot.by_slug.get(slug)
 
     @staticmethod
     def _materialize(revision: EndpointTopologyRevision) -> PublishedEndpoint:

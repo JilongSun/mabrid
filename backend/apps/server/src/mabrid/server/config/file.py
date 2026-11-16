@@ -1,7 +1,7 @@
 """Validated YAML contracts for a Mabrid server deployment.
 
-These models preserve camelCase file syntax and reject unknown fields. They contain environment
-variable names but never resolved secrets or process-local absolute paths.
+These models preserve camelCase file syntax and reject unknown fields. Agent Host credentials,
+upstream headers, and subprocess environment values belong to the runtime file.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from pydantic import (
     ConfigDict,
     Field,
     PositiveFloat,
+    SecretStr,
     field_validator,
     model_validator,
 )
@@ -68,27 +69,34 @@ class HermesSessionFileConfig(CamelModel):
 
 
 class HermesAgentRuntimeFileConfig(CamelModel):
-    """Transitional YAML runtime selection/connection settings with an environment-secret reference."""
+    """Validate file-owned Hermes settings without an environment credential source."""
 
     integration: Literal["hermes"] = "hermes"
     interface: Literal["openai-chat-completions"] = "openai-chat-completions"
     base_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8642/v1")
-    api_key_env: str = Field(default="API_SERVER_KEY", min_length=1)
+    api_key: SecretStr | None = None
     timeout_seconds: PositiveFloat = 120.0
     sessions: HermesSessionFileConfig | None = None
 
+    @model_validator(mode="after")
+    def validate_credential(self) -> HermesAgentRuntimeFileConfig:
+        if self.api_key is not None:
+            value = self.api_key.get_secret_value()
+            if not value.strip() or "\r" in value or "\n" in value:
+                raise ValueError("Host API key must be nonempty and contain no newlines")
+        return self
 
-class AgentHostFileConfig(CamelModel):
-    """Transitional YAML Target, endpoint assignment, and Host feature selection."""
+
+class HostIdentityConfig(CamelModel):
+    """Share Host identity and enablement invariants across file and management settings."""
 
     enabled: bool = False
     mcp_apps_enabled: bool = False
     target_id: str | None = Field(default=None, min_length=1)
     endpoint_slug: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
-    runtime: HermesAgentRuntimeFileConfig = Field(default_factory=HermesAgentRuntimeFileConfig)
 
     @model_validator(mode="after")
-    def validate_enabled_target(self) -> AgentHostFileConfig:
+    def validate_enabled_target(self) -> HostIdentityConfig:
         if self.mcp_apps_enabled and not self.enabled:
             raise ValueError("'mcpAppsEnabled' requires enabled Agent Host")
         if self.enabled and self.target_id is None:
@@ -98,10 +106,17 @@ class AgentHostFileConfig(CamelModel):
         return self
 
 
+class AgentHostFileConfig(HostIdentityConfig):
+    """Add credential-bearing Hermes settings to the file-owned Host identity."""
+
+    runtime: HermesAgentRuntimeFileConfig = Field(default_factory=HermesAgentRuntimeFileConfig)
+
+
 class UpstreamFileConfig(CamelModel):
-    """Validate a transitional upstream seed before resolving transport-specific settings."""
+    """Validate file-backed upstream settings before resolving their transport."""
 
     transport: Literal["stdio", "sse", "streamable-http"]
+    enabled: bool = True
     command: str | None = None
     args: list[str] = Field(default_factory=list)
     cwd: Path | None = None
@@ -119,7 +134,7 @@ class UpstreamFileConfig(CamelModel):
 
 
 class EndpointBindingFileConfig(CamelModel):
-    """Declare a seed binding by upstream name, namespace, order, and enablement."""
+    """Declare a runtime binding by upstream name, namespace, order, and enablement."""
 
     upstream: str
     namespace: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]*$")
@@ -128,7 +143,7 @@ class EndpointBindingFileConfig(CamelModel):
 
 
 class EndpointFileConfig(CamelModel):
-    """Validate one transitional endpoint seed and its explicit upstream bindings."""
+    """Validate one runtime endpoint and its explicit upstream bindings."""
 
     display_name: str | None = None
     mode: Literal["passthrough", "aggregate"] = "passthrough"
@@ -136,24 +151,26 @@ class EndpointFileConfig(CamelModel):
     enabled: bool = True
 
 
-class MabridConfig(CamelModel):
-    """Combine deployment settings with temporary topology seeds and Agent Host configuration."""
+class ProcessFileConfig(CamelModel):
+    """Validate restart-applied process settings from the static configuration file."""
 
     bridge: BridgeRuntimeConfig = Field(default_factory=BridgeRuntimeConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    runtime_config_file: Path | None = None
+
+
+class RuntimeFileConfig(CamelModel):
+    """Validate the runtime file's Gateway topology and Agent Host settings as one candidate.
+
+    Cross-file rules, such as the Host's need for an advertised base URL, are checked by the loader.
+    """
+
+    upstreams: dict[str, UpstreamFileConfig] = Field(default_factory=dict)
+    endpoints: dict[str, EndpointFileConfig] = Field(default_factory=dict)
     agent_host: AgentHostFileConfig = Field(default_factory=AgentHostFileConfig)
-    upstreams: dict[str, UpstreamFileConfig] = Field(min_length=1)
-    endpoints: dict[str, EndpointFileConfig] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_upstream_defaults(self) -> MabridConfig:
-        if self.agent_host.enabled and self.bridge.advertised_base_url is None:
-            raise ValueError("enabled Agent Host requires 'bridge.advertisedBaseUrl'")
-        diagnostic = self.bridge.diagnostic_upstream
-        if diagnostic is not None and diagnostic not in self.upstreams:
-            raise ValueError(
-                f"'bridge.diagnosticUpstream' references unknown upstream '{diagnostic}'"
-            )
+    def validate_upstream_references(self) -> RuntimeFileConfig:
         for endpoint_name, endpoint in self.endpoints.items():
             for binding in endpoint.bindings:
                 if binding.upstream not in self.upstreams:

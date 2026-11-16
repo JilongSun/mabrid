@@ -1,0 +1,12 @@
+{
+  "yaml.schemas": {
+    "./docs/contracts/configuration/mabrid.schema.json": [
+      "/mabrid.yaml",
+      "/mabrid.yaml.example"
+    ],
+    "./docs/contracts/configuration/mabrid.runtime.schema.json": [
+      "**/mabrid.runtime.yaml",
+      "/mabrid.runtime.yaml.example"
+    ]
+  }
+}

@@ -7,21 +7,30 @@ const problemSchema = z.object({
 /** Preserve HTTP status separately from human-readable diagnostic messages. */
 export class HttpError extends Error {
   readonly status: number
+  readonly code: string | null
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code: string | null = null) {
     super(message)
     this.name = 'HttpError'
     this.status = status
+    this.code = code
   }
 }
 
-export async function readJson<T>(path: string, schema: z.ZodType<T>, signal: AbortSignal, service: string, errorFromBody?: (body: unknown, status: number) => Error): Promise<T> {
+type JsonRequest = { method: 'GET' } | { method: 'POST' | 'PUT'; body: unknown }
+
+async function requestJson<T>(path: string, schema: z.ZodType<T>, signal: AbortSignal, service: string, request: JsonRequest, errorFromBody?: (body: unknown, status: number) => Error): Promise<T> {
   const timeout = AbortSignal.timeout(10_000)
   let response: Response
   try {
     response = await fetch(path, {
       signal: AbortSignal.any([signal, timeout]),
-      headers: { Accept: 'application/json, application/problem+json' }, cache: 'no-store',
+      ...(request.method !== 'GET' ? { method: request.method, body: JSON.stringify(request.body) } : {}),
+      headers: {
+        Accept: 'application/json, application/problem+json',
+        ...(request.method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
+      },
+      cache: 'no-store',
     })
   } catch (error) {
     if (signal.aborted) throw error
@@ -47,9 +56,21 @@ export async function readJson<T>(path: string, schema: z.ZodType<T>, signal: Ab
     const problem = problemSchema.safeParse(body)
     throw new HttpError(problem.success
       ? `${problem.data.detail} (${problem.data.code}, HTTP ${response.status})`
-      : `The ${service} request failed (HTTP ${response.status}).`, response.status)
+      : `The ${service} request failed (HTTP ${response.status}).`, response.status, problem.success ? problem.data.code : null)
   }
   const parsed = schema.safeParse(body)
   if (!parsed.success) throw new Error(`The ${service} response does not match the expected contract.`)
   return parsed.data
+}
+
+export function readJson<T>(path: string, schema: z.ZodType<T>, signal: AbortSignal, service: string, errorFromBody?: (body: unknown, status: number) => Error): Promise<T> {
+  return requestJson(path, schema, signal, service, { method: 'GET' }, errorFromBody)
+}
+
+export function postJson<T>(path: string, body: unknown, schema: z.ZodType<T>, signal: AbortSignal, service: string): Promise<T> {
+  return requestJson(path, schema, signal, service, { method: 'POST', body })
+}
+
+export function putJson<T>(path: string, body: unknown, schema: z.ZodType<T>, signal: AbortSignal, service: string): Promise<T> {
+  return requestJson(path, schema, signal, service, { method: 'PUT', body })
 }

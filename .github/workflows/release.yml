@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify Release Source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+        with:
+          version: "0.11.25"
+          python-version: "3.12"
+          enable-cache: false
+      - run: uv run --directory backend --all-packages --locked python ../scripts/release.py verify-tag "$RELEASE_TAG"
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+
+  checks:
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish GitHub Release
+    needs: [verify, checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+        with:
+          version: "0.11.25"
+          python-version: "3.12"
+          enable-cache: false
+      - run: uv run --directory backend --all-packages --locked python ../scripts/release.py publish "$RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}

@@ -20,6 +20,7 @@ from mabrid.application.gateway.sessions import GatewaySessionCoordinator
 from mabrid.application.gateway import GatewayMcpSessionBroker
 from mabrid.application.host import HostEventStream, HostSessionEventStream
 
+from mabrid.server import __version__
 from mabrid.server.api.management.agent_host import create_agent_host_management_router
 from mabrid.server.api.management.errors import (
     ManagementProblem,
@@ -32,6 +33,7 @@ from mabrid.server.api.host import create_host_router, host_error_response
 from mabrid.server.api.readiness import create_readiness_router
 from mabrid.server.api.capabilities import create_capabilities_router
 from mabrid.server.api.frontend import mount_frontend
+from mabrid.server.api.host_lifecycle import HostOperationMiddleware
 from mabrid.server.logging import get_logger
 
 if TYPE_CHECKING:
@@ -58,7 +60,7 @@ def create_app(
             yield
         logger.info("FastAPI application shutting down (lifespan exit)")
 
-    app = FastAPI(title="Mabrid", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Mabrid", version=__version__, lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -70,6 +72,10 @@ def create_app(
     app.state.gateway = manager
     app.state.gateway_management = gateway_management
     app.state.agent_host_management = agent_host_management
+    configuration = gateway_management.configuration if gateway_management is not None else None
+    host_runtime = configuration.host_runtime if configuration is not None else None
+    if host_runtime is not None:
+        app.add_middleware(HostOperationMiddleware, runtime=host_runtime)
 
     @app.exception_handler(ManagementProblem)
     async def handle_management_problem(
@@ -97,7 +103,9 @@ def create_app(
         return await request_validation_exception_handler(request, exc)
 
     app.mount("/mcp", create_mcp_asgi_app(GatewayMcpSessionBroker(manager)))
-    app.include_router(create_host_router(agent_sessions, host_session_events))
+    app.include_router(
+        create_host_router(agent_sessions, host_session_events, runtime=host_runtime)
+    )
     app.include_router(
         create_capabilities_router(
             agent_host_capabilities
@@ -111,13 +119,20 @@ def create_app(
                 compatibility_enabled=agent_host is not None,
             ),
             management_enabled=gateway_management is not None,
+            runtime=host_runtime,
         )
     )
-    if agent_host is not None:
-        app.include_router(create_openai_compatibility_router(agent_host, host_events))
+    if agent_host is not None or host_runtime is not None:
+        app.include_router(
+            create_openai_compatibility_router(agent_host, host_events, runtime=host_runtime)
+        )
     if gateway_management is not None:
         app.include_router(create_gateway_management_router(gateway_management))
-        app.include_router(create_agent_host_management_router(agent_host_management))
+        app.include_router(
+            create_agent_host_management_router(
+                agent_host_management, runtime=host_runtime, configuration=configuration
+            )
+        )
         app.include_router(create_readiness_router(gateway_management))
 
     @app.get("/health")

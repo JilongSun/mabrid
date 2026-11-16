@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from importlib.metadata import version
 from pathlib import Path
 from typing import cast
 
@@ -19,6 +20,7 @@ from mabrid.application.agent_host import (
     EffectiveCapability,
 )
 from mabrid.server.api import create_app
+from mabrid.server import __version__
 from mabrid.server.composition import GatewayManagementComposition
 from mabrid.server.api.capabilities import ProductCapabilitiesResponse
 from mabrid.server.api.host_contracts import (
@@ -116,6 +118,7 @@ def test_examples_cover_every_stream_payload_and_effective_availability() -> Non
 def test_committed_contract_matches_current_schemas_and_has_no_dangling_references() -> None:
     document = json.loads((CONTRACT_ROOT / "frontend-contract.json").read_text(encoding="utf-8"))
     assert document == frontend_contract()
+    assert document["openapi"]["info"]["version"] == __version__ == version("mabrid-server")
 
     def verify(value: object, root: dict) -> None:
         if isinstance(value, dict):
@@ -162,12 +165,18 @@ def test_offline_frontend_contract_is_deterministic_and_partitions_routes() -> N
         "/api/v1/host/sessions/{session_id}/runs/{run_id}/reconcile",
         "/api/v1/capabilities",
         "/api/v1/gateway/status",
+        "/api/v1/gateway/configuration",
+        "/api/v1/gateway/configuration/apply",
+        "/api/v1/gateway/configuration/runtime",
         "/api/v1/gateway/topology",
         "/api/v1/gateway/sessions",
         "/api/v1/gateway/sessions/{session_id}",
         "/api/v1/gateway/sessions/{session_id}/snapshot",
         "/api/v1/gateway/sessions/{session_id}/events",
         "/api/v1/agent-host/target",
+        "/api/v1/agent-host/configuration",
+        "/api/v1/agent-host/configuration/runtime",
+        "/api/v1/agent-host/configuration/apply",
         "/health",
         "/ready",
     }
@@ -176,7 +185,14 @@ def test_offline_frontend_contract_is_deterministic_and_partitions_routes() -> N
     for status in ("404", "409", "422", "500", "502", "503"):
         assert set(run["responses"][status]["content"]) == {"application/json"}
     assert all(
-        set(operation) == {"get"}
+        set(operation)
+        == (
+            {"post"}
+            if path.endswith("/configuration/apply")
+            else {"get", "put"}
+            if path.endswith("/configuration/runtime")
+            else {"get"}
+        )
         for path, operation in paths.items()
         if path.startswith(("/api/v1/gateway", "/api/v1/agent-host"))
     )
@@ -202,9 +218,11 @@ def test_offline_frontend_contract_is_deterministic_and_partitions_routes() -> N
 
 
 async def test_management_errors_match_the_frozen_media_type_and_safe_validation() -> None:
+    from types import SimpleNamespace
+
     app = create_app(
         cast(GatewaySessionCoordinator, object()),
-        gateway_management=cast(GatewayManagementComposition, object()),
+        gateway_management=cast(GatewayManagementComposition, SimpleNamespace(configuration=None)),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://fixture.test"
@@ -212,6 +230,8 @@ async def test_management_errors_match_the_frozen_media_type_and_safe_validation
         for path, status, code in (
             ("/api/v1/gateway/sessions?limit=0", 422, "invalid_request"),
             ("/api/v1/agent-host/target", 404, "agent_host_disabled"),
+            ("/api/v1/agent-host/configuration", 503, "configuration_unavailable"),
+            ("/api/v1/agent-host/configuration/runtime", 503, "configuration_unavailable"),
         ):
             response = await client.get(path)
             assert response.status_code == status

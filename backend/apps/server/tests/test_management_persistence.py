@@ -41,7 +41,7 @@ from mabrid.server.persistence.sessions import (
 )
 from mabrid.server.persistence.topology import (
     SqlAlchemyTopologySnapshotReader,
-    seed_topology_if_empty,
+    reconcile_topology,
 )
 
 
@@ -87,11 +87,8 @@ async def _seed_topology(
         bindings=[EndpointBinding(upstream_server_id=http.server_id)],
         enabled=False,
     )
-    await seed_topology_if_empty(
-        database.session_factory,
-        [stdio, http],
-        [aggregate, disabled],
-    )
+    async with database.session_factory.begin() as session:
+        await reconcile_topology(session, [stdio, http], [aggregate, disabled])
     return stdio, http, aggregate
 
 
