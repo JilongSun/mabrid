@@ -22,6 +22,18 @@ install:
 dev:
     uv run --directory backend --all-packages python ../scripts/dev.py
 
+check scope="all":
+    uv run --directory backend --all-packages --locked python ../scripts/check.py "{{scope}}"
+
+contracts:
+    uv run --directory backend --all-packages --locked python ../scripts/check.py contracts
+
+version-check:
+    uv run --directory backend --all-packages --locked python ../scripts/check.py versions
+
+prepare-version version:
+    uv run --directory backend --all-packages --locked python ../scripts/release.py prepare "{{version}}"
+
 [unix]
 setup:
     sh scripts/manage.sh setup --config-dir "{{config_dir}}" --image "{{image}}" --name "{{name}}" --port "{{port}}"

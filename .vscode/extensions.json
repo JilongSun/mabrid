@@ -1,6 +1,7 @@
 {
   "recommendations": [
     "antunesdq.comment-linker",
-    "charliermarsh.ruff"
+    "charliermarsh.ruff",
+    "redhat.vscode-yaml"
   ]
 }

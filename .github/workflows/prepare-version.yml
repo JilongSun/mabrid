@@ -1,0 +1,64 @@
+name: Prepare Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Product version (X.Y.Z, without v)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-version
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+        with:
+          version: "0.11.25"
+          python-version: "3.12"
+          enable-cache: false
+      - name: Prepare selected source version
+        run: uv run --directory backend --all-packages --locked python ../scripts/release.py prepare "$TARGET_VERSION"
+        env:
+          TARGET_VERSION: ${{ inputs.version }}
+      - run: uv run --directory backend --all-packages --locked python ../scripts/check.py contracts
+      - run: uv run --directory backend --all-packages --locked python ../scripts/check.py versions
+      - name: Open or update the version pull request
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1
+        with:
+          token: ${{ github.token }}
+          base: main
+          branch: release/v${{ inputs.version }}
+          delete-branch: false
+          commit-message: "chore: prepare v${{ inputs.version }}"
+          title: "chore: prepare v${{ inputs.version }}"
+          body: |
+            Prepare the selected product version, lockfile, and generated frontend contract.
+
+            Approve the bot pull request's workflow run when GitHub requests it, then review and
+            merge only after Required Checks passes. Merging does not publish a release or tag.
+          add-paths: |
+            backend/pyproject.toml
+            backend/apps/server/pyproject.toml
+            backend/packages/application/pyproject.toml
+            backend/packages/bridge/pyproject.toml
+            backend/uv.lock
+            frontend/package.json
+            docs/contracts/v0.1/frontend-contract.json
