@@ -2,7 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh.md)
 
-[![Version](https://img.shields.io/badge/Version-v0.1.0-2F855A?logo=semver&logoColor=white)](https://github.com/JilongSun/mabrid/releases/tag/v0.1.0)
+[![Version](https://img.shields.io/github/v/release/JilongSun/mabrid?label=Version&color=2F855A&logo=semver&logoColor=white)](https://github.com/JilongSun/mabrid/releases/latest)
+[![CI](https://github.com/JilongSun/mabrid/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/JilongSun/mabrid/actions/workflows/ci.yml?query=branch%3Amain)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](./backend/pyproject.toml)
 [![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)](./Dockerfile)
 [![License](https://img.shields.io/badge/License-Apache%202.0-D22128?logo=apache&logoColor=white)](./LICENSE)
@@ -16,7 +17,7 @@ MCP 网关让你集中管理外部 MCP 服务器。Agent Host 为开发者提供
 在网关和 Agent Host 的基础上，Mabrid 还可扩展更多功能，例如交互式 MCP Apps。
 
 > [!NOTE]
-> v0.1 为开发者预览版，功能仍在开发和优化中。
+> Mabrid 仍为开发者预览版，功能仍在开发和优化中。
 > Mabrid 的 API 尚未稳定，后续版本可能发生变更。
 
 ## Why Mabrid
@@ -109,8 +110,8 @@ make run   # 或：just run
 - Compose 以只读方式挂载静态配置文件，并以可写方式挂载动态配置目录。
   网关和 Host 配置分别应用；文件布局、密钥配置及重启要求见
   [英文配置说明](README.md#get-the-code-and-configure)。
-- MCP Apps 支持展示和交换工具数据。v0.1 不支持由 App 发起后续消息或工具调用。
-- 桌面客户端和多 worker 部署不在 v0.1 范围内。
+- MCP Apps 支持展示和交换工具数据，目前不支持由 App 发起后续消息或工具调用。
+- 桌面客户端和多 worker 部署不在当前范围内。
 
 ## 许可证
 

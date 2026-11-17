@@ -13,7 +13,7 @@ from mabrid.application.gateway.sessions import (
     SessionHistoryReader,
 )
 from mabrid.application.gateway.topology import TopologySnapshotReader
-
+from mabrid.server import __version__
 from mabrid.server.config import RuntimeConfiguration
 from mabrid.server.logging import get_logger
 from mabrid.server.persistence import SqliteDatabase, SqliteReadinessProbe
@@ -89,6 +89,7 @@ async def compose_gateway(
         topology_reader,
         session_repository,
         session_store_factory,
+        version=__version__,
     )
     configuration_manager = RuntimeConfigurationManager(configuration, database, coordinator)
     await configuration_manager.initialize()

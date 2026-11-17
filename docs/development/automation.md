@@ -87,6 +87,16 @@ version and does not need a version-only rewrite. Preparation never commits, pus
 If preparation fails, inspect the diff and fix the cause before committing; do not publish partially
 prepared source. The tool does not reset or discard working-tree changes.
 
+Patch releases use the same workflow. For example, after maintenance changes for `0.2.1` have
+merged into `main` at source version `0.2.0`, dispatch **Prepare Version** with `0.2.1` (without
+`v`). Review and merge that version PR, then create and push `v0.2.1` on the prepared commit.
+Do not bump metadata by hand in the maintenance PR or reuse the already published `v0.2.0` tag.
+
+README version badges query the latest published GitHub Release and link to `releases/latest`;
+they do not report the version of a checkout or development build. Until `v0.2.1` is published,
+the badge correctly remains at `v0.2.0`. A separate CI badge selects `main` push runs. Neither
+badge requires a release-time source rewrite, and badge caches may delay visual updates.
+
 ## Workflows and Permissions
 
 [CI](../../.github/workflows/ci.yml) runs for PRs targeting `main` and pushes to `main`, and is also
@@ -108,9 +118,18 @@ commit, or a commit outside `main` history. It runs the same CI on the exact tag
 the publication job receives contents-write permission. Releases for different tags do not cancel
 each other.
 
-Publication creates a public, non-prerelease GitHub Release with GitHub-generated notes from merged
-PRs. Use user-facing PR titles. There are no internal contract attachments, Python/npm publication,
-or automatic OCI builds. GitHub's automatic source archives describe the prepared tagged source.
+Publication creates a public, non-prerelease GitHub Release. Maintain concise user-facing history
+in the root [English changelog](../../CHANGELOG.md) and [Chinese changelog](../../CHANGELOG.zh.md),
+not separate files per version. Use Highlights for minor feature releases and Fixed for patch
+releases; small-fix entries may be included when useful. This documentation convention does not
+change version-number semantics.
+Commit entries with the relevant changes, before the version PR, using exact `## X.Y.Z` headings
+and level-three headings for subsections. Publication extracts only the matching version from each
+available language and combines them into the release body. A matching empty or duplicate entry is
+an error. A version without an entry uses GitHub-generated notes from merged PRs; there is no
+requirement to author a changelog entry for every tag. Use user-facing PR titles for that fallback.
+There are no internal contract attachments, Python/npm publication, or automatic OCI builds.
+GitHub's automatic source archives describe the prepared tagged source.
 A rerun confirms an existing public release only when its tag and target commit agree; it never
 edits notes, replaces assets, promotes a draft, or moves a tag. API errors fail rather than being
 treated as proof that no release exists.
@@ -119,6 +138,11 @@ Action dependencies are pinned to reviewed commits: checkout 7.0.1, setup-node 7
 10.3.3, and create-pull-request 8.1.3. Review both the code and fixed references when updating them.
 
 ## First GitHub Acceptance
+
+The first version-preparation, PR/main CI, hosted Windows checks, and tag-publication chain
+succeeded for `v0.2.0` on 2026-11-17. See the [decision log](../architecture/decision-log.md#v020-publication-and-release-maintenance-2026-11-17)
+for the observed runs and limits. Branch-protection settings, publication reruns, and real
+container acceptance are not established by those successful runs.
 
 Local validation is not GitHub acceptance. Perform these steps only when integration is authorized:
 
