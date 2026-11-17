@@ -56,6 +56,10 @@ class BridgeDownstreamServer:
 
     async def handle_streamable_http(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Implement [McpTransportSession.handle_streamable_http](asgi.py:27)."""
+        options = self._create_initialization_options("Protocol-aware MCP Apps HTTP proxy.")
+        self._server.name = options.server_name
+        self._server.version = options.server_version
+        self._server.instructions = options.instructions
         await self._streamable_http.handle_request(scope, receive, send)
 
     async def handle_sse(self, scope: Scope, receive: Receive, send: Send) -> None:

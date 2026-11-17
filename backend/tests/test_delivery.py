@@ -67,7 +67,7 @@ def repository(tmp_path: Path, delivery: ModuleType) -> Path:
     return tmp_path
 
 
-@pytest.mark.parametrize("value", ["0.1.0", "0.12.34", "1.0.0", "10.20.30"])
+@pytest.mark.parametrize("value", ["0.1.0", "0.2.1", "0.12.34", "1.0.0", "10.20.30"])
 def test_plain_product_versions(delivery: ModuleType, value: str) -> None:
     assert delivery.version_parts(value) == tuple(map(int, value.split(".")))
 
@@ -278,11 +278,19 @@ def test_tag_verification_requires_exact_prepared_source_in_main(
 @pytest.mark.parametrize(
     "existing", ["none", "matching", "draft", "prerelease", "wrong-commit", "api-error"]
 )
+@pytest.mark.parametrize("authored_notes", [False, True])
 def test_publication_is_fail_closed_and_never_rewrites_releases(
-    delivery: ModuleType, repository: Path, monkeypatch: pytest.MonkeyPatch, existing: str
+    delivery: ModuleType,
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    existing: str,
+    authored_notes: bool,
 ) -> None:
     monkeypatch.setattr(delivery, "verify_tag", lambda *_: "a" * 40)
     calls: list[list[str]] = []
+    notes = repository / "CHANGELOG.md"
+    if authored_notes:
+        notes.write_text("# Changelog\n\n## 0.1.0\n\nControlled release notes.\n", encoding="utf-8")
 
     def command(arguments, root, *, check=True):
         calls.append(arguments)
@@ -311,9 +319,52 @@ def test_publication_is_fail_closed_and_never_rewrites_releases(
     assert len(writes) == (existing == "none")
     if writes:
         assert writes[0][:4] == ["gh", "release", "create", "v0.1.0"]
-        assert "--verify-tag" in writes[0] and "--generate-notes" in writes[0]
+        assert "--verify-tag" in writes[0]
+        if authored_notes:
+            assert writes[0][-2:] == ["--notes", "# English\n\nControlled release notes."]
+            assert "--generate-notes" not in writes[0]
+        else:
+            assert writes[0][-1] == "--generate-notes"
         assert "--target" in writes[0] and "--draft" not in writes[0]
     assert all("edit" not in arguments and "upload" not in arguments for arguments in calls)
+
+
+@pytest.mark.parametrize("filename", ["CHANGELOG.md", "CHANGELOG.zh.md"])
+@pytest.mark.parametrize("body", ["\n", "\nNotes.\n\n## 0.1.0\n\nDuplicate.\n"])
+def test_publication_rejects_invalid_authored_notes_before_creating_release(
+    delivery: ModuleType,
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    filename: str,
+    body: str,
+) -> None:
+    monkeypatch.setattr(delivery, "verify_tag", lambda *_: "a" * 40)
+    notes = repository / filename
+    notes.write_text(f"# Changelog\n\n## 0.1.0\n{body}", encoding="utf-8")
+
+    def command(arguments, root, *, check=True):
+        assert arguments[:2] == ["gh", "api"]
+        return subprocess.CompletedProcess(arguments, 0, "[]")
+
+    monkeypatch.setattr(delivery, "run", command)
+    with pytest.raises(ValueError, match="Release notes must not be empty|Duplicate release entry"):
+        delivery.publish_release(repository, "v0.1.0")
+
+
+def test_changelog_notes_selects_only_matching_version_in_both_languages(
+    delivery: ModuleType, repository: Path
+) -> None:
+    for filename in ("CHANGELOG.md", "CHANGELOG.zh.md"):
+        (repository / filename).write_text(
+            f"# Changelog\n\n## 0.2.0\n\nNewer entry.\n\n## 0.1.0\n\n"
+            f"### Highlights\n\nNotes from {filename}.\n\n## 0.0.9\n\nOlder entry.\n",
+            encoding="utf-8",
+        )
+    assert delivery.changelog_notes(repository, "v0.1.0") == (
+        "# English\n\n### Highlights\n\nNotes from CHANGELOG.md.\n\n"
+        "# Chinese\n\n### Highlights\n\nNotes from CHANGELOG.zh.md."
+    )
+    assert delivery.changelog_notes(repository, "v0.1.1") == ""
 
 
 @pytest.fixture

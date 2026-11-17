@@ -38,6 +38,7 @@ from mabrid.application.gateway.topology import (
     UpstreamRevision,
 )
 
+from mabrid.server import __version__
 from mabrid.server.api import create_app
 from mabrid.server.composition import bootstrap_server
 from mabrid.server.config import (
@@ -61,6 +62,7 @@ class FixtureClient:
             server_name="Fixture MCP",
             server_version="1.0.0",
             protocol_version="2025-11-25",
+            instructions="Use fixture tools.",
             supports_tools=True,
             supports_resources=True,
         )
@@ -177,6 +179,84 @@ def response_payload(response: httpx.Response) -> dict[str, Any]:
         )
         return cast(dict[str, Any], json.loads(data))
     return cast(dict[str, Any], response.json())
+
+
+@pytest.mark.parametrize(
+    "mode,binding,expected_version",
+    [
+        ("aggregate", "upstream: fixture, namespace: fixture", __version__),
+        ("passthrough", "upstream: fixture", "1.0.0"),
+    ],
+)
+async def test_production_gateway_reports_protocol_identity_version(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    binding: str,
+    expected_version: str,
+) -> None:
+    monkeypatch.setattr(
+        gateway_composition,
+        "GatewaySessionCoordinator",
+        partial(GatewaySessionCoordinator, upstream_client_factory=FixtureClientFactory()),
+    )
+    config_path = tmp_path / "mabrid.yaml"
+    config_path.write_text("storage: {sqlitePath: gateway.db}\n", encoding="utf-8")
+    (tmp_path / "mabrid.runtime.yaml").write_text(
+        "upstreams: {fixture: {transport: stdio, command: fixture-server}}\n"
+        "endpoints:\n"
+        "  fixture:\n"
+        f"    mode: {mode}\n"
+        f"    bindings: [{{{binding}}}]\n",
+        encoding="utf-8",
+    )
+    result = await bootstrap_server(resolve_runtime_configuration(str(config_path)))
+    app = create_app(result.gateway, gateway_management=result.gateway_management)
+    headers = {
+        "accept": "application/json, text/event-stream",
+        "content-type": "application/json",
+    }
+    try:
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                initialized = await client.post(
+                    "/mcp/fixture",
+                    headers=headers,
+                    json=rpc_request(
+                        "initialize",
+                        request_id=1,
+                        params={
+                            "protocolVersion": "2025-11-25",
+                            "capabilities": {},
+                            "clientInfo": {"name": "version-test", "version": "1.0.0"},
+                        },
+                    ),
+                )
+                assert initialized.status_code == 200
+                assert response_payload(initialized)["result"]["serverInfo"]["version"] == (
+                    expected_version
+                )
+                identity = response_payload(initialized)["result"]
+                if mode == "passthrough":
+                    assert identity["serverInfo"]["name"] == "Fixture MCP"
+                    assert identity["instructions"] == "Use fixture tools."
+                else:
+                    assert identity["serverInfo"]["name"] == (
+                        result.gateway.published_endpoints[0].revision.display_name
+                    )
+                assert (
+                    await client.delete(
+                        "/mcp/fixture",
+                        headers={
+                            **headers,
+                            "mcp-session-id": initialized.headers["mcp-session-id"],
+                        },
+                    )
+                ).status_code == 200
+    finally:
+        await result.database.close()
 
 
 async def test_composed_server_supports_mcp_2025_streamable_http_contract() -> None:

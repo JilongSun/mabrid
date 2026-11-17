@@ -125,6 +125,25 @@ def verify_tag(root: Path, tag: str, main_ref: str = "origin/main") -> str:
     return head
 
 
+def changelog_notes(root: Path, tag: str) -> str:
+    sections: list[str] = []
+    heading = f"\n## {tag.removeprefix('v')}\n"
+    for language, filename in (("English", "CHANGELOG.md"), ("Chinese", "CHANGELOG.zh.md")):
+        path = root / filename
+        if not path.exists():
+            continue
+        entries = ("\n" + path.read_text(encoding="utf-8")).split(heading)
+        if len(entries) == 1:
+            continue
+        if len(entries) > 2:
+            raise ValueError(f"Duplicate release entry in {filename}: {tag}")
+        notes = entries[1].split("\n## ", 1)[0].strip()
+        if not notes:
+            raise ValueError(f"Release notes must not be empty: {filename}")
+        sections.append(f"# {language}\n\n{notes}")
+    return "\n\n".join(sections)
+
+
 def publish_release(root: Path, tag: str) -> None:
     head = verify_tag(root, tag)
     pages = json.loads(
@@ -141,6 +160,8 @@ def publish_release(root: Path, tag: str) -> None:
                 raise ValueError("Existing release does not match this public prepared release")
             print(f"Public release already exists; leaving it unchanged: {release['html_url']}")
             return
+    notes = changelog_notes(root, tag)
+    notes_arguments = ["--notes", notes] if notes else ["--generate-notes"]
     result = run(
         [
             "gh",
@@ -152,7 +173,7 @@ def publish_release(root: Path, tag: str) -> None:
             head,
             "--title",
             f"Mabrid {tag}",
-            "--generate-notes",
+            *notes_arguments,
         ],
         root,
     )

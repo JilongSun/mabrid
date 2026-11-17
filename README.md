@@ -2,7 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh.md)
 
-[![Version](https://img.shields.io/badge/Version-v0.1.0-2F855A?logo=semver&logoColor=white)](https://github.com/JilongSun/mabrid/releases/tag/v0.1.0)
+[![Version](https://img.shields.io/github/v/release/JilongSun/mabrid?label=Version&color=2F855A&logo=semver&logoColor=white)](https://github.com/JilongSun/mabrid/releases/latest)
+[![CI](https://github.com/JilongSun/mabrid/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/JilongSun/mabrid/actions/workflows/ci.yml?query=branch%3Amain)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](./backend/pyproject.toml)
 [![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)](./Dockerfile)
 [![License](https://img.shields.io/badge/License-Apache%202.0-D22128?logo=apache&logoColor=white)](./LICENSE)
@@ -19,7 +20,7 @@ Together, the gateway and Agent Host provide a foundation for additional
 features, such as interactive MCP Apps.
 
 > [!NOTE]
-> v0.1 is a developer preview. Features are still being developed and refined.
+> Mabrid is a developer preview. Features are still being developed and refined.
 > Mabrid's APIs are not yet stable and may change between releases.
 
 ## Why Mabrid
@@ -129,8 +130,8 @@ Mabrid is intended for trusted, self-hosted use, not a public multi-user service
   managed edits. Runtime changes use the separate Apply actions; static settings
   and process/container environment changes still require restart or recreation.
 - MCP Apps can display and exchange tool data. App-triggered follow-up messages
-  and tool calls are not supported in v0.1.
-- Desktop packaging and multi-worker deployments are outside v0.1.
+  and tool calls are not currently supported.
+- Desktop packaging and multi-worker deployments are outside the current scope.
 
 ## License
 

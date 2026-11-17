@@ -16,6 +16,11 @@ its dated delivery assessments are not a list of independent implementation tick
 
 ## Current Publication And Governance Position
 
+On 2026-11-17, the owner confirmed publication of `v0.2.0`. Inspection of the public
+[Release](https://github.com/JilongSun/mabrid/releases/tag/v0.2.0) and its Actions runs independently
+confirmed the prepared tag, successful checks, and public Latest Release. The maintenance review
+below records the evidence and remaining limits; publication is not full live-deployment acceptance.
+
 As of 2026-10-26, the owner has confirmed that v0.1 is formally released. This is an owner-reported
 publication fact, not a fresh independent audit of release artifacts or all deployment scenarios.
 On 2026-11-03 the owner clarified that the product remains a developer preview: publication does
@@ -36,7 +41,7 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 - Review identifier: `managed-config-foundations`.
 - Workstream: `feat/managed-config-and-recovery`.
 - Review state: **Approved for the bounded CI, contract, version preparation, and release batch
-	below on 2026-11-13**. Earlier configuration batches retain their
+	below on 2026-11-13, and the maintenance follow-up on 2026-11-17**. Earlier configuration batches retain their
 	approvals and delivery evidence. The owner accepted
 	[ADR 0018](decisions/0018-file-authoritative-configuration-and-generation-applied-runtime.md)
 	and the dated amendments below, including component-scoped application, the existing Hermes
@@ -47,8 +52,53 @@ batch. No product design, Git branch, workflow, tag, or release artifact is crea
 	on 2026-11-11. Runtime placement, literal Host credential rotation, and container-layout
 	integration have controlled evidence on 2026-11-12. The configuration-owned Host credential
 	simplification has controlled evidence on 2026-11-13, separately from live acceptance.
-- Further work: live deployment acceptance, README delivery review, CI/version handling, and
-	unrelated Agent Host capabilities remain separately scoped; this batch does not authorize them.
+- Further work: live deployment acceptance, access/trust-boundary changes, broader Agent Host
+	capabilities and runtime-model changes, recovery, and OCI automation remain separately scoped.
+	The maintenance follow-up does not authorize those changes.
+
+#### v0.2.0 Publication And Release Maintenance (2026-11-17)
+
+The owner reported the completed `v0.2.0` publication and authorized a bounded maintenance batch:
+correct MCP identity/version reporting, add protocol regression coverage, replace static README
+version badges, clarify current preview wording, and complete user-facing release notes and
+verification records. The selected maintenance version is `0.2.1`; selecting it does not create
+a version PR, tag, or Release. Version preparation remains a separate action after these fixes merge.
+
+Observed GitHub evidence for `v0.2.0`:
+
+- [Prepare Version](https://github.com/JilongSun/mabrid/actions/runs/44002940532) succeeded and
+	produced the version PR; [PR CI](https://github.com/JilongSun/mabrid/actions/runs/44003005372)
+	succeeded. Both the feature integration and version PR used Merge commits.
+- The prepared commit is `96a7f555be0bfd5ec69b5bfd318b835856ec805e`, shared by `v0.2.0` and
+	`main` at assessment. [Main CI](https://github.com/JilongSun/mabrid/actions/runs/44004222738)
+	passed Backend, Frontend, Windows Native Scripts, and Required Checks.
+- The [tag Release run](https://github.com/JilongSun/mabrid/actions/runs/44005053498) passed source
+	verification, the reused checks, and publication. The public Release is Latest and provides
+	GitHub's automatic source archives. Local `release.py verify-tag v0.2.0` also passed.
+- Branch-protection settings, administrator bypass, a real publication rerun, actual Docker/ACL
+	behavior, remote credentials, and Agent/MCP business operations were not audited by this evidence.
+
+Maintenance implementation uses the installed product version at the Gateway composition boundary.
+Streamable HTTP and SSE share effective identity resolution: aggregate endpoints report Mabrid's
+version, while passthrough retains upstream identity. README version badges follow published Releases,
+not checkout metadata; the separate CI badge follows `main` push runs. Following owner review,
+the release-note design uses root English and Chinese changelogs instead of per-tag files. Minor
+feature releases use Highlights; patch releases use Fixed, with small-fix entries optional. Publication extracts only
+the matching version, with the existing generated-note fallback for versions without entries.
+An existing public Release remains unchanged, including when retrospective notes are added to source.
+
+Focused local evidence: the new production aggregate handshake assertion failed with `0.1.0`
+against installed `0.2.0` before the fix. All **8 transport/downstream checks** passed afterward,
+including passthrough name/version/instructions. **17 changelog and publication checks** passed
+with bilingual exact-version extraction, generated-note fallback, empty/duplicate-entry rejection,
+and no existing-Release mutation.
+The shared backend gate passed: **544 tests passed, 1 intentional directory-ACL acceptance skip**;
+Pyright, Ruff lint/format, all three contract snapshots, and unified versions passed. Its isolated
+empty-cache integration prepared `0.2.1` from `0.2.0` with real uv operations, retained third-party
+dependency versions, refreshed installed metadata, and regenerated the version-bearing API snapshot.
+The source metadata remains `0.2.0` until the normal version-preparation step; `v0.2.1` is not
+reported as published. No tag movement, publication, service restart, or real Agent/MCP operation
+was used as a maintenance test.
 
 #### CI, Version Preparation, And Tag-Triggered Releases (2026-11-13)
 
@@ -140,7 +190,8 @@ Verification evidence:
 - Official actionlint **1.7.7** passed all three workflows. No actual GitHub publication or repository
 	setting change was used as a local test.
 
-GitHub acceptance: **Pending**. Required-check and merge settings, the first feature PR/main run,
+GitHub acceptance on 2026-11-13: **Pending**. See the 2026-11-17 follow-up above for subsequently
+observed CI and publication outcomes. Required-check and merge settings, the first feature PR/main run,
 bot-version-PR approval, hosted Windows execution, and a real tag/release/rerun still require the
 documented separate acceptance. Local checks do not establish those outcomes. OCI automation and
 real deployment acceptance remain outside this delivery batch.
