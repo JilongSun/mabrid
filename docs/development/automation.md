@@ -120,14 +120,23 @@ each other.
 
 Publication creates a public, non-prerelease GitHub Release. Maintain concise user-facing history
 in the root [English changelog](../../CHANGELOG.md) and [Chinese changelog](../../CHANGELOG.zh.md),
-not separate files per version. Use Highlights for minor feature releases and Fixed for patch
-releases; small-fix entries may be included when useful. This documentation convention does not
-change version-number semantics.
-Commit entries with the relevant changes, before the version PR, using exact `## X.Y.Z` headings
-and level-three headings for subsections. Publication extracts only the matching version from each
-available language and combines them into the release body. A matching empty or duplicate entry is
-an error. A version without an entry uses GitHub-generated notes from merged PRs; there is no
-requirement to author a changelog entry for every tag. Use user-facing PR titles for that fallback.
+not separate files per version. Commit entries with the relevant changes, before the version PR,
+using exact `## X.Y.Z` headings and level-three headings for subsections. Use Highlights for minor
+feature releases and Fixed for patch releases.
+
+Patch releases may be batched. Record fixes under the next-release heading (`## Unreleased` in the
+English changelog, `## 未发布` in the Chinese changelog) as they merge, instead of preparing a
+version, tag, and Release for every fix. When the maintainer decides a batch is worth publishing,
+rename that heading to the target version in both files and run the normal release flow. Those
+headings are never published because only exact version headings are matched. Between releases the
+reported product version remains the last published version even though `main` already contains
+the batched fixes; identify such builds by commit or image digest. An urgent fix may still be
+released immediately as its own patch version.
+
+Publication extracts only the matching version from each available language and combines them into
+the release body. A matching empty or duplicate entry is an error. A version without an entry uses
+GitHub-generated notes from merged PRs; there is no requirement to author a changelog entry for
+every tag. Use user-facing PR titles for that fallback.
 There are no internal contract attachments, Python/npm publication, or automatic OCI builds.
 GitHub's automatic source archives describe the prepared tagged source.
 A rerun confirms an existing public release only when its tag and target commit agree; it never
