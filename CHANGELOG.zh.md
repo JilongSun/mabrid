@@ -3,6 +3,8 @@
 [English](CHANGELOG.md)。这里记录已发布和待发布的变更，实际发布状态以
 [GitHub Releases](https://github.com/JilongSun/mabrid/releases) 为准。
 
+## 未发布
+
 ## 0.2.1
 
 ### 问题修复

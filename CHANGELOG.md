@@ -3,6 +3,8 @@
 [Chinese](CHANGELOG.zh.md). Entries cover released and upcoming changes; see
 [GitHub Releases](https://github.com/JilongSun/mabrid/releases) for published versions.
 
+## Unreleased
+
 ## 0.2.1
 
 ### Fixed

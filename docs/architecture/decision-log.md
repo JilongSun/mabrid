@@ -83,9 +83,18 @@ Streamable HTTP and SSE share effective identity resolution: aggregate endpoints
 version, while passthrough retains upstream identity. README version badges follow published Releases,
 not checkout metadata; the separate CI badge follows `main` push runs. Following owner review,
 the release-note design uses root English and Chinese changelogs instead of per-tag files. Minor
-feature releases use Highlights; patch releases use Fixed, with small-fix entries optional. Publication extracts only
-the matching version, with the existing generated-note fallback for versions without entries.
-An existing public Release remains unchanged, including when retrospective notes are added to source.
+feature releases use Highlights; patch releases use Fixed.
+
+On 2026-11-17 the owner approved batching patch releases: fixes accumulate on `main` under the
+next-release changelog heading and the normal version-preparation, tag, and publication flow runs
+once per batch. This changes release cadence only. Pull requests, CI gates, tag provenance, and
+publication checks are unchanged, every published version keeps its own tag and Release, and an
+urgent fix may still ship as its own patch version. Between releases the reported product version
+remains the last published version while `main` already contains the batched fixes.
+
+Publication extracts only the matching version, with the existing generated-note fallback for
+versions without entries. An existing public Release remains unchanged, including when
+retrospective notes are added to source.
 
 Focused local evidence: the new production aggregate handshake assertion failed with `0.1.0`
 against installed `0.2.0` before the fix. All **8 transport/downstream checks** passed afterward,
