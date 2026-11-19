@@ -146,6 +146,28 @@ treated as proof that no release exists.
 Action dependencies are pinned to reviewed commits: checkout 7.0.1, setup-node 7.1.0, setup-uv
 10.3.3, and create-pull-request 8.1.3. Review both the code and fixed references when updating them.
 
+## Pull Request Types and Labels
+
+Pull request labels record what a change is, not how it is delivered. One primary type applies, and
+`type: breaking` is additional so it can accompany another type.
+
+| Label | Changelog section | Version effect during `0.x` |
+| --- | --- | --- |
+| `type: feature` | `### Added`, or `### Changed` when existing behavior changes | minor |
+| `type: breaking` | `### Changed`, stating the incompatible behavior and its migration | minor |
+| `type: problem` | `### Fixed` | patch |
+| `type: design` | `### Changed` | minor |
+| `type: internal` | none | none |
+
+A `type: problem` issue is triaged into a defect (keep the label), a design gap (relabel
+`type: feature` or `type: idea`), or a boundary outside the project (add `out-of-scope`). Issues also
+use `type: idea` and `type: design`; `area: code` and `area: docs` separate implementation from
+documentation, and `status: working` marks an issue the maintainer has started.
+
+Labels are working aids. No CI check, workflow, or other automation requires them. The optional
+[release notes configuration](../../.github/release.yml) only groups the generated fallback described
+above when a version has no changelog entry.
+
 ## First GitHub Acceptance
 
 The first version-preparation, PR/main CI, hosted Windows checks, and tag-publication chain
