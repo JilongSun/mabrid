@@ -1,0 +1,16 @@
+# Optional grouping for GitHub-generated release notes.
+# Only used when a release has no matching entry in CHANGELOG.md or CHANGELOG.zh.md.
+# Categories match in order and a pull request appears in the first match only,
+# so Breaking Changes must stay first.
+changelog:
+  categories:
+    - title: Breaking Changes
+      labels: ["type: breaking"]
+    - title: Features
+      labels: ["type: feature"]
+    - title: Fixes
+      labels: ["type: problem"]
+    - title: Design
+      labels: ["type: design"]
+  exclude:
+    labels: ["type: internal"]
